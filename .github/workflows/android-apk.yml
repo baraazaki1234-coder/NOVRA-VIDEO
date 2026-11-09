@@ -37,6 +37,9 @@ jobs:
       - name: Install JavaScript dependencies
         run: npm ci
 
+      - name: Build native Capacitor bridge
+        run: npx --yes esbuild static/native-entry.js --bundle --format=iife --outfile=static/native-bridge.js
+
       - name: Sync Capacitor Android project
         run: npx cap sync android
 

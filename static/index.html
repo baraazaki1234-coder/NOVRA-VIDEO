@@ -6,7 +6,8 @@
   <meta name="theme-color" content="#080711">
   <meta name="description" content="NOVRA VIDEO — عالمك الشخصي للفيديوهات والموسيقى، بتجربة Galaxy خاصة ومنظمة.">
   <link rel="manifest" href="/manifest.json">
-  <link rel="apple-touch-icon" href="/icon-192.png">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icon.svg">
   <link rel="stylesheet" href="/style.css?v=12">
   <title>NOVRA VIDEO</title>
   <meta name="mobile-web-app-capable" content="yes">
@@ -97,6 +98,7 @@
         </div>
         <div class="toolbar-controls">
           <label class="search-box"><span>⌕</span><input id="searchInput" type="search" placeholder="ابحث عن فيديو..."></label>
+          <button id="scanDeviceBtn" class="scan-device-btn" style="min-height:43px;padding:0 12px;border:1px solid #54d9ed55;border-radius:12px;color:#eaf5ff;background:#24234a;font:inherit;font-size:12px" type="button" hidden>مزامنة الجهاز</button>
           <select id="sortSelect" aria-label="ترتيب الفيديوهات">
             <option value="newest">الأحدث</option><option value="oldest">الأقدم</option><option value="name">الاسم</option><option value="largest">الحجم</option>
           </select>
@@ -239,6 +241,16 @@
   </div>
   <div class="toast" id="toast" role="status"></div>
   <div class="import-progress" id="progressBox" hidden><div class="progress-head"><span id="progressLabel">جارٍ الاستيراد...</span><b id="progressPercent">0%</b></div><div class="progress-track"><span id="progressFill"></span></div></div>
-  <script src="/app.js?v=13"></script>
+  <script>
+    window.__novraNativeReady = new Promise(resolve => {
+      if (!window.Capacitor?.isNativePlatform?.()) return resolve(null);
+      const bridge = document.createElement("script");
+      bridge.src = "/native-bridge.js";
+      bridge.onload = () => resolve(window.NovraMedia || null);
+      bridge.onerror = () => resolve(null);
+      document.head.appendChild(bridge);
+    });
+  </script>
+  <script src="/app.js?v=14"></script>
 </body>
 </html>
