@@ -2511,7 +2511,7 @@ async function copyCurrentVideoToVault() {
   const newId = id(), filename = `${newId}.media`;
   let written = false;
   try {
-    await savePosition();
+    await savePosition(true);
     const file = await getFile(source.filename);
     await writeFile(file, filename, () => {});
     written = true;
@@ -2538,7 +2538,7 @@ async function moveCurrentVideoToVault() {
   if (!await playerVaultAccess() || !currentVideo) return;
 
   try {
-    await savePosition();
+    await savePosition(true);
     currentVideo.vault = true;
     await dbRequest("readwrite", "put", currentVideo);
     toast("تم نقل الفيديو إلى الخزنة دون حذف ملفه.");
@@ -2629,10 +2629,24 @@ async function playVideo(videoId, musicMode = false) {
     toast("تعذر فتح ملف الفيديو. ربما تم حذف بيانات الموقع من المتصفح.");
   }
 }
-async function savePosition() {
-  if(!currentVideo||!Number.isFinite($("#videoPlayer").currentTime))return;
-  currentVideo.position=$("#videoPlayer").currentTime;currentVideo.duration=$("#videoPlayer").duration||currentVideo.duration;currentVideo.lastPlayed=Date.now();
-  try{await dbRequest("readwrite","put",currentVideo);}catch{}
+let lastVideoPositionWriteAt = 0;
+
+async function savePosition(force = false) {
+  if (!currentVideo || !Number.isFinite($("#videoPlayer").currentTime)) return;
+
+  const now = Date.now();
+  if (!force && now - lastVideoPositionWriteAt < 4500) return;
+  lastVideoPositionWriteAt = now;
+
+  currentVideo.position = $("#videoPlayer").currentTime;
+  currentVideo.duration = $("#videoPlayer").duration || currentVideo.duration;
+  currentVideo.lastPlayed = now;
+
+  try {
+    await dbRequest("readwrite", "put", currentVideo);
+  } catch (error) {
+    console.warn("Could not save playback position:", error);
+  }
 }
 async function deleteVideo(videoId) {
   if(!confirm("هل تريد حذف هذا الفيديو من مكتبة NOVRA VIDEO؟ لا يمكن التراجع عن الحذف."))return;
@@ -3129,7 +3143,7 @@ async function init() {
     if (Math.floor($("#videoPlayer").currentTime) % 5 === 0) savePosition();
   });
 
-  $("#videoPlayer").addEventListener("pause", savePosition);
+  $("#videoPlayer").addEventListener("pause", () => savePosition(true));
 
   $("#videoPlayer").addEventListener("ended", async () => {
     if (currentVideo) {
@@ -3236,7 +3250,7 @@ async function init() {
   };
 
   $("#playerModal").querySelector(".close-btn").addEventListener("click", async () => {
-    await savePosition();
+    await savePosition(true);
     $("#videoPlayer").pause();
     $("#videoPlayer").removeAttribute("src");
     $("#videoPlayer").load();
