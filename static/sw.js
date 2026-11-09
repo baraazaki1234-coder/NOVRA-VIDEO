@@ -1,4 +1,4 @@
-const CACHE = "novra-video-shell-v24";
+const CACHE = "novra-video-shell-v25";
 const CACHE_PREFIX = "novra-video-shell-";
 
 const ASSETS = [
@@ -6,6 +6,7 @@ const ASSETS = [
   "/index.html",
   "/style.css",
   "/app.js",
+  "/native-bridge.js",
   "/manifest.json",
   "/sw.js",
   "/icon.svg"

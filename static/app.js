@@ -3224,40 +3224,43 @@ function setupPageRouter() {
 }
 
 async function init() {
+  // Bind the interface before waiting for storage or Android APIs.
+  // A slow/blocked database must never leave the whole app visually dead.
   setupPageRouter();
   if (!("storage" in navigator) || !navigator.storage.getDirectory) {
-    toast("المتصفح الحالي لا يدعم التخزين المحلي المطلوب. استخدم Chrome حديثًا.");
+    toast("التخزين المحلي المتقدم غير متاح في هذا الإصدار من WebView.");
   }
 
-  db = await openDB();
-  loadMusicEqSettings();
-
-  try {
-    await navigator.storage.persist();
-  } catch {}
-
-  nativeMediaPlugin = await (window.__novraNativeReady || Promise.resolve(null));
   const scanDeviceButton = $("#scanDeviceBtn");
   if (scanDeviceButton) {
-    scanDeviceButton.hidden = !nativeMediaPlugin;
+    scanDeviceButton.hidden = true;
     scanDeviceButton.onclick = () => syncDeviceMedia(currentCategory === "audio" ? "audio" : "video");
   }
-  if (nativeMediaPlugin) {
-    document.addEventListener("visibilitychange", () => {
-      if (!document.hidden) refreshNativeMediaIfAllowed();
+
+  const nativeReady = Promise.resolve(window.__novraNativeReady || null)
+    .then(plugin => {
+      nativeMediaPlugin = plugin || null;
+      if (scanDeviceButton) scanDeviceButton.hidden = !nativeMediaPlugin;
+      if (!nativeMediaPlugin) return null;
+      document.addEventListener("visibilitychange", () => {
+        if (!document.hidden && db) refreshNativeMediaIfAllowed();
+      });
+      if (typeof nativeMediaPlugin.addListener === "function") {
+        let lastMediaEventAt = 0;
+        Promise.resolve(nativeMediaPlugin.addListener("mediaChanged", () => {
+          const now = Date.now();
+          if (now - lastMediaEventAt < 15000) return;
+          lastMediaEventAt = now;
+          lastNativeMediaRefreshAt = 0;
+          if (db) refreshNativeMediaIfAllowed();
+        })).catch(error => console.debug("NOVRA media observer listener unavailable:", error));
+      }
+      return nativeMediaPlugin;
+    })
+    .catch(error => {
+      console.warn("NOVRA native bridge unavailable:", error);
+      return null;
     });
-    if (typeof nativeMediaPlugin.addListener === "function") {
-      let lastMediaEventAt = 0;
-      nativeMediaPlugin.addListener("mediaChanged", () => {
-        const now = Date.now();
-        if (now - lastMediaEventAt < 15000) return;
-        lastMediaEventAt = now;
-        lastNativeMediaRefreshAt = 0;
-        refreshNativeMediaIfAllowed();
-      }).catch(error => console.debug("NOVRA media observer listener unavailable:", error));
-    }
-    refreshNativeMediaIfAllowed();
-  }
 
   $("#heroAdd").onclick = $("#emptyAdd").onclick = () => openModal("addModal");
 
@@ -3676,7 +3679,29 @@ async function init() {
     });
   }
 
-  await importSharedFiles();
-  await render();
+  // Storage initialization happens only after all navigation and controls are live.
+  try {
+    db = await openDB();
+    loadMusicEqSettings();
+
+    if (navigator.storage && typeof navigator.storage.persist === "function") {
+      try { await navigator.storage.persist(); } catch {}
+    }
+
+    await importSharedFiles();
+    await render();
+
+    await nativeReady;
+    if (nativeMediaPlugin) refreshNativeMediaIfAllowed();
+    document.documentElement.dataset.novraReady = "true";
+  } catch (error) {
+    console.error("NOVRA startup failed:", error);
+    document.documentElement.dataset.novraReady = "error";
+    toast("تعذر تهيئة المكتبة: " + (error?.message || "خطأ غير معروف"));
+  }
 }
-init().catch(e=>{console.error(e);toast("حدث خطأ أثناء تشغيل التطبيق: "+e.message);});
+init().catch(e=>{
+  console.error("NOVRA interface initialization failed:",e);
+  document.documentElement.dataset.novraReady = "error";
+  try { toast("تعذر تشغيل الواجهة: "+(e?.message||"خطأ غير معروف")); } catch {}
+});
