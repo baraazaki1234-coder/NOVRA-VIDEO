@@ -2,6 +2,6 @@
 <resources>
     <string name="app_name">NOVRA</string>
     <string name="title_activity_main">NOVRA</string>
-    <string name="package_name">com.novra.video</string>
-    <string name="custom_url_scheme">com.novra.video</string>
+    <string name="package_name">com.novra.video.next</string>
+    <string name="custom_url_scheme">com.novra.video.next</string>
 </resources>
