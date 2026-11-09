@@ -554,15 +554,14 @@ async function inspectIncomingMedia(file) {
   return { kind, info };
 }
 
-async function extractMp3Cover(file) {
+async function extractMp3Metadata(file) {
+  const metadata = { cover: "", title: "", artist: "", album: "", year: "" };
   try {
     const bytes = new Uint8Array(
       await file.slice(0, Math.min(file.size, 8 * 1024 * 1024)).arrayBuffer()
     );
-
-    if (bytes.length < 10 ||
-        bytes[0] !== 0x49 || bytes[1] !== 0x44 || bytes[2] !== 0x33) {
-      return "";
+    if (bytes.length < 10 || bytes[0] !== 0x49 || bytes[1] !== 0x44 || bytes[2] !== 0x33) {
+      return metadata;
     }
 
     const version = bytes[3];
@@ -571,98 +570,109 @@ async function extractMp3Cover(file) {
       ((bytes[7] & 0x7f) << 14) |
       ((bytes[8] & 0x7f) << 7) |
       (bytes[9] & 0x7f);
-
     const end = Math.min(bytes.length, 10 + tagSize);
-    let offset = 10;
+    const textFields = {
+      TIT2: "title",
+      TPE1: "artist",
+      TALB: "album",
+      TDRC: "year",
+      TYER: "year"
+    };
 
+    const decodeText = (start, size) => {
+      if (size < 2) return "";
+      const encoding = bytes[start];
+      const payload = bytes.slice(start + 1, start + size);
+      let decoder;
+      try {
+        decoder = encoding === 1 ? new TextDecoder("utf-16")
+          : encoding === 2 ? new TextDecoder("utf-16be")
+          : encoding === 3 ? new TextDecoder("utf-8")
+          : new TextDecoder("windows-1252");
+      } catch {
+        decoder = new TextDecoder();
+      }
+      return decoder.decode(payload).replace(/\u0000/g, "").trim();
+    };
+
+    let offset = 10;
     while (offset + 10 <= end) {
       const frameId = String.fromCharCode(
-        bytes[offset], bytes[offset + 1],
-        bytes[offset + 2], bytes[offset + 3]
+        bytes[offset], bytes[offset + 1], bytes[offset + 2], bytes[offset + 3]
       );
-
       if (!frameId.trim() || frameId.charCodeAt(0) === 0) break;
 
-      let size;
-      if (version === 4) {
-        size =
-          ((bytes[offset + 4] & 0x7f) << 21) |
+      let size = version === 4
+        ? ((bytes[offset + 4] & 0x7f) << 21) |
           ((bytes[offset + 5] & 0x7f) << 14) |
           ((bytes[offset + 6] & 0x7f) << 7) |
-          (bytes[offset + 7] & 0x7f);
-      } else {
-        size =
-          (bytes[offset + 4] << 24) |
+          (bytes[offset + 7] & 0x7f)
+        : (bytes[offset + 4] << 24) |
           (bytes[offset + 5] << 16) |
           (bytes[offset + 6] << 8) |
           bytes[offset + 7];
+
+      if (!Number.isFinite(size) || size <= 0 || offset + 10 + size > end) break;
+      const frameStart = offset + 10;
+
+      if (textFields[frameId] && !metadata[textFields[frameId]]) {
+        metadata[textFields[frameId]] = decodeText(frameStart, size);
       }
 
-      if (!Number.isFinite(size) || size <= 0 || offset + 10 + size > end) {
-        break;
-      }
-
-      if (frameId === "APIC") {
-        const start = offset + 10;
-        const encoding = bytes[start];
-        let pos = start + 1;
-
-        while (pos < start + size && bytes[pos] !== 0) pos++;
-        const mime = new TextDecoder().decode(bytes.slice(start + 1, pos));
-        pos++;
-
-        if (pos >= start + size) return "";
-
-        pos++; // Picture type.
-
-        if (encoding === 1 || encoding === 2) {
-          while (pos + 1 < start + size &&
-                 !(bytes[pos] === 0 && bytes[pos + 1] === 0)) pos += 2;
-          pos += 2;
-        } else {
-          while (pos < start + size && bytes[pos] !== 0) pos++;
-          pos++;
-        }
-
-        if (pos >= start + size) return "";
-
-        const imageBlob = new Blob(
-          [bytes.slice(pos, start + size)],
-          { type: mime.startsWith("image/") ? mime : "image/jpeg" }
-        );
-
-        const objectUrl = URL.createObjectURL(imageBlob);
-
+      if (frameId === "APIC" && !metadata.cover) {
         try {
-          const image = new Image();
-          await new Promise((resolve, reject) => {
-            image.onload = resolve;
-            image.onerror = reject;
-            image.src = objectUrl;
-          });
+          const encoding = bytes[frameStart];
+          let pos = frameStart + 1;
+          while (pos < frameStart + size && bytes[pos] !== 0) pos++;
+          const mime = new TextDecoder().decode(bytes.slice(frameStart + 1, pos));
+          pos++;
+          if (pos < frameStart + size) pos++;
+          if (encoding === 1 || encoding === 2) {
+            while (pos + 1 < frameStart + size &&
+              !(bytes[pos] === 0 && bytes[pos + 1] === 0)) pos += 2;
+            pos += 2;
+          } else {
+            while (pos < frameStart + size && bytes[pos] !== 0) pos++;
+            pos++;
+          }
 
-          const scale = Math.min(1, 480 / Math.max(image.width, image.height));
-          const canvas = document.createElement("canvas");
-          canvas.width = Math.max(1, Math.round(image.width * scale));
-          canvas.height = Math.max(1, Math.round(image.height * scale));
-
-          const context = canvas.getContext("2d");
-          if (!context) return "";
-
-          context.drawImage(image, 0, 0, canvas.width, canvas.height);
-          return canvas.toDataURL("image/jpeg", 0.82);
-        } finally {
-          URL.revokeObjectURL(objectUrl);
+          if (pos < frameStart + size) {
+            const imageBlob = new Blob(
+              [bytes.slice(pos, frameStart + size)],
+              { type: mime.startsWith("image/") ? mime : "image/jpeg" }
+            );
+            const objectUrl = URL.createObjectURL(imageBlob);
+            try {
+              const image = new Image();
+              await new Promise((resolve, reject) => {
+                image.onload = resolve;
+                image.onerror = reject;
+                image.src = objectUrl;
+              });
+              const scale = Math.min(1, 480 / Math.max(image.width, image.height));
+              const canvas = document.createElement("canvas");
+              canvas.width = Math.max(1, Math.round(image.width * scale));
+              canvas.height = Math.max(1, Math.round(image.height * scale));
+              const context = canvas.getContext("2d");
+              if (context) {
+                context.drawImage(image, 0, 0, canvas.width, canvas.height);
+                metadata.cover = canvas.toDataURL("image/jpeg", 0.82);
+              }
+            } finally {
+              URL.revokeObjectURL(objectUrl);
+            }
+          }
+        } catch (error) {
+          console.debug("MP3 artwork frame skipped:", error);
         }
       }
 
       offset += 10 + size;
     }
   } catch (error) {
-    console.warn("MP3 cover extraction skipped:", error);
+    console.warn("MP3 metadata extraction skipped:", error);
   }
-
-  return "";
+  return metadata;
 }
 
 async function importLocal(file) {
@@ -702,9 +712,10 @@ async function importLocal(file) {
 
   showProgress(`تجهيز بيانات ${file.name}`, 25);
 
-  const audioCover = actualKind === "audio" && /\.mp3$/i.test(file.name)
-    ? await extractMp3Cover(file)
-    : "";
+  const audioMetadata = actualKind === "audio" && /\.mp3$/i.test(file.name)
+    ? await extractMp3Metadata(file)
+    : null;
+  const audioCover = audioMetadata?.cover || "";
 
   if (!actualKind) {
     throw new Error("نوع الملف غير مدعوم. اختر فيديو أو ملفًا صوتيًا معروفًا.");
@@ -736,7 +747,7 @@ async function importLocal(file) {
 
     const record = {
       id: mediaId,
-      name: safeName(file.name.replace(/\.[^.]+$/, "")),
+      name: safeName(audioMetadata?.title || file.name.replace(/\.[^.]+$/, "")),
       originalName: file.name,
       filename,
       size: file.size,
@@ -745,6 +756,9 @@ async function importLocal(file) {
       vault: useVault,
       duration,
       thumb: actualKind === "video" ? (mediaInfo?.thumb || "") : audioCover,
+      artist: audioMetadata?.artist || "",
+      album: audioMetadata?.album || "",
+      year: audioMetadata?.year || "",
       created: Date.now(),
       lastPlayed: 0,
       position: 0,
@@ -1837,7 +1851,7 @@ function syncMusicMediaSession() {
 function updateMusicArtwork() {
   const orb = $("#musicControls .music-orb");
   if (!orb) return;
-  const cover = currentMusicTrack?.thumb || "";
+  const cover = currentMusicTrack?.thumb || "/icon.svg";
   if (cover) {
     orb.replaceChildren();
     const img = document.createElement("img");
@@ -2354,6 +2368,12 @@ async function render() {
     const size = document.createElement("span");
     size.textContent = formatBytes(v.size);
     meta.append(date,size);
+    if (kind === "audio" && (v.artist || v.album)) {
+      const trackInfo = document.createElement("span");
+      trackInfo.textContent = [v.artist, v.album].filter(Boolean).join(" • ");
+      trackInfo.style.cssText = "flex-basis:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap";
+      meta.append(trackInfo);
+    }
 
     const actions = document.createElement("div");
     actions.className = "card-actions";
@@ -3172,6 +3192,16 @@ async function init() {
     document.addEventListener("visibilitychange", () => {
       if (!document.hidden) refreshNativeMediaIfAllowed();
     });
+    if (typeof nativeMediaPlugin.addListener === "function") {
+      let lastMediaEventAt = 0;
+      nativeMediaPlugin.addListener("mediaChanged", () => {
+        const now = Date.now();
+        if (now - lastMediaEventAt < 15000) return;
+        lastMediaEventAt = now;
+        lastNativeMediaRefreshAt = 0;
+        refreshNativeMediaIfAllowed();
+      }).catch(error => console.debug("NOVRA media observer listener unavailable:", error));
+    }
     refreshNativeMediaIfAllowed();
   }
 

@@ -3,6 +3,9 @@ package com.novra.video;
 import android.Manifest;
 import android.content.ContentUris;
 import android.database.Cursor;
+import android.database.ContentObserver;
+import android.os.Handler;
+import android.os.Looper;
 import android.net.Uri;
 import android.os.Build;
 import android.provider.MediaStore;
@@ -24,6 +27,27 @@ import com.getcapacitor.annotation.PermissionCallback;
   @Permission(alias="audio", strings={Manifest.permission.READ_MEDIA_AUDIO})
 })
 public class NovraMediaPlugin extends Plugin {
+  private ContentObserver mediaObserver;
+
+  @Override
+  public void load() {
+    super.load();
+    Handler handler = new Handler(Looper.getMainLooper());
+    mediaObserver = new ContentObserver(handler) {
+      @Override
+      public void onChange(boolean selfChange, Uri uri) {
+        JSObject payload = new JSObject();
+        payload.put("uri", uri == null ? "" : uri.toString());
+        notifyListeners("mediaChanged", payload);
+      }
+    };
+    getContext().getContentResolver().registerContentObserver(
+      MediaStore.Video.Media.EXTERNAL_CONTENT_URI, true, mediaObserver
+    );
+    getContext().getContentResolver().registerContentObserver(
+      MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, true, mediaObserver
+    );
+  }
   @PluginMethod
   public void requestAccess(PluginCall call) {
     String kind=call.getString("kind","video");
