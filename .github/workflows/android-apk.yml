@@ -40,6 +40,9 @@ jobs:
       - name: Build native Capacitor bridge
         run: npx --yes esbuild static/native-entry.js --bundle --format=iife --outfile=static/native-bridge.js
 
+      - name: Validate application JavaScript
+        run: node --check static/app.js
+
       - name: Sync Capacitor Android project
         run: npx cap sync android
 

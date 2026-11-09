@@ -78,6 +78,18 @@ function dbRequest(mode, action, value) {
     req.onsuccess = () => resolve(req.result); req.onerror = () => reject(req.error);
   });
 }
+function dbBulkPut(records) {
+  if (!records.length) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, "readwrite");
+    const store = tx.objectStore(STORE);
+    for (const record of records) store.put(record);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error || new Error("Media library update was aborted."));
+  });
+}
+
 function playlistRequest(action, value) {
   return new Promise((resolve, reject) => {
     const mode = action === "all" || action === "get" ? "readonly" : "readwrite";
@@ -304,9 +316,9 @@ function mediaKind(type, name) {
   const t = (type || "").toLowerCase();
   const n = (name || "").toLowerCase();
 
-  // File extension takes priority when the sharing app sends a wrong MIME type.
-  if (/\.(mp4|webm|ogg|ogv|mov|m4v|mkv|avi|3gp)$/i.test(n)) return "video";
-  if (/\.(mp3|m4a|aac|wav|flac|opus|oga|weba)$/i.test(n)) return "audio";
+  // Prefer known extensions, while keeping OGG audio distinct from OGV video.
+  if (/\.(mp4|webm|ogv|mov|m4v|mkv|avi|3gp)$/i.test(n)) return "video";
+  if (/\.(mp3|m4a|aac|wav|flac|ogg|opus|oga|weba)$/i.test(n)) return "audio";
 
   if (t.startsWith("video/")) return "video";
   if (t.startsWith("audio/")) return "audio";
@@ -514,56 +526,33 @@ async function inspectIncomingMedia(file) {
   let kind = mediaKind(file.type, file.name);
   let info = null;
 
-  // If the sender labels a video as audio, inspect its actual video frames.
-  if (kind === "audio" && (file.type || "").toLowerCase().startsWith("audio/")) {
-    let probeType = "video/mp4";
-    const ext = (file.name.match(/\.([^.]+)$/) || [])[1]?.toLowerCase();
+  // Known audio extensions should not be sent through the video decoder.
+  // This avoids long metadata timeouts for M4A/FLAC/OGG tracks.
+  const knownAudio = /\.(mp3|m4a|aac|wav|flac|ogg|oga|opus|weba)$/i.test(file.name);
 
-    const types = {
-      mp4: "video/mp4", m4v: "video/mp4", mov: "video/quicktime",
-      webm: "video/webm", ogv: "video/ogg", ogg: "video/ogg",
-      mkv: "video/x-matroska", avi: "video/x-msvideo", "3gp": "video/3gpp"
-    };
-
-    if (types[ext]) {
-      probeType = types[ext];
-    } else {
-      try {
-        const head = new Uint8Array(await file.slice(0, 16).arrayBuffer());
-        const signature = String.fromCharCode(...head);
-        if (signature.includes("ftyp")) probeType = "video/mp4";
-        else if (head[0] === 0x1A && head[1] === 0x45 &&
-                 head[2] === 0xDF && head[3] === 0xA3) {
-          probeType = "video/webm";
-        } else if (signature.startsWith("OggS")) probeType = "video/ogg";
-        else if (signature.startsWith("RIFF")) probeType = "video/x-msvideo";
-      } catch {}
-    }
-
+  // Keep a guarded fallback for unusual files mislabeled as audio.
+  if (kind === "audio" && !knownAudio && (file.type || "").toLowerCase().startsWith("audio/")) {
     try {
-      const probeFile = new Blob([file], { type: probeType });
-      const probe = new File([probeFile], file.name, {
-        type: probeType,
-        lastModified: file.lastModified
-      });
-      const result = await makeThumb(probe);
-
-      if (result.thumb) {
-        kind = "video";
-        info = result;
+      const head = new Uint8Array(await file.slice(0, 32).arrayBuffer());
+      const signature = String.fromCharCode(...head);
+      const isEbml = head[0] === 0x1A && head[1] === 0x45 && head[2] === 0xDF && head[3] === 0xA3;
+      const looksLikeVideoContainer = signature.includes("ftyp") || isEbml ||
+        (signature.startsWith("RIFF") && signature.includes("AVI "));
+      if (looksLikeVideoContainer) {
+        const result = await makeThumb(new File([file], file.name, {
+          type: isEbml ? "video/webm" : "video/mp4",
+          lastModified: file.lastModified
+        }));
+        if (result.thumb) { kind = "video"; info = result; }
       }
     } catch (error) {
-      console.warn("Incoming video inspection failed:", error);
+      console.warn("Unusual media inspection skipped:", error);
     }
   }
 
-  if (kind === "video" && !info) {
-    info = await makeThumb(file);
-  }
-
+  if (kind === "video" && !info) info = await makeThumb(file);
   return { kind, info };
 }
-
 
 async function extractMp3Cover(file) {
   try {
@@ -791,28 +780,52 @@ async function importLocal(file) {
 }
 
 async function syncDeviceMedia(kind, requestPermission = true, quiet = false) {
-  if (!nativeMediaPlugin) { toast("مزامنة ملفات الهاتف متاحة في تطبيق NOVRA Android فقط."); return; }
+  if (!nativeMediaPlugin) {
+    if (!quiet) toast("مزامنة ملفات الهاتف متاحة في تطبيق NOVRA Android فقط.");
+    return;
+  }
+
   const button = $("#scanDeviceBtn");
-  if (button && !quiet) { button.disabled = true; button.textContent = "جارٍ الفحص…"; }
+  if (button && !quiet) {
+    button.disabled = true;
+    button.textContent = "جارٍ الفحص…";
+  }
+
   try {
-    if (!quiet && requestPermission) toast(kind === "audio" ? "اسمح لـ NOVRA بالوصول إلى ملفات الصوت لإضافتها إلى مكتبتك." : "اسمح لـ NOVRA بالوصول إلى الفيديوهات لاكتشاف ملفات الهاتف.");
+    if (!quiet && requestPermission) {
+      toast(kind === "audio"
+        ? "اسمح لـ NOVRA بالوصول إلى ملفات الصوت لإضافتها إلى مكتبتك."
+        : "اسمح لـ NOVRA بالوصول إلى الفيديوهات لاكتشاف ملفات الهاتف.");
+    }
+
     const access = requestPermission
       ? await nativeMediaPlugin.requestAccess({ kind })
       : await nativeMediaPlugin.checkAccess({ kind });
-    if (!access || access.granted !== true) {
+
+    if (!access?.granted) {
       if (!quiet) toast("لم يتم منح إذن الوصول. يمكنك تفعيله لاحقًا من إعدادات Android.");
       return;
     }
+
     const result = await nativeMediaPlugin.listMedia({ kind });
     const items = Array.isArray(result?.items) ? result.items : [];
     const ignored = new Set(JSON.parse(localStorage.getItem(DEVICE_MEDIA_EXCLUSIONS_KEY) || "[]"));
-    let added = 0, refreshed = 0;
+    const existing = await dbRequest("readonly", "all");
+    const byId = new Map(existing.map(record => [String(record.id), record]));
+    const recordsToWrite = [];
+    let added = 0;
+    let refreshed = 0;
+
     for (const item of items) {
       if (!item?.id || !item?.uri || ignored.has(String(item.id))) continue;
+
       const mediaId = String(item.id);
-      const old = await dbRequest("readonly", "get", mediaId);
+      const old = byId.get(mediaId);
       const dateAdded = Number(item.dateAdded) > 0 ? Number(item.dateAdded) * 1000 : Date.now();
-      const duration = Number(item.durationMs) > 0 ? Number(item.durationMs) / 1000 : (old?.duration || 0);
+      const duration = Number(item.durationMs) > 0
+        ? Number(item.durationMs) / 1000
+        : (old?.duration || 0);
+
       const record = {
         ...(old || {}),
         id: mediaId,
@@ -834,16 +847,37 @@ async function syncDeviceMedia(kind, requestPermission = true, quiet = false) {
         vault: false,
         lastPlayed: Number(old?.lastPlayed) || 0
       };
-      await dbRequest("readwrite", "put", record);
-      if (old) refreshed++; else added++;
+
+      const changed = !old ||
+        old.nativeUri !== record.nativeUri ||
+        old.name !== record.name ||
+        old.type !== record.type ||
+        Number(old.size) !== record.size ||
+        Number(old.duration) !== record.duration ||
+        old.artist !== record.artist ||
+        old.album !== record.album;
+
+      if (changed) {
+        recordsToWrite.push(record);
+        if (old) refreshed++;
+        else added++;
+      }
     }
+
+    await dbBulkPut(recordsToWrite);
     await render();
-    if (!quiet) toast(`تم تحديث مكتبة NOVRA: ${added} جديد، ${refreshed} تم تحديثه من ملفات الهاتف.`);
+
+    if (!quiet) {
+      toast(`تم تحديث مكتبة NOVRA: ${added} جديد، ${refreshed} تم تحديثه من ملفات الهاتف.`);
+    }
   } catch (error) {
     console.error("NOVRA device media sync failed:", error);
-    toast(error?.message || "تعذر فحص ملفات الهاتف.");
+    if (!quiet) toast(error?.message || "تعذر فحص ملفات الهاتف.");
   } finally {
-    if (button && !quiet) { button.disabled = false; button.textContent = "مزامنة الجهاز"; }
+    if (button && !quiet) {
+      button.disabled = false;
+      button.textContent = "مزامنة الجهاز";
+    }
   }
 }
 
@@ -1869,7 +1903,7 @@ function syncMusicQueue(items) {
       .normalize("NFKC")
       .trim()
       .toLocaleLowerCase()
-      .replace(/\\s+/g, " ");
+      .replace(/\s+/g, " ");
 
   const audioItems = items.filter(
     item => item.kind === "audio" && !isVaultItem(item)
@@ -2177,7 +2211,7 @@ async function render() {
     currentCategory === "playlists" ? (selectedPlaylist ? (selectedPlaylist.mediaIds || []).length : allPlaylists.length) :
     videosOnly.length;
   $("#watchedCount").textContent = videosOnly.filter(v => v.position > 5).length;
-  $("#storageUsed").textContent = formatBytes(all.reduce((n,v)=>n+(Number(v.size)||0),0));
+  $("#storageUsed").textContent = formatBytes(all.reduce((n,v)=>n+(v.nativeUri?0:(Number(v.size)||0)),0));
 
   let items = currentCategory === "vault"
     ? (vaultOpen ? all.filter(isVaultItem) : [])
@@ -2728,6 +2762,10 @@ async function playVideo(videoId, musicMode = false) {
   if (!v) return;
 
   currentMusicVideo = musicMode;
+  videoLoopA = null;
+  videoLoopB = null;
+  const abLoopButton = $("#abLoopBtn");
+  if (abLoopButton) abLoopButton.textContent = "A↔B تكرار جزء";
   if (!musicMode) {
     currentAudioId = null;
     currentMusicTitle = "";
@@ -2802,6 +2840,8 @@ async function playVideo(videoId, musicMode = false) {
   }
 }
 let lastVideoPositionWriteAt = 0;
+let videoLoopA = null;
+let videoLoopB = null;
 
 async function savePosition(force = false) {
   if (!currentVideo || !Number.isFinite($("#videoPlayer").currentTime)) return;
@@ -2820,6 +2860,70 @@ async function savePosition(force = false) {
     console.warn("Could not save playback position:", error);
   }
 }
+function toggleVideoABLoop() {
+  const player = $("#videoPlayer");
+  const button = $("#abLoopBtn");
+  if (!currentVideo || !Number.isFinite(player.currentTime)) {
+    toast("شغّل فيديو أولًا لتحديد المقطع.");
+    return;
+  }
+
+  if (videoLoopA === null || videoLoopB !== null) {
+    videoLoopA = player.currentTime;
+    videoLoopB = null;
+    if (button) button.textContent = "حدد نهاية B";
+    toast("تم تحديد بداية المقطع A. انتقل للنهاية واضغط مرة أخرى.");
+    return;
+  }
+
+  if (player.currentTime <= videoLoopA + 0.25) {
+    toast("نقطة النهاية B لازم تكون بعد نقطة البداية A.");
+    return;
+  }
+
+  videoLoopB = player.currentTime;
+  if (button) button.textContent = "إيقاف تكرار A-B";
+  toast("تم تفعيل تكرار المقطع المحدد.");
+}
+
+async function captureVideoFrame() {
+  const player = $("#videoPlayer");
+  if (!player.videoWidth || !player.videoHeight) {
+    toast("انتظر حتى يظهر إطار الفيديو أولًا.");
+    return;
+  }
+
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = player.videoWidth;
+    canvas.height = player.videoHeight;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("تعذر إنشاء صورة الإطار.");
+    context.drawImage(player, 0, 0, canvas.width, canvas.height);
+
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
+    if (!blob) throw new Error("تعذر تجهيز الصورة.");
+
+    const filename = "NOVRA-frame-" + new Date().toISOString().replace(/[:.]/g, "-") + ".png";
+    const file = new File([blob], filename, { type: "image/png" });
+
+    if (navigator.share && navigator.canShare?.({ files: [file] })) {
+      await navigator.share({ files: [file], title: "NOVRA VIDEO frame" });
+    } else {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+    }
+    toast("تم تجهيز لقطة الإطار.");
+  } catch (error) {
+    console.error("NOVRA frame capture failed:", error);
+    toast(error?.message || "تعذر التقاط الإطار. قد يمنع مصدر الفيديو التقاط الصور.");
+  }
+}
+
 async function deleteVideo(videoId) {
   const v = await dbRequest("readonly", "get", videoId);
   if (!v) return;
@@ -3339,7 +3443,11 @@ async function init() {
   setupCustomPlayer();
 
   $("#videoPlayer").addEventListener("timeupdate", () => {
-    if (Math.floor($("#videoPlayer").currentTime) % 5 === 0) savePosition();
+    const player = $("#videoPlayer");
+    if (videoLoopA !== null && videoLoopB !== null && player.currentTime >= videoLoopB) {
+      player.currentTime = videoLoopA;
+    }
+    if (Math.floor(player.currentTime) % 5 === 0) savePosition();
   });
 
   $("#videoPlayer").addEventListener("pause", () => savePosition(true));
@@ -3358,6 +3466,8 @@ async function init() {
   $("#speedSelect").onchange = () => {
     $("#videoPlayer").playbackRate = Number($("#speedSelect").value);
   };
+  $("#abLoopBtn").onclick = toggleVideoABLoop;
+  $("#captureFrameBtn").onclick = captureVideoFrame;
 
 
   let logoVaultTaps = 0, logoVaultTimer = null;

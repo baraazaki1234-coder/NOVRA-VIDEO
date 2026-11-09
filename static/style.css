@@ -4154,3 +4154,8 @@ select:focus-visible {
 .music-eq-band input{width:100%;accent-color:#8b68ff}
 .music-eq-band output{color:#7fe4f5;font-size:10px;font-variant-numeric:tabular-nums}
 @media(max-width:600px){.music-eq-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.music-eq-band{grid-template-columns:44px minmax(0,1fr) 42px;align-items:center;justify-items:stretch}.music-eq-band input{min-width:0}}
+
+
+/* NOVRA video utility actions */
+#playerModal .player-tools { flex-wrap: wrap; }
+#playerModal .player-tools > button { min-height: 40px; }
