@@ -68,6 +68,7 @@ jobs:
         with:
           name: NOVRA-VIDEO-debug-apk
           path: |
-            android/app/build/outputs/apk/debug/app-debug.apk/build/outputs/apk/debug/app-debug.apk
+            android/app/build/outputs/apk/debug/app-debug.apk
+            android/app/build/outputs/apk/debug/app-debug.apk.sha256
           if-no-files-found: error
           retention-days: 14
