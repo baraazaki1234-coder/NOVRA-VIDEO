@@ -27,6 +27,8 @@ let vaultSetupMode = false;
 let pendingVaultResolve = null;
 let vaultPurpose = "browse";
 let nativeMediaPlugin = null;
+const nativeThumbnailCache = new Map();
+const nativeThumbnailPending = new Set();
 const DEVICE_MEDIA_EXCLUSIONS_KEY = "novra-device-media-hidden-v1";
 
 const rootDirPromise = navigator.storage?.getDirectory ? navigator.storage.getDirectory() : Promise.reject(new Error("المتصفح لا يدعم التخزين الخاص OPFS. استخدم Chrome حديثًا." ));
@@ -843,7 +845,8 @@ async function syncDeviceMedia(kind, requestPermission = true, quiet = false) {
       const record = {
         ...(old || {}),
         id: mediaId,
-        name: String(item.title || item.name || "بدون اسم").replace(/\.[^.]+$/, ""),
+        name: old?.nameOverride ? old.name : String(item.title || item.name || "بدون اسم").replace(/\.[^.]+$/, ""),
+        nameOverride: old?.nameOverride === true,
         originalName: String(item.name || item.title || "بدون اسم"),
         filename: old?.filename || null,
         nativeUri: String(item.uri),
@@ -2210,6 +2213,55 @@ function toggleMusicPlayPause() {
 }
 
 
+
+function observeNativeVideoThumbnail(media, thumb) {
+  if (!nativeMediaPlugin || !media?.nativeUri || media.kind !== "video" || media.thumb || !thumb) return;
+  if (thumb.dataset.nativeThumbnailBound === "1") return;
+  thumb.dataset.nativeThumbnailBound = "1";
+  const placeholder = thumb.querySelector(".thumb-placeholder");
+  const image = document.createElement("img");
+  image.alt = "";
+  image.loading = "lazy";
+  image.decoding = "async";
+  image.hidden = true;
+  image.style.cssText = "position:absolute;inset:0;width:100%;height:100%;object-fit:cover";
+  thumb.append(image);
+  const load = async () => {
+    if (!thumb.isConnected) return;
+    const cached = nativeThumbnailCache.get(media.id);
+    if (cached) {
+      image.src = cached; image.hidden = false;
+      if (placeholder) placeholder.hidden = true;
+      return;
+    }
+    if (nativeThumbnailPending.has(media.id)) return;
+    nativeThumbnailPending.add(media.id);
+    try {
+      const result = await nativeMediaPlugin.getThumbnail({uri:media.nativeUri});
+      if (!result?.data || !thumb.isConnected) return;
+      const source = "data:image/jpeg;base64," + result.data;
+      if (nativeThumbnailCache.size >= 80) nativeThumbnailCache.delete(nativeThumbnailCache.keys().next().value);
+      nativeThumbnailCache.set(media.id, source);
+      image.src = source; image.hidden = false;
+      if (placeholder) placeholder.hidden = true;
+    } catch (error) { console.debug("NOVRA native thumbnail unavailable:", error); }
+    finally { nativeThumbnailPending.delete(media.id); }
+  };
+  if ("IntersectionObserver" in window) {
+    if (!window.novraThumbnailObserver) {
+      window.novraThumbnailObserver = new IntersectionObserver(entries => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          window.novraThumbnailObserver.unobserve(entry.target);
+          entry.target.__novraLoadThumbnail?.();
+        }
+      }, {rootMargin:"240px 0px"});
+    }
+    thumb.__novraLoadThumbnail = load;
+    window.novraThumbnailObserver.observe(thumb);
+  } else load();
+}
+
 async function render() {
   const all = await dbRequest("readonly","all");
   const allPlaylists = await playlistRequest("all");
@@ -2319,6 +2371,7 @@ async function render() {
         ph.textContent = "▶";
         thumb.append(ph);
       }
+      if (v.nativeUri && !v.thumb) observeNativeVideoThumbnail(v, thumb);
     } else {
       thumb.classList.add("audio-thumb");
       if (v.thumb) {
@@ -2481,6 +2534,7 @@ async function render() {
       const oldName = v.name;
       try {
         v.name = newName;
+        if (v.nativeUri) v.nameOverride = true;
         await dbRequest("readwrite", "put", v);
         toast("تم تعديل اسم الملف.");
         await render();

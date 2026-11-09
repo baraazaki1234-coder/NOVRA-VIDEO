@@ -1,6 +1,10 @@
 package com.novra.video;
 
 import android.Manifest;
+import android.graphics.Bitmap;
+import android.media.MediaMetadataRetriever;
+import android.util.Base64;
+import java.io.ByteArrayOutputStream;
 import android.content.ContentUris;
 import android.database.Cursor;
 import android.database.ContentObserver;
@@ -61,6 +65,41 @@ public class NovraMediaPlugin extends Plugin {
   private void accessResult(PluginCall call){String kind=call.getString("kind","video");JSObject out=new JSObject();out.put("granted",hasAccess(kind));out.put("kind",kind);call.resolve(out);}
   @PluginMethod
   public void checkAccess(PluginCall call){String kind=call.getString("kind","video");JSObject out=new JSObject();out.put("granted",hasAccess(kind));out.put("kind",kind);call.resolve(out);}
+
+  @PluginMethod
+  public void getThumbnail(PluginCall call) {
+    String rawUri = call.getString("uri");
+    if (rawUri == null || !rawUri.startsWith("content://")) { call.reject("Invalid media URI."); return; }
+    if (!hasAccess("video")) { call.reject("Video permission has not been granted.", "PERMISSION_REQUIRED"); return; }
+    MediaMetadataRetriever retriever = new MediaMetadataRetriever();
+    Bitmap frame = null;
+    Bitmap scaled = null;
+    try {
+      retriever.setDataSource(getContext(), Uri.parse(rawUri));
+      frame = retriever.getFrameAtTime(1_000_000L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC);
+      if (frame == null) frame = retriever.getFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC);
+      if (frame == null) { JSObject empty = new JSObject(); empty.put("data", ""); call.resolve(empty); return; }
+      int maxDimension = 480;
+      float scale = Math.min(1f, maxDimension / (float)Math.max(frame.getWidth(), frame.getHeight()));
+      Bitmap output = frame;
+      if (scale < 1f) {
+        scaled = Bitmap.createScaledBitmap(frame, Math.max(1, Math.round(frame.getWidth()*scale)), Math.max(1, Math.round(frame.getHeight()*scale)), true);
+        output = scaled;
+      }
+      ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+      output.compress(Bitmap.CompressFormat.JPEG, 74, bytes);
+      JSObject result = new JSObject();
+      result.put("data", Base64.encodeToString(bytes.toByteArray(), Base64.NO_WRAP));
+      call.resolve(result);
+    } catch (Exception error) {
+      call.reject("Could not generate video thumbnail.", null, error);
+    } finally {
+      if (scaled != null && !scaled.isRecycled()) scaled.recycle();
+      if (frame != null && !frame.isRecycled()) frame.recycle();
+      try { retriever.release(); } catch (Exception ignored) {}
+    }
+  }
+
   @PluginMethod
   public void listMedia(PluginCall call) {
     String kind=call.getString("kind","video");
