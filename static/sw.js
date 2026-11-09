@@ -1,4 +1,4 @@
-const CACHE = "novra-video-shell-v23";
+const CACHE = "novra-video-shell-v24";
 const CACHE_PREFIX = "novra-video-shell-";
 
 const ASSETS = [
@@ -8,9 +8,7 @@ const ASSETS = [
   "/app.js",
   "/manifest.json",
   "/sw.js",
-  "/icon-192.png",
-  "/icon-512.png",
-  "/icon-maskable-512.png"
+  "/icon.svg"
 ];
 
 const SHELL_PATHS = new Set(ASSETS);

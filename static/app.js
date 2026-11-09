@@ -790,14 +790,19 @@ async function importLocal(file) {
   }
 }
 
-async function syncDeviceMedia(kind) {
+async function syncDeviceMedia(kind, requestPermission = true, quiet = false) {
   if (!nativeMediaPlugin) { toast("مزامنة ملفات الهاتف متاحة في تطبيق NOVRA Android فقط."); return; }
   const button = $("#scanDeviceBtn");
-  if (button) { button.disabled = true; button.textContent = "جارٍ الفحص…"; }
+  if (button && !quiet) { button.disabled = true; button.textContent = "جارٍ الفحص…"; }
   try {
-    toast(kind === "audio" ? "اسمح لـ NOVRA بالوصول إلى ملفات الصوت لإضافتها إلى مكتبتك." : "اسمح لـ NOVRA بالوصول إلى الفيديوهات لاكتشاف ملفات الهاتف.");
-    const access = await nativeMediaPlugin.requestAccess({ kind });
-    if (!access || access.granted !== true) { toast("لم يتم منح إذن الوصول. يمكنك تفعيله لاحقًا من إعدادات Android."); return; }
+    if (!quiet && requestPermission) toast(kind === "audio" ? "اسمح لـ NOVRA بالوصول إلى ملفات الصوت لإضافتها إلى مكتبتك." : "اسمح لـ NOVRA بالوصول إلى الفيديوهات لاكتشاف ملفات الهاتف.");
+    const access = requestPermission
+      ? await nativeMediaPlugin.requestAccess({ kind })
+      : await nativeMediaPlugin.checkAccess({ kind });
+    if (!access || access.granted !== true) {
+      if (!quiet) toast("لم يتم منح إذن الوصول. يمكنك تفعيله لاحقًا من إعدادات Android.");
+      return;
+    }
     const result = await nativeMediaPlugin.listMedia({ kind });
     const items = Array.isArray(result?.items) ? result.items : [];
     const ignored = new Set(JSON.parse(localStorage.getItem(DEVICE_MEDIA_EXCLUSIONS_KEY) || "[]"));
@@ -833,12 +838,26 @@ async function syncDeviceMedia(kind) {
       if (old) refreshed++; else added++;
     }
     await render();
-    toast(`تم تحديث مكتبة NOVRA: ${added} جديد، ${refreshed} تم تحديثه من ملفات الهاتف.`);
+    if (!quiet) toast(`تم تحديث مكتبة NOVRA: ${added} جديد، ${refreshed} تم تحديثه من ملفات الهاتف.`);
   } catch (error) {
     console.error("NOVRA device media sync failed:", error);
     toast(error?.message || "تعذر فحص ملفات الهاتف.");
   } finally {
-    if (button) { button.disabled = false; button.textContent = "مزامنة الجهاز"; }
+    if (button && !quiet) { button.disabled = false; button.textContent = "مزامنة الجهاز"; }
+  }
+}
+
+let lastNativeMediaRefreshAt = 0;
+async function refreshNativeMediaIfAllowed() {
+  if (!nativeMediaPlugin || Date.now() - lastNativeMediaRefreshAt < 45000) return;
+  lastNativeMediaRefreshAt = Date.now();
+  for (const kind of ["video", "audio"]) {
+    try {
+      const access = await nativeMediaPlugin.checkAccess({ kind });
+      if (access?.granted) await syncDeviceMedia(kind, false, true);
+    } catch (error) {
+      console.debug("NOVRA background media refresh skipped:", kind, error);
+    }
   }
 }
 
@@ -1307,12 +1326,76 @@ let musicAudioSource = null;
 let musicEqFilters = null;
 let musicEqPresetIndex = 0;
 
-const musicEqPresets = [
-  { name: "إيقاف", gains: [0, 0, 0] },
-  { name: "Bass+", gains: [6, 1, -2] },
-  { name: "Vocal", gains: [-2, 4, 1] },
-  { name: "Treble+", gains: [-2, 1, 6] }
+const musicEqBands = [
+  { label: "31 Hz", frequency: 31 },
+  { label: "62 Hz", frequency: 62 },
+  { label: "125 Hz", frequency: 125 },
+  { label: "250 Hz", frequency: 250 },
+  { label: "500 Hz", frequency: 500 },
+  { label: "1 kHz", frequency: 1000 },
+  { label: "2 kHz", frequency: 2000 },
+  { label: "4 kHz", frequency: 4000 },
+  { label: "8 kHz", frequency: 8000 },
+  { label: "16 kHz", frequency: 16000 }
 ];
+let musicEqCustomGains = Array(10).fill(0);
+let musicEqCustomEnabled = false;
+const musicEqPresets = [
+  { name: "إيقاف", gains: [0,0,0,0,0,0,0,0,0,0] },
+  { name: "Bass+", gains: [6,5,4,2,0,0,-1,-2,-2,-2] },
+  { name: "Vocal", gains: [-2,-1,0,2,4,5,4,2,0,-1] },
+  { name: "Treble+", gains: [-3,-2,-1,0,1,2,3,4,5,6] },
+  { name: "Rock", gains: [4,3,1,-1,-2,1,3,4,4,4] },
+  { name: "Jazz", gains: [3,2,1,2,-1,-1,1,2,3,3] },
+  { name: "Classical", gains: [4,3,2,1,-1,-1,0,2,3,4] },
+  { name: "Pop", gains: [-1,1,3,4,2,0,1,2,3,2] }
+];
+
+function loadMusicEqSettings() {
+  try {
+    const saved = JSON.parse(localStorage.getItem("novra-music-eq-v1") || "null");
+    if (!saved || typeof saved !== "object") return;
+    if (Number.isInteger(saved.presetIndex)) {
+      musicEqPresetIndex = Math.max(0, Math.min(musicEqPresets.length - 1, saved.presetIndex));
+    }
+    if (Array.isArray(saved.customGains) && saved.customGains.length === 10) {
+      musicEqCustomGains = saved.customGains.map(value =>
+        Math.max(-12, Math.min(12, Number(value) || 0))
+      );
+    }
+    musicEqCustomEnabled = saved.customEnabled === true;
+  } catch (error) {
+    console.warn("Could not restore NOVRA EQ settings:", error);
+  }
+}
+
+function saveMusicEqSettings() {
+  try {
+    localStorage.setItem("novra-music-eq-v1", JSON.stringify({
+      presetIndex: musicEqPresetIndex,
+      customEnabled: musicEqCustomEnabled,
+      customGains: musicEqCustomGains
+    }));
+  } catch (error) {
+    console.warn("Could not save NOVRA EQ settings:", error);
+  }
+}
+
+function syncMusicEqControls() {
+  const button = $("#musicEqBtn");
+  if (button) {
+    button.textContent = musicEqCustomEnabled
+      ? "♫ EQ: مخصص"
+      : "♫ EQ: " + musicEqPresets[musicEqPresetIndex].name;
+  }
+  document.querySelectorAll("[data-eq-band]").forEach(input => {
+    const index = Number(input.dataset.eqBand);
+    if (!Number.isInteger(index) || index < 0 || index >= 10) return;
+    input.value = String(musicEqCustomGains[index]);
+    const output = input.parentElement?.querySelector("output");
+    if (output) output.textContent = musicEqCustomGains[index] + " dB";
+  });
+}
 
 
 // NOVRA VIDEO — LRC LYRICS
@@ -1421,6 +1504,43 @@ function ensureMusicEnhancementControls() {
 
   area.append(sleep, eq);
 
+  const eqDetails = document.createElement("details");
+  eqDetails.className = "music-eq-details";
+  const eqSummary = document.createElement("summary");
+  eqSummary.textContent = "معادل صوتي احترافي — 10 نطاقات";
+  const eqGrid = document.createElement("div");
+  eqGrid.className = "music-eq-grid";
+
+  musicEqBands.forEach((band, index) => {
+    const label = document.createElement("label");
+    label.className = "music-eq-band";
+    const name = document.createElement("span");
+    name.textContent = band.label;
+    const range = document.createElement("input");
+    range.type = "range";
+    range.min = "-12";
+    range.max = "12";
+    range.step = "1";
+    range.value = String(musicEqCustomGains[index]);
+    range.dataset.eqBand = String(index);
+    range.setAttribute("aria-label", "معادل " + band.label);
+    const value = document.createElement("output");
+    value.textContent = musicEqCustomGains[index] + " dB";
+    range.addEventListener("input", () => {
+      musicEqCustomGains[index] = Number(range.value);
+      musicEqCustomEnabled = true;
+      applyMusicEqualizer();
+      syncMusicEqControls();
+      saveMusicEqSettings();
+    });
+    label.append(name, range, value);
+    eqGrid.append(label);
+  });
+
+  eqDetails.append(eqSummary, eqGrid);
+  area.append(eqDetails);
+  syncMusicEqControls();
+
   // NOVRA VIDEO — LRC LYRICS UI
   const lyricsButton = document.createElement("button");
   lyricsButton.id = "novraLyricsBtn";
@@ -1527,25 +1647,20 @@ function ensureMusicAudioGraph() {
     musicAudioContext = musicAudioContext || new AudioContextClass();
     musicAudioSource = musicAudioContext.createMediaElementSource(currentAudio);
 
-    const low = musicAudioContext.createBiquadFilter();
-    low.type = "lowshelf";
-    low.frequency.value = 120;
+    musicEqFilters = musicEqBands.map(band => {
+      const filter = musicAudioContext.createBiquadFilter();
+      filter.type = "peaking";
+      filter.frequency.value = band.frequency;
+      filter.Q.value = 1.0;
+      return filter;
+    });
 
-    const mid = musicAudioContext.createBiquadFilter();
-    mid.type = "peaking";
-    mid.frequency.value = 1000;
-    mid.Q.value = 0.8;
-
-    const high = musicAudioContext.createBiquadFilter();
-    high.type = "highshelf";
-    high.frequency.value = 8000;
-
-    musicAudioSource.connect(low);
-    low.connect(mid);
-    mid.connect(high);
-    high.connect(musicAudioContext.destination);
-
-    musicEqFilters = [low, mid, high];
+    let previous = musicAudioSource;
+    for (const filter of musicEqFilters) {
+      previous.connect(filter);
+      previous = filter;
+    }
+    previous.connect(musicAudioContext.destination);
     applyMusicEqualizer();
     return true;
   } catch (error) {
@@ -1557,38 +1672,28 @@ function ensureMusicAudioGraph() {
 function applyMusicEqualizer() {
   if (!musicEqFilters) return;
 
-  const gains = musicEqPresets[musicEqPresetIndex].gains;
+  const gains = musicEqCustomEnabled
+    ? musicEqCustomGains
+    : musicEqPresets[musicEqPresetIndex].gains;
   musicEqFilters.forEach((filter, index) => {
-    filter.gain.setTargetAtTime(
-      gains[index],
-      musicAudioContext.currentTime,
-      0.04
-    );
+    filter.gain.setTargetAtTime(gains[index] || 0, musicAudioContext.currentTime, 0.04);
   });
 }
 
 async function cycleMusicEqualizer() {
-  if (!ensureMusicAudioGraph()) {
-    toast("المعادل الصوتي غير مدعوم في هذا المتصفح.");
-    return;
-  }
-
+  musicEqCustomEnabled = false;
+  musicEqPresetIndex = (musicEqPresetIndex + 1) % musicEqPresets.length;
   try {
-    if (musicAudioContext.state === "suspended") {
+    if (currentAudio && ensureMusicAudioGraph() && musicAudioContext.state === "suspended") {
       await musicAudioContext.resume();
     }
-
-    musicEqPresetIndex =
-      (musicEqPresetIndex + 1) % musicEqPresets.length;
-
     applyMusicEqualizer();
-
-    const preset = musicEqPresets[musicEqPresetIndex];
-    $("#musicEqBtn").textContent = `♫ EQ: ${preset.name}`;
-    toast(`تم اختيار المعادل: ${preset.name}`);
+    syncMusicEqControls();
+    saveMusicEqSettings();
+    toast("تم اختيار المعادل: " + musicEqPresets[musicEqPresetIndex].name);
   } catch (error) {
     console.warn(error);
-    toast("تعذر تشغيل المعادل الصوتي.");
+    toast("تم حفظ إعداد المعادل وسيُطبّق عند تشغيل الصوت.");
   }
 }
 
@@ -1626,9 +1731,10 @@ function syncMusicMediaSession() {
         artist: currentMusicTrack.artist || "NOVRA VIDEO",
         album: currentMusicTrack.album || "المكتبة المحلية",
         artwork: [{
-          src: new URL("/icon-512.png", location.origin).href,
+          src: currentMusicTrack.thumb || new URL("/icon.svg", location.origin).href,
           sizes: "512x512",
-          type: "image/png"
+          type: (currentMusicTrack.thumb || "").startsWith("data:image/png") ? "image/png" :
+            (currentMusicTrack.thumb || "").startsWith("data:image/") ? "image/jpeg" : "image/svg+xml"
         }]
       });
     }
@@ -2167,10 +2273,20 @@ async function render() {
       }
     } else {
       thumb.classList.add("audio-thumb");
-      const symbol = document.createElement("span");
-      symbol.className = "audio-symbol";
-      symbol.textContent = "♫";
-      thumb.append(symbol);
+      if (v.thumb) {
+        const cover = document.createElement("img");
+        cover.src = v.thumb;
+        cover.alt = "";
+        cover.loading = "lazy";
+        cover.decoding = "async";
+        cover.style.cssText = "position:absolute;inset:0;width:100%;height:100%;object-fit:cover";
+        thumb.append(cover);
+      } else {
+        const symbol = document.createElement("span");
+        symbol.className = "audio-symbol";
+        symbol.textContent = "♫";
+        thumb.append(symbol);
+      }
     }
 
     const duration = document.createElement("span");
@@ -2936,6 +3052,7 @@ async function init() {
   }
 
   db = await openDB();
+  loadMusicEqSettings();
 
   try {
     await navigator.storage.persist();
@@ -2946,6 +3063,12 @@ async function init() {
   if (scanDeviceButton) {
     scanDeviceButton.hidden = !nativeMediaPlugin;
     scanDeviceButton.onclick = () => syncDeviceMedia(currentCategory === "audio" ? "audio" : "video");
+  }
+  if (nativeMediaPlugin) {
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) refreshNativeMediaIfAllowed();
+    });
+    refreshNativeMediaIfAllowed();
   }
 
   $("#heroAdd").onclick = $("#emptyAdd").onclick = () => openModal("addModal");

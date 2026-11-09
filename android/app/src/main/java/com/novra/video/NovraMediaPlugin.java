@@ -66,7 +66,7 @@ public class NovraMediaPlugin extends Plugin {
         int titleCol="audio".equals(kind)?cursor.getColumnIndex(MediaStore.Audio.Media.TITLE):-1;
         int widthCol="video".equals(kind)?cursor.getColumnIndex(MediaStore.Video.Media.WIDTH):-1;
         int heightCol="video".equals(kind)?cursor.getColumnIndex(MediaStore.Video.Media.HEIGHT):-1;
-        while(cursor.moveToNext()&&count<5000){
+        while(cursor.moveToNext()&&count<3000){
           long rowId=cursor.getLong(idCol);Uri itemUri=ContentUris.withAppendedId(collection,rowId);
           JSObject item=new JSObject();
           item.put("id","android:"+kind+":"+rowId);item.put("uri",itemUri.toString());
@@ -82,7 +82,7 @@ public class NovraMediaPlugin extends Plugin {
         }
       }
       JSObject out=new JSObject();out.put("kind",kind);out.put("count",count);out.put("items",items);call.resolve(out);
-    }catch(Exception error){call.reject("Could not read device media.",error);}
+    }catch(Exception error){call.reject("Could not read device media.",null,error);}
   }
   private boolean hasAccess(String kind){
     if(Build.VERSION.SDK_INT>=33){

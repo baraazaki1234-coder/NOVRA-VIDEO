@@ -4144,3 +4144,13 @@ select:focus-visible {
 }
 
 /* END NOVRA MEDIA UPGRADE */
+
+
+/* NOVRA 10-band equalizer */
+.music-eq-details{width:100%;padding:12px;border:1px solid rgba(116,169,255,.18);border-radius:14px;background:rgba(9,17,35,.58)}
+.music-eq-details summary{color:#bcdcff;font-size:12px;font-weight:700;cursor:pointer}
+.music-eq-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-top:14px}
+.music-eq-band{display:grid;justify-items:center;gap:7px;min-width:0;color:#a9c3e8;font-size:10px}
+.music-eq-band input{width:100%;accent-color:#8b68ff}
+.music-eq-band output{color:#7fe4f5;font-size:10px;font-variant-numeric:tabular-nums}
+@media(max-width:600px){.music-eq-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.music-eq-band{grid-template-columns:44px minmax(0,1fr) 42px;align-items:center;justify-items:stretch}.music-eq-band input{min-width:0}}
