@@ -1,0 +1,20 @@
+{
+  "name": "novra-video",
+  "version": "1.0.0",
+  "description": "مكتبة فيديوهات محلية تعمل من خلال متصفح الهاتف وخادم محلي بسيط.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@capacitor/android": "^8.6.0",
+    "@capacitor/core": "^8.6.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.6.0"
+  }
+}
