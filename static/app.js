@@ -32,6 +32,7 @@ const nativeThumbnailPending = new Set();
 const DEVICE_MEDIA_EXCLUSIONS_KEY = "novra-device-media-hidden-v1";
 const MEDIA_RENDER_BATCH = 72;
 let mediaRenderLimit = MEDIA_RENDER_BATCH;
+let nativeShareImportQueue = Promise.resolve();
 
 const rootDirPromise = navigator.storage?.getDirectory ? navigator.storage.getDirectory() : Promise.reject(new Error("المتصفح لا يدعم التخزين الخاص OPFS. استخدم Chrome حديثًا." ));
 
@@ -1004,6 +1005,7 @@ async function importSharedFiles() {
 async function importNativeSharedFiles() {
   if (!nativeMediaPlugin?.consumeSharedFiles) return;
 
+  const processPendingShares = async () => {
   try {
     const shared = await nativeMediaPlugin.consumeSharedFiles();
     const items = Array.isArray(shared?.items) ? shared.items : [];
@@ -1049,6 +1051,13 @@ async function importNativeSharedFiles() {
     console.error("NOVRA share receiver failed:", error);
     toast("تعذر استقبال المشاركة. حاول إرسال الملف مرة أخرى.");
   }
+  };
+
+  nativeShareImportQueue = nativeShareImportQueue.then(
+    processPendingShares,
+    processPendingShares
+  );
+  return nativeShareImportQueue;
 }
 
 async function importUrl() {
