@@ -3309,6 +3309,14 @@ async function init() {
     scanDeviceButton.onclick = () => syncDeviceMedia(currentCategory === "audio" ? "audio" : "video");
   }
 
+  window.addEventListener("novraShareIntent", () => {
+    if (!db) return;
+    importNativeSharedFiles().catch(error => {
+      console.error("NOVRA foreground share import failed:", error);
+      toast("تعذر استيراد المشاركة الجديدة.");
+    });
+  });
+
   const nativeReady = Promise.resolve(window.__novraNativeReady || null)
     .then(plugin => {
       nativeMediaPlugin = plugin || null;
