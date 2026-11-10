@@ -1,6 +1,7 @@
 const $ = (s) => document.querySelector(s);
 const DB_NAME = "novra-video-db", STORE = "videos";
 let db, currentVideo = null, currentObjectUrl = null, toastTimer, pendingPosterId = null;
+let currentNativePlaybackPath = null;
 let searchRenderTimer = null;
 let activePlaylistId = null;
 // NOVRA_LIBRARY_V2
@@ -2213,6 +2214,7 @@ async function playMusicTrack(id) {
       if (currentObjectUrl) URL.revokeObjectURL(currentObjectUrl);
       currentObjectUrl = null;
       currentVideo = null;
+      await releaseCurrentNativePlayback();
       closeModal("playerModal");
     }
 
@@ -2226,7 +2228,17 @@ async function playMusicTrack(id) {
       currentAudioUrl = null;
     }
 
-    const playbackSource = track.nativeUri || URL.createObjectURL(file);
+    let playbackSource;
+    if (track.nativeUri) {
+      await releaseCurrentNativePlayback();
+      if (!nativeMediaPlugin?.preparePlayback) throw new Error("تشغيل ملفات الجهاز يحتاج إصدار Android المحدث.");
+      const prepared = await nativeMediaPlugin.preparePlayback({uri:track.nativeUri});
+      currentNativePlaybackPath = prepared.path;
+      playbackSource = window.Capacitor?.convertFileSrc?.(prepared.path);
+      if (!playbackSource) throw new Error("تعذر تجهيز مسار تشغيل الملف.");
+    } else {
+      playbackSource = URL.createObjectURL(file);
+    }
     currentAudioUrl = playbackSource.startsWith("blob:") ? playbackSource : null;
 
     if (!currentAudio) currentAudio = new Audio();
@@ -2749,6 +2761,15 @@ async function render() {
   }
 }
 
+async function releaseCurrentNativePlayback() {
+  const path = currentNativePlaybackPath;
+  currentNativePlaybackPath = null;
+  if (path && nativeMediaPlugin?.releasePlaybackFile) {
+    try { await nativeMediaPlugin.releasePlaybackFile({path}); }
+    catch (error) { console.debug("Temporary playback cache cleanup skipped:", error); }
+  }
+}
+
 function formatPlayerTime(seconds) {
   if (!Number.isFinite(seconds) || seconds < 0) return "00:00";
   const total = Math.floor(seconds);
@@ -3053,7 +3074,15 @@ async function playVideo(videoId, musicMode = false) {
     player.load();
 
     currentObjectUrl = file ? URL.createObjectURL(file) : null;
-    const playbackSource = v.nativeUri || currentObjectUrl;
+    let playbackSource = currentObjectUrl;
+    if (v.nativeUri) {
+      await releaseCurrentNativePlayback();
+      if (!nativeMediaPlugin?.preparePlayback) throw new Error("تشغيل ملفات الجهاز يحتاج إصدار Android المحدث.");
+      const prepared = await nativeMediaPlugin.preparePlayback({uri:v.nativeUri});
+      currentNativePlaybackPath = prepared.path;
+      playbackSource = window.Capacitor?.convertFileSrc?.(prepared.path);
+      if (!playbackSource) throw new Error("تعذر تجهيز مسار تشغيل الملف.");
+    }
     currentVideo = v;
     if (musicMode) currentMusicTitle = v.name || v.filename || "بدون اسم";
 
@@ -4058,6 +4087,7 @@ async function init() {
     if (currentObjectUrl) URL.revokeObjectURL(currentObjectUrl);
     currentObjectUrl = null;
     currentVideo = null;
+    await releaseCurrentNativePlayback();
 
     if (currentMusicVideo) {
       currentMusicVideo = false;

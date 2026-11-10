@@ -79,6 +79,38 @@ public class NovraMediaPlugin extends Plugin {
   public void checkAccess(PluginCall call){String kind=call.getString("kind","video");JSObject out=new JSObject();out.put("granted",hasAccess(kind));out.put("kind",kind);call.resolve(out);}
 
   @PluginMethod
+  public void preparePlayback(PluginCall call) {
+    String rawUri = call.getString("uri");
+    if (rawUri == null || !rawUri.startsWith("content://")) { call.reject("Invalid media URI."); return; }
+    File directory = new File(getContext().getCacheDir(), "novra-playback");
+    if (!directory.exists() && !directory.mkdirs()) { call.reject("Could not create playback cache."); return; }
+    String originalName = sharedDisplayName(Uri.parse(rawUri));
+    String extension = "";
+    int dot = originalName.lastIndexOf(".");
+    if (dot > 0 && dot < originalName.length() - 1) extension = originalName.substring(dot).replaceAll("[^A-Za-z0-9._-]", "");
+    File target = new File(directory, UUID.randomUUID().toString() + extension);
+    try (InputStream input = getContext().getContentResolver().openInputStream(Uri.parse(rawUri)); FileOutputStream output = new FileOutputStream(target)) {
+      if (input == null) throw new Exception("Media stream is unavailable.");
+      byte[] buffer = new byte[128 * 1024]; int count;
+      while ((count = input.read(buffer)) != -1) output.write(buffer, 0, count);
+      output.getFD().sync();
+      JSObject result = new JSObject(); result.put("path", target.getAbsolutePath()); result.put("size", target.length()); call.resolve(result);
+    } catch (Exception error) { target.delete(); call.reject("تعذر تجهيز الملف للتشغيل.", null, error); }
+  }
+
+  @PluginMethod
+  public void releasePlaybackFile(PluginCall call) {
+    try {
+      String rawPath = call.getString("path");
+      if (rawPath == null || rawPath.isEmpty()) { call.resolve(); return; }
+      File directory = new File(getContext().getCacheDir(), "novra-playback").getCanonicalFile();
+      File target = new File(rawPath).getCanonicalFile();
+      if (!directory.equals(target.getParentFile())) { call.reject("Invalid playback cache path."); return; }
+      if (target.exists() && !target.delete()) { call.reject("Could not release playback cache."); return; }
+      call.resolve();
+    } catch (Exception error) { call.reject("تعذر تنظيف ذاكرة التشغيل المؤقتة.", null, error); }
+  }
+  @PluginMethod
   public void getThumbnail(PluginCall call) {
     String rawUri = call.getString("uri");
     if (rawUri == null || !rawUri.startsWith("content://")) { call.reject("Invalid media URI."); return; }
