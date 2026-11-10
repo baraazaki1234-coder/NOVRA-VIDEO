@@ -30,6 +30,8 @@ let nativeMediaPlugin = null;
 const nativeThumbnailCache = new Map();
 const nativeThumbnailPending = new Set();
 const DEVICE_MEDIA_EXCLUSIONS_KEY = "novra-device-media-hidden-v1";
+const MEDIA_RENDER_BATCH = 72;
+let mediaRenderLimit = MEDIA_RENDER_BATCH;
 
 const rootDirPromise = navigator.storage?.getDirectory ? navigator.storage.getDirectory() : Promise.reject(new Error("المتصفح لا يدعم التخزين الخاص OPFS. استخدم Chrome حديثًا." ));
 
@@ -995,6 +997,57 @@ async function importSharedFiles() {
       location.hash;
 
     history.replaceState({}, "", cleanURL);
+  }
+}
+
+
+async function importNativeSharedFiles() {
+  if (!nativeMediaPlugin?.consumeSharedFiles) return;
+
+  try {
+    const shared = await nativeMediaPlugin.consumeSharedFiles();
+    const items = Array.isArray(shared?.items) ? shared.items : [];
+    let imported = 0;
+    let failed = 0;
+
+    for (const item of items) {
+      try {
+        const localUrl = window.Capacitor?.convertFileSrc?.(item.path);
+        if (!localUrl) throw new Error("تعذر فتح مسار الملف المستلم.");
+        const response = await fetch(localUrl);
+        if (!response.ok) throw new Error("تعذر قراءة الملف المستلم.");
+        const blob = await response.blob();
+        const file = new File([blob], item.name || "shared-media", {
+          type: item.type || blob.type || "",
+          lastModified: Date.now()
+        });
+        await importLocal(file);
+        await nativeMediaPlugin.deleteSharedFile({ path: item.path });
+        imported++;
+      } catch (error) {
+        failed++;
+        console.error("NOVRA native share import failed:", item?.name, error);
+      }
+    }
+
+    if (failed) {
+      toast(`تعذر استيراد ${failed} ملف. احتفظت NOVRA بالنسخ المستلمة لمحاولة أخرى.`);
+    } else if (imported > 1) {
+      toast(`تم استيراد ${imported} ملفات مشتركة إلى المكتبة.`);
+    }
+
+    const sharedText = String(shared?.text || "").trim();
+    const urlMatch = sharedText.match(/https?:\/\/[^\s]+/i);
+    if (urlMatch) {
+      $("#urlInput").value = urlMatch[0].replace(/[),.؛،]+$/, "");
+      openModal("addModal");
+      toast("استلمت رابطًا من تطبيق آخر. راجعه ثم اضغط استيراد الرابط.");
+    } else if (sharedText && !items.length) {
+      toast("استلمت نصًا من تطبيق آخر، لكن NOVRA تحتاج رابط ملف فيديو أو صوت مباشر.");
+    }
+  } catch (error) {
+    console.error("NOVRA share receiver failed:", error);
+    toast("تعذر استقبال المشاركة. حاول إرسال الملف مرة أخرى.");
   }
 }
 
@@ -2311,6 +2364,7 @@ async function render() {
   const playlistIndexView = currentCategory === "playlists" && !activePlaylistId;
   const videoGrid = $("#videoGrid");
   const cardFragment = document.createDocumentFragment();
+  document.querySelector("#loadMoreMedia")?.remove();
   videoGrid.replaceChildren();
   $("#videoGrid").hidden = playlistIndexView;
   $("#emptyState").hidden = playlistIndexView || items.length > 0;
@@ -2349,7 +2403,8 @@ async function render() {
     $("#emptyState button").hidden = false;
   }
 
-  for (const v of items) {
+  const visibleItems = items.slice(0, mediaRenderLimit);
+  for (const v of visibleItems) {
     const kind = v.kind || "video";
     const card = document.createElement("article");
     card.className = "video-card";
@@ -2551,6 +2606,23 @@ async function render() {
   }
 
   videoGrid.append(cardFragment);
+
+  if (items.length > visibleItems.length) {
+    const more = document.createElement("button");
+    more.id = "loadMoreMedia";
+    more.className = "load-more-media";
+    more.type = "button";
+    const remaining = items.length - visibleItems.length;
+    more.textContent = `عرض المزيد · ${Math.min(MEDIA_RENDER_BATCH, remaining)} من ${remaining}`;
+    more.onclick = () => {
+      mediaRenderLimit += MEDIA_RENDER_BATCH;
+      render().catch(error => {
+        console.error("NOVRA incremental render failed:", error);
+        toast("تعذر تحميل المزيد من عناصر المكتبة.");
+      });
+    };
+    videoGrid.after(more);
+  }
 }
 
 function formatPlayerTime(seconds) {
@@ -3688,10 +3760,11 @@ async function init() {
       try { await navigator.storage.persist(); } catch {}
     }
 
+    await nativeReady;
+    await importNativeSharedFiles();
     await importSharedFiles();
     await render();
 
-    await nativeReady;
     if (nativeMediaPlugin) refreshNativeMediaIfAllowed();
     document.documentElement.dataset.novraReady = "true";
   } catch (error) {
