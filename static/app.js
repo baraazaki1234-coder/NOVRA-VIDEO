@@ -1096,7 +1096,7 @@ async function importNativeSharedFiles() {
     if (imported) await render();
 
     if (failed) {
-      toast(`تعذر استيراد ${failed} ملف. احتفظت NOVRA بالنسخ المستلمة لمحاولة أخرى.`);
+      toast(`تعذر استيراد ${failed} ملف. احتفظ التطبيق بالنسخ المستلمة لمحاولة أخرى.`);
     } else if (imported > 1) {
       toast(`تم استيراد ${imported} ملفات مشتركة إلى المكتبة.`);
     }
@@ -3234,7 +3234,7 @@ async function deleteVideo(videoId) {
   const isDeviceMedia = !!v.nativeUri;
   const message = isDeviceMedia
     ? "إزالة هذا الملف من المكتبة فقط؟ سيظل الملف الأصلي محفوظًا على الهاتف."
-    : "هل تريد حذف هذا الملف من مكتبة NOVRA ومساحة التخزين الخاصة بها؟ لا يمكن التراجع عن الحذف.";
+    : "هل تريد حذف هذا الملف من المكتبة ومساحة التخزين الخاصة بها؟ لا يمكن التراجع عن الحذف.";
   if (!confirm(message)) return;
   if (isDeviceMedia) {
     const ignored = new Set(JSON.parse(localStorage.getItem(DEVICE_MEDIA_EXCLUSIONS_KEY) || "[]"));
