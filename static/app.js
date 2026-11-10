@@ -1057,7 +1057,10 @@ async function importNativeSharedFiles() {
 
         if (importedId && nativeMediaPlugin.getSharedMetadata) {
           try {
-            const metadata = await nativeMediaPlugin.getSharedMetadata({ path: item.path });
+            const metadata = await nativeMediaPlugin.getSharedMetadata({
+              path: item.path,
+              kind: mediaKind(file.type, file.name) || "video"
+            });
             const record = await dbRequest("readonly", "get", importedId);
             if (record && (metadata?.thumb || metadata?.duration > 0)) {
               if (metadata.thumb) record.thumb = "data:image/jpeg;base64," + metadata.thumb;
