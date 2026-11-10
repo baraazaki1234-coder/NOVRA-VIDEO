@@ -170,7 +170,8 @@ public class NovraMediaPlugin extends Plugin {
         String action = intent.getAction();
         boolean isShare = Intent.ACTION_SEND.equals(action) || Intent.ACTION_SEND_MULTIPLE.equals(action);
         if (isShare) {
-          sharedText = intent.getStringExtra(Intent.EXTRA_TEXT);
+          CharSequence sharedValue = intent.getCharSequenceExtra(Intent.EXTRA_TEXT);
+          sharedText = sharedValue == null ? "" : sharedValue.toString();
           ArrayList<Uri> uris = new ArrayList<>();
           Set<String> seen = new HashSet<>();
           ClipData clip = intent.getClipData();
@@ -211,21 +212,24 @@ public class NovraMediaPlugin extends Plugin {
                 int count;
                 while ((count = input.read(buffer)) != -1) output.write(buffer, 0, count);
                 output.getFD().sync();
+              } catch (Exception copyError) {
+                temporary.delete();
+                throw copyError;
               }
               if (!temporary.renameTo(destination)) {
                 temporary.delete();
                 throw new Exception("Could not finalize a shared file.");
               }
+              created.add(destination);
               JSONObject metadata = new JSONObject();
               metadata.put("name", originalName);
               metadata.put("type", mime);
               File sidecar = new File(directory, token + ".json");
+              created.add(sidecar);
               try (FileOutputStream output = new FileOutputStream(sidecar)) {
                 output.write(metadata.toString().getBytes(StandardCharsets.UTF_8));
                 output.getFD().sync();
               }
-              created.add(destination);
-              created.add(sidecar);
             }
           } catch (Exception error) {
             for (File file : created) file.delete();
@@ -312,7 +316,10 @@ public class NovraMediaPlugin extends Plugin {
       String name = target.getName();
       int dot = name.lastIndexOf('.');
       String token = dot > 0 ? name.substring(0, dot) : name;
-      target.delete();
+      if (!target.delete()) {
+        call.reject("Could not remove imported temporary file.");
+        return;
+      }
       new File(directory, token + ".json").delete();
       call.resolve();
     } catch (Exception error) {
