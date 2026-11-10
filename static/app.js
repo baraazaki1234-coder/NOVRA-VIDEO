@@ -3439,6 +3439,8 @@ function applyPageVisibility(page) {
   if (videoDiscovery) videoDiscovery.hidden = page !== "videos";
   const musicBrowse = $("#musicBrowsePanel");
   if (musicBrowse) musicBrowse.hidden = page !== "music";
+  const videoSearchButton = $("#onlineVideoSearchBtn");
+  if (videoSearchButton) videoSearchButton.hidden = page !== "videos";
   document.querySelectorAll(".sidebar-link[data-page]").forEach(link => {
     link.classList.toggle("active", link.dataset.page === page);
     if (link.dataset.page === page) link.setAttribute("aria-current", "page");
@@ -3503,7 +3505,7 @@ function setupDiscoveryExperience() {
     <form id="onlineMusicForm" class="online-search-form"><input id="onlineMusicQuery" type="search" placeholder="اسم الأغنية أو الفنان..." autocomplete="off" aria-label="بحث موسيقى عبر الإنترنت"><button class="primary-btn" type="submit">بحث</button></form>
     <div id="onlineMusicStatus" class="online-status">اكتب اسم أغنية أو فنان لبدء البحث.</div>
     <div id="onlineMusicResults" class="online-music-results"></div>
-    <p class="online-disclaimer">المعاينة المتاحة قد تكون قصيرة (حتى 30 ثانية). الاستماع الكامل والشراء أو التحميل يتم من المصدر الرسمي حسب التوفر وحقوق النشر.</p>`;
+    <p class="online-disclaimer">معاينة ترويجية من Apple قد تصل إلى 30 ثانية، وبجوارها رابط Apple Music للمحتوى الكامل.</p>`;
   panel.insertAdjacentHTML("beforeend", '<div class="licensed-audio-block"><div class="licensed-audio-heading"><strong>موسيقى مجانية بترخيص معلن</strong><button id="licensedAudioSearch" class="secondary-btn" type="button">بحث في Internet Archive</button></div><div id="licensedAudioStatus" class="online-status">ابحث عن تسجيلات وأعمال منشورة بتراخيص مفتوحة.</div><div id="licensedAudioResults" class="archive-results"></div></div>');
   $("#licensedAudioSearch").addEventListener("click", () => searchLicensedArchive($("#onlineMusicQuery").value, "audio"));
   tabs.after(panel);
@@ -3511,7 +3513,8 @@ function setupDiscoveryExperience() {
   browsePanel.id = "musicBrowsePanel";
   browsePanel.className = "music-browse-panel";
   browsePanel.innerHTML = '<div class="music-browse-head"><strong>مكتبتي الموسيقية</strong><button id="musicBrowseBack" class="secondary-btn" type="button" hidden>← رجوع للقائمة</button></div><nav class="music-browse-tabs"><button type="button" data-music-view="tracks" class="active">الأغاني</button><button type="button" data-music-view="artists">الفنانون</button><button type="button" data-music-view="albums">الألبومات</button></nav>';
-  panel.after(browsePanel);
+  const musicControlsPanel = document.querySelector("#musicControls");
+  if (musicControlsPanel) musicControlsPanel.after(browsePanel); else panel.after(browsePanel);
   browsePanel.querySelectorAll("[data-music-view]").forEach(button => button.addEventListener("click", () => {
     musicBrowseMode = button.dataset.musicView;
     musicGroupFilter = null;
@@ -3615,7 +3618,7 @@ async function searchOnlineMusic(query) {
         source.href = track.trackViewUrl;
         source.target = "_blank";
         source.rel = "noopener noreferrer";
-        source.textContent = "المصدر";
+        source.textContent = "Apple Music";
         actions.append(source);
       }
       card.append(cover, info, actions);
