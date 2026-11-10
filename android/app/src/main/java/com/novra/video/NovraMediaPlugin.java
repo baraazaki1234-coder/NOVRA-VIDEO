@@ -245,6 +245,59 @@ public class NovraMediaPlugin extends Plugin {
     }
   }
 
+
+  @PluginMethod
+  public void getSharedMetadata(PluginCall call) {
+    MediaMetadataRetriever retriever = new MediaMetadataRetriever();
+    Bitmap frame = null;
+    Bitmap scaled = null;
+    try {
+      String rawPath = call.getString("path");
+      if (rawPath == null || rawPath.isEmpty()) { call.reject("Missing shared file path."); return; }
+      File directory = new File(getContext().getFilesDir(), "novra-share-inbox").getCanonicalFile();
+      File source = new File(rawPath).getCanonicalFile();
+      if (!directory.equals(source.getParentFile()) || !source.isFile()) {
+        call.reject("Invalid shared file path.");
+        return;
+      }
+      retriever.setDataSource(source.getAbsolutePath());
+      long durationMs = 0L;
+      String rawDuration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION);
+      if (rawDuration != null) {
+        try { durationMs = Long.parseLong(rawDuration); } catch (NumberFormatException ignored) {}
+      }
+      String mime = call.getString("kind", "");
+      if (!"audio".equals(mime)) {
+        frame = retriever.getFrameAtTime(1_000_000L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC);
+        if (frame == null) frame = retriever.getFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC);
+      }
+      JSObject result = new JSObject();
+      result.put("duration", durationMs > 0 ? durationMs / 1000.0 : 0.0);
+      if (frame != null) {
+        int maxDimension = 480;
+        float scale = Math.min(1f, maxDimension / (float)Math.max(frame.getWidth(), frame.getHeight()));
+        Bitmap output = frame;
+        if (scale < 1f) {
+          scaled = Bitmap.createScaledBitmap(frame, Math.max(1, Math.round(frame.getWidth() * scale)),
+            Math.max(1, Math.round(frame.getHeight() * scale)), true);
+          output = scaled;
+        }
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        output.compress(Bitmap.CompressFormat.JPEG, 72, bytes);
+        result.put("thumb", Base64.encodeToString(bytes.toByteArray(), Base64.NO_WRAP));
+      } else {
+        result.put("thumb", "");
+      }
+      call.resolve(result);
+    } catch (Exception error) {
+      call.reject("Could not inspect shared media.", null, error);
+    } finally {
+      if (scaled != null && !scaled.isRecycled()) scaled.recycle();
+      if (frame != null && !frame.isRecycled()) frame.recycle();
+      try { retriever.release(); } catch (Exception ignored) {}
+    }
+  }
+
   @PluginMethod
   public void deleteSharedFile(PluginCall call) {
     try {
