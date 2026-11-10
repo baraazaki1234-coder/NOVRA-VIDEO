@@ -3765,7 +3765,14 @@ async function init() {
     await importSharedFiles();
     await render();
 
-    if (nativeMediaPlugin) refreshNativeMediaIfAllowed();
+    if (nativeMediaPlugin) {
+      const scheduleRefresh = () => refreshNativeMediaIfAllowed();
+      if ("requestIdleCallback" in window) {
+        window.requestIdleCallback(scheduleRefresh, { timeout: 5000 });
+      } else {
+        setTimeout(scheduleRefresh, 1800);
+      }
+    }
     document.documentElement.dataset.novraReady = "true";
   } catch (error) {
     console.error("NOVRA startup failed:", error);
