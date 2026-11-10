@@ -4559,3 +4559,8 @@ button,a,.thumb{-webkit-tap-highlight-color:transparent}button:focus-visible,a:f
 .hero{padding:21px 17px}.hero h1{font-size:27px}.stats{gap:7px}.stat{gap:8px}.stat-icon{width:31px;height:31px;flex-basis:31px}
 .video-grid{gap:9px}.thumb{aspect-ratio:16/10}.card-title{font-size:11px}.card-meta{font-size:9px}
 .card-actions{gap:4px}.card-actions button{font-size:9px;padding:6px 3px}.toolbar-controls{gap:7px}.toolbar-controls select{min-width:0}.modal{max-height:88dvh;overflow:auto}}
+
+
+/* Single-column hero layout after removing decorative artwork */
+.main-content>.hero{display:flex;align-items:center;justify-content:flex-start;grid-template-columns:minmax(0,1fr)}
+.main-content>.hero .hero-copy{width:100%;max-width:760px}
