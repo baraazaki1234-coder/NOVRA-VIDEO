@@ -1,4 +1,4 @@
-const CACHE = "novra-video-shell-v26";
+const CACHE = "novra-video-shell-v27";
 const CACHE_PREFIX = "novra-video-shell-";
 
 const ASSETS = [
