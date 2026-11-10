@@ -2227,10 +2227,10 @@ async function playMusicTrack(id) {
       URL.revokeObjectURL(currentAudioUrl);
       currentAudioUrl = null;
     }
+    await releaseCurrentNativePlayback();
 
     let playbackSource;
     if (track.nativeUri) {
-      await releaseCurrentNativePlayback();
       if (!nativeMediaPlugin?.preparePlayback) throw new Error("تشغيل ملفات الجهاز يحتاج إصدار Android المحدث.");
       const prepared = await nativeMediaPlugin.preparePlayback({uri:track.nativeUri});
       currentNativePlaybackPath = prepared.path;
@@ -3063,6 +3063,12 @@ async function playVideo(videoId, musicMode = false) {
   }
 
   try {
+    if (currentAudio) currentAudio.pause();
+    if (currentAudioUrl) {
+      URL.revokeObjectURL(currentAudioUrl);
+      currentAudioUrl = null;
+    }
+    await releaseCurrentNativePlayback();
     const file = v.nativeUri ? null : await getFile(v.filename);
     const player = $("#videoPlayer");
     const screen = $("#playerScreen");
@@ -3076,7 +3082,6 @@ async function playVideo(videoId, musicMode = false) {
     currentObjectUrl = file ? URL.createObjectURL(file) : null;
     let playbackSource = currentObjectUrl;
     if (v.nativeUri) {
-      await releaseCurrentNativePlayback();
       if (!nativeMediaPlugin?.preparePlayback) throw new Error("تشغيل ملفات الجهاز يحتاج إصدار Android المحدث.");
       const prepared = await nativeMediaPlugin.preparePlayback({uri:v.nativeUri});
       currentNativePlaybackPath = prepared.path;
