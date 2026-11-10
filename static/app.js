@@ -1080,6 +1080,8 @@ async function importNativeSharedFiles() {
       }
     }
 
+    if (imported) await render();
+
     if (failed) {
       toast(`تعذر استيراد ${failed} ملف. احتفظت NOVRA بالنسخ المستلمة لمحاولة أخرى.`);
     } else if (imported > 1) {
