@@ -33,6 +33,7 @@ const DEVICE_MEDIA_EXCLUSIONS_KEY = "novra-device-media-hidden-v1";
 const MEDIA_RENDER_BATCH = 72;
 let mediaRenderLimit = MEDIA_RENDER_BATCH;
 let nativeShareImportQueue = Promise.resolve();
+let thumbnailGenerationQueue = Promise.resolve();
 
 const rootDirPromise = navigator.storage?.getDirectory ? navigator.storage.getDirectory() : Promise.reject(new Error("المتصفح لا يدعم التخزين الخاص OPFS. استخدم Chrome حديثًا." ));
 
@@ -314,6 +315,12 @@ async function generateAndSaveThumb(videoId,file) {
   }catch(error){
     console.warn("Video metadata/thumbnail generation failed:",error);
   }
+}
+
+function scheduleVideoThumbnail(videoId, file) {
+  const generate = () => generateAndSaveThumb(videoId, file);
+  thumbnailGenerationQueue = thumbnailGenerationQueue.then(generate, generate);
+  return thumbnailGenerationQueue;
 }
 
 
@@ -698,17 +705,24 @@ async function importLocal(file) {
     return;
   }
 
-  let inspected;
+  // Identify common media types without decoding the whole video before saving.
+  // Thumbnail and duration extraction runs after the import, off the critical UI path.
+  let actualKind = mediaKind(file.type, file.name);
+  let mediaInfo = null;
+  const knownAudio = /\.(mp3|m4a|aac|wav|flac|ogg|oga|opus|weba)$/i.test(file.name);
+  const needsFallbackInspection = !actualKind ||
+    (actualKind === "audio" && !knownAudio && (file.type || "").toLowerCase().startsWith("audio/"));
 
-  try {
-    inspected = await inspectIncomingMedia(file);
-  } catch (error) {
-    hideProgress();
-    throw error;
+  if (needsFallbackInspection) {
+    try {
+      const inspected = await inspectIncomingMedia(file);
+      actualKind = inspected.kind;
+      mediaInfo = inspected.info;
+    } catch (error) {
+      hideProgress();
+      throw error;
+    }
   }
-
-  const actualKind = inspected.kind;
-  const mediaInfo = inspected.info;
 
   if (actualKind === "audio" && !/\.(mp3|m4a|aac|wav|flac|ogg|oga|opus|weba)$/i.test(file.name)) {
     hideProgress();
@@ -783,7 +797,12 @@ async function importLocal(file) {
     );
 
     if (actualKind === "video" && !mediaInfo?.thumb) {
-      generateAndSaveThumb(mediaId, file);
+      const schedule = () => scheduleVideoThumbnail(mediaId, file);
+      if ("requestIdleCallback" in window) {
+        window.requestIdleCallback(schedule, { timeout: 4000 });
+      } else {
+        setTimeout(schedule, 1200);
+      }
     }
 
     if (useVault) currentCategory = "vault";
