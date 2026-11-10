@@ -184,7 +184,7 @@ public class NovraMediaPlugin extends Plugin {
             ArrayList<Uri> streams = intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM);
             if (streams != null) for (Uri uri : streams) addSharedUri(uris, seen, uri);
           } else {
-            Uri stream = intent.getParcelableExtra(Intent.EXTRA_STREAM);
+            Uri stream = (Uri) intent.getParcelableExtra(Intent.EXTRA_STREAM);
             addSharedUri(uris, seen, stream);
           }
           if (uris.isEmpty() && intent.getData() != null) addSharedUri(uris, seen, intent.getData());
