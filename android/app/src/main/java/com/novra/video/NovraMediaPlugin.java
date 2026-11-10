@@ -231,7 +231,9 @@ public class NovraMediaPlugin extends Plugin {
             for (File file : created) file.delete();
             throw error;
           }
-          activity.setIntent(new Intent(Intent.ACTION_MAIN));
+          if (activity.getIntent() == intent) {
+            activity.setIntent(new Intent(Intent.ACTION_MAIN));
+          }
         }
       }
       JSObject result = new JSObject();
