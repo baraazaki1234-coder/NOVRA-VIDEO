@@ -8,6 +8,9 @@ public class MainActivity extends BridgeActivity {
     public void onNewIntent(android.content.Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
+        if (getBridge() != null) {
+            getBridge().triggerJSEvent("novraShareIntent", "window", "{}");
+        }
     }
 
     @Override
