@@ -1,12 +1,12 @@
 {
-  "name": "NOVRA VIDEO",
-  "short_name": "NOVRA VIDEO",
+  "name": "مكتبة الوسائط",
+  "short_name": "مكتبتي",
   "description": "مكتبتك الشخصية للفيديو والموسيقى، محليًا وبدون إنترنت.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#080711",
-  "theme_color": "#080711",
+  "background_color": "#101114",
+  "theme_color": "#101114",
   "lang": "ar",
   "dir": "rtl",
   "icons": [

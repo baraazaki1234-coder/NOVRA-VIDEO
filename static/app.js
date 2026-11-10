@@ -3296,6 +3296,8 @@ function lockVault() {
 function applyPageVisibility(page) {
   $("#homePage").hidden = page !== "home";
   $("#libraryPage").hidden = page === "home";
+  const discovery = $("#onlineMusicSearch");
+  if (discovery) discovery.hidden = page !== "music";
   document.querySelectorAll(".sidebar-link[data-page]").forEach(link => {
     link.classList.toggle("active", link.dataset.page === page);
     if (link.dataset.page === page) link.setAttribute("aria-current", "page");
@@ -3337,7 +3339,159 @@ function routeFromLocation() {
     {replace:true, render:false, skipGuard:true});
 }
 
+
+let onlineSearchTimer = null;
+let onlinePreviewAudio = null;
+let onlinePreviewTrack = null;
+
+function setupDiscoveryExperience() {
+  const tabs = document.querySelector(".library-tabs");
+  if (!tabs || document.querySelector("#onlineMusicSearch")) return;
+  const panel = document.createElement("section");
+  panel.id = "onlineMusicSearch";
+  panel.className = "online-music-search";
+  panel.innerHTML = `
+    <div class="discovery-heading"><div><p class="eyebrow">اكتشاف عبر الإنترنت</p><h3>ابحث عن أغنية جديدة</h3><p>معاينات موسيقية رسمية وروابط المصدر.</p></div><span class="discovery-mark">♫</span></div>
+    <form id="onlineMusicForm" class="online-search-form"><input id="onlineMusicQuery" type="search" placeholder="اسم الأغنية أو الفنان..." autocomplete="off" aria-label="بحث موسيقى عبر الإنترنت"><button class="primary-btn" type="submit">بحث</button></form>
+    <div id="onlineMusicStatus" class="online-status">اكتب اسم أغنية أو فنان لبدء البحث.</div>
+    <div id="onlineMusicResults" class="online-music-results"></div>
+    <p class="online-disclaimer">المعاينة المتاحة قد تكون قصيرة (حتى 30 ثانية). الاستماع الكامل والشراء أو التحميل يتم من المصدر الرسمي حسب التوفر وحقوق النشر.</p>`;
+  tabs.after(panel);
+  $("#onlineMusicForm").addEventListener("submit", event => {
+    event.preventDefault();
+    searchOnlineMusic($("#onlineMusicQuery").value);
+  });
+  $("#onlineMusicQuery").addEventListener("input", () => {
+    clearTimeout(onlineSearchTimer);
+    const query = $("#onlineMusicQuery").value.trim();
+    if (query.length < 2) return;
+    onlineSearchTimer = setTimeout(() => searchOnlineMusic(query), 550);
+  });
+  $("#onlineVideoSearchBtn")?.addEventListener("click", () => {
+    const query = $("#searchInput")?.value.trim() || "";
+    const url = "https://www.youtube.com/results?search_query=" + encodeURIComponent(query);
+    window.open(url, "_blank", "noopener,noreferrer");
+  });
+}
+
+async function searchOnlineMusic(query) {
+  const term = String(query || "").trim();
+  const status = $("#onlineMusicStatus");
+  const results = $("#onlineMusicResults");
+  if (!term) { status.textContent = "اكتب اسم أغنية أو فنان أولًا."; return; }
+  status.textContent = "جارٍ البحث عن الأغاني...";
+  results.replaceChildren();
+  try {
+    const endpoint = "https://itunes.apple.com/search?media=music&entity=song&limit=24&term=" + encodeURIComponent(term);
+    const response = await fetch(endpoint);
+    if (!response.ok) throw new Error("خدمة البحث غير متاحة حاليًا.");
+    const data = await response.json();
+    const tracks = (data.results || []).filter(track => track.trackName && track.artistName);
+    if (!tracks.length) { status.textContent = "لم نعثر على نتائج مطابقة. جرّب اسمًا آخر."; return; }
+    status.textContent = `تم العثور على ${tracks.length} نتيجة. اضغط تشغيل لسماع المعاينة.`;
+    const fragment = document.createDocumentFragment();
+    for (const track of tracks) {
+      const card = document.createElement("article");
+      card.className = "online-track";
+      const cover = document.createElement("img");
+      cover.src = String(track.artworkUrl100 || "").replace("100x100bb", "240x240bb");
+      cover.alt = "";
+      cover.loading = "lazy";
+      const info = document.createElement("div");
+      info.className = "online-track-info";
+      const title = document.createElement("strong");
+      title.textContent = track.trackName;
+      const artist = document.createElement("small");
+      artist.textContent = track.artistName + (track.collectionName ? " · " + track.collectionName : "");
+      info.append(title, artist);
+      const actions = document.createElement("div");
+      actions.className = "online-track-actions";
+      if (track.previewUrl) {
+        const play = document.createElement("button");
+        play.type = "button";
+        play.className = "preview-button";
+        play.textContent = "▶ معاينة";
+        play.addEventListener("click", () => playOnlinePreview(track, play));
+        actions.append(play);
+      }
+      if (track.trackViewUrl) {
+        const source = document.createElement("a");
+        source.href = track.trackViewUrl;
+        source.target = "_blank";
+        source.rel = "noopener noreferrer";
+        source.textContent = "المصدر";
+        actions.append(source);
+      }
+      card.append(cover, info, actions);
+      fragment.append(card);
+    }
+    results.append(fragment);
+  } catch (error) {
+    console.error("Online music search failed:", error);
+    status.textContent = "تعذر الاتصال بخدمة البحث. تحقق من الإنترنت وحاول مجددًا.";
+  }
+}
+
+async function playOnlinePreview(track, button) {
+  if (!track.previewUrl) return;
+  if (currentAudio && !currentAudio.paused) currentAudio.pause();
+  if (currentMusicVideo) $("#videoPlayer")?.pause();
+  if (!onlinePreviewAudio) {
+    onlinePreviewAudio = new Audio();
+    onlinePreviewAudio.preload = "none";
+    onlinePreviewAudio.addEventListener("ended", () => {
+      onlinePreviewTrack = null;
+      document.querySelectorAll(".preview-button").forEach(item => item.textContent = "▶ معاينة");
+    });
+  }
+  if (onlinePreviewTrack === track.trackId && !onlinePreviewAudio.paused) {
+    onlinePreviewAudio.pause();
+    button.textContent = "▶ معاينة";
+    return;
+  }
+  onlinePreviewAudio.pause();
+  onlinePreviewAudio.src = track.previewUrl;
+  onlinePreviewTrack = track.trackId;
+  document.querySelectorAll(".preview-button").forEach(item => item.textContent = "▶ معاينة");
+  button.textContent = "Ⅱ إيقاف";
+  try {
+    await onlinePreviewAudio.play();
+  } catch (error) {
+    button.textContent = "▶ معاينة";
+    toast("تعذر تشغيل المعاينة. جرّب فتح المصدر الرسمي.");
+  }
+  onlinePreviewAudio.onpause = () => {
+    if (onlinePreviewTrack === track.trackId) button.textContent = "▶ معاينة";
+  };
+}
+
+function setupSettingsExperience() {
+  const theme = localStorage.getItem("novraTheme") || "dark";
+  document.documentElement.dataset.theme = theme;
+  const themeSelect = $("#themeSetting");
+  const speedSelect = $("#defaultSpeedSetting");
+  if (themeSelect) {
+    themeSelect.value = theme;
+    themeSelect.addEventListener("change", () => {
+      document.documentElement.dataset.theme = themeSelect.value;
+      localStorage.setItem("novraTheme", themeSelect.value);
+    });
+  }
+  if (speedSelect) {
+    speedSelect.value = localStorage.getItem("novraVideoPlaybackRate") || "1";
+    speedSelect.addEventListener("change", () => {
+      localStorage.setItem("novraVideoPlaybackRate", speedSelect.value);
+      if ($("#speedSelect")) $("#speedSelect").value = speedSelect.value;
+      if ($("#videoPlayer")) $("#videoPlayer").playbackRate = Number(speedSelect.value);
+    });
+  }
+  $("#settingsScanVideo")?.addEventListener("click", () => syncDeviceMedia("video"));
+  $("#settingsScanAudio")?.addEventListener("click", () => syncDeviceMedia("audio"));
+  $("#settingsExportBtn")?.addEventListener("click", exportData);
+}
+
 function setupPageRouter() {
+  setupDiscoveryExperience();
   const launch = document.createElement("section");
   launch.id = "homeLaunchGrid";
   launch.className = "home-launch-grid";
@@ -3648,6 +3802,7 @@ async function init() {
     if (target) playVideo(target.dataset.play);
   });
 
+  setupSettingsExperience();
   $("#settingsBtn").onclick = () => openModal("settingsModal");
 
   $("#settingsStorageBtn").onclick = async () => {
@@ -3817,10 +3972,10 @@ async function init() {
     await render();
   });
 
-  $("#storageBtn").onclick = async () => {
+  $("#storageBtn")?.addEventListener("click", async () => {
     await storageInfo();
     openModal("storageModal");
-  };
+  });
 
   $("#exportLibrary").onclick = exportData;
 
