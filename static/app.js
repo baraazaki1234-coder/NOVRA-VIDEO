@@ -69,7 +69,7 @@ function openDB() {
 
     req.onerror = () => reject(req.error);
     req.onblocked = () => reject(new Error(
-      "ترقية قاعدة البيانات متوقفة. أغلق أي نسخة قديمة من NOVRA VIDEO ثم أعد فتح التطبيق."
+      "ترقية قاعدة البيانات متوقفة. أغلق أي نسخة قديمة من التطبيق ثم أعد فتحه."
     ));
   });
 }
@@ -839,7 +839,7 @@ async function importLocal(file, options = {}) {
 
 async function syncDeviceMedia(kind, requestPermission = true, quiet = false) {
   if (!nativeMediaPlugin) {
-    if (!quiet) toast("مزامنة ملفات الهاتف متاحة في تطبيق NOVRA Android فقط.");
+    if (!quiet) toast("مزامنة ملفات الهاتف متاحة في تطبيق Android فقط.");
     return;
   }
 
@@ -852,8 +852,8 @@ async function syncDeviceMedia(kind, requestPermission = true, quiet = false) {
   try {
     if (!quiet && requestPermission) {
       toast(kind === "audio"
-        ? "اسمح لـ NOVRA بالوصول إلى ملفات الصوت لإضافتها إلى مكتبتك."
-        : "اسمح لـ NOVRA بالوصول إلى الفيديوهات لاكتشاف ملفات الهاتف.");
+        ? "اسمح بالوصول إلى ملفات الصوت لإضافتها إلى مكتبتك."
+        : "اسمح بالوصول إلى الفيديوهات لاكتشاف ملفات الهاتف.");
     }
 
     const access = requestPermission
@@ -927,7 +927,7 @@ async function syncDeviceMedia(kind, requestPermission = true, quiet = false) {
     await render();
 
     if (!quiet) {
-      toast(`تم تحديث مكتبة NOVRA: ${added} جديد، ${refreshed} تم تحديثه من ملفات الهاتف.`);
+      toast(`تم تحديث المكتبة: ${added} جديد، ${refreshed} تم تحديثه من ملفات الهاتف.`);
     }
   } catch (error) {
     console.error("NOVRA device media sync failed:", error);
@@ -1107,7 +1107,7 @@ async function importNativeSharedFiles() {
       openModal("addModal");
       toast("استلمت رابطًا من تطبيق آخر. راجعه ثم اضغط استيراد الرابط.");
     } else if (sharedText && !items.length) {
-      toast("استلمت نصًا من تطبيق آخر، لكن NOVRA تحتاج رابط ملف فيديو أو صوت مباشر.");
+      toast("استلمت نصًا من تطبيق آخر، لكن التطبيق يحتاج رابط ملف فيديو أو صوت مباشر.");
     }
   } catch (error) {
     console.error("NOVRA share receiver failed:", error);
@@ -1139,7 +1139,7 @@ async function importUrl() {
 
   const host = parsedUrl.hostname.toLowerCase().replace(/\.$/, "");
   if (host === "xnxx.com" || host.endsWith(".xnxx.com")) {
-    toast("هذا الموقع غير مدعوم في NOVRA VIDEO.");
+    toast("هذا الموقع غير مدعوم.");
     return;
   }
 
@@ -1677,7 +1677,7 @@ async function fetchTrackLyrics(track) {
   if (next) next.textContent = "بحث تلقائي عن الكلمات المتاحة";
   const params = new URLSearchParams({track_name:track.name,artist_name:track.artist,...(track.album?{album_name:track.album}:{}),...(Number(track.duration)>0?{duration:String(Math.round(track.duration))}:{})});
   try {
-    const response = await fetch("https://lrclib.net/api/get?" + params.toString(), {headers:{"X-User-Agent":"NOVRA Media/1.1 (local media player)"}});
+    const response = await fetch("https://lrclib.net/api/get?" + params.toString(), {headers:{"X-User-Agent":"Media Library/1.1 (local media player)"}});
     if (!response.ok) throw new Error(response.status === 404 ? "not-found" : "lyrics-service");
     const data = await response.json();
     if (currentAudioId !== trackId) return;
@@ -1954,8 +1954,8 @@ function syncMusicMediaSession() {
   try {
     if (currentMusicTrack && "MediaMetadata" in window) {
       session.metadata = new MediaMetadata({
-        title: currentMusicTrack.name || currentMusicTitle || "NOVRA VIDEO",
-        artist: currentMusicTrack.artist || "NOVRA VIDEO",
+        title: currentMusicTrack.name || currentMusicTitle || "مشغل الوسائط",
+        artist: currentMusicTrack.artist || "المكتبة المحلية",
         album: currentMusicTrack.album || "المكتبة المحلية",
         artwork: [{
           src: currentMusicTrack.thumb || new URL("/icon.svg", location.origin).href,
@@ -2035,7 +2035,7 @@ function updateMusicArtwork() {
     orb.replaceChildren();
     const img = document.createElement("img");
     img.src = cover;
-    img.alt = "NOVRA music cover";
+    img.alt = "غلاف الأغنية";
     img.className = "music-cover-image";
     orb.appendChild(img);
     orb.classList.add("has-cover");
@@ -2509,7 +2509,7 @@ async function render() {
       btn.hidden = true;
     } else if (currentCategory === "vault" && !vaultOpen) {
       h.textContent = "الخزنة مقفولة";
-      p.textContent = "افتح الخزنة من شعار NOVRA لإدخال كلمة المرور.";
+      p.textContent = "افتح الخزنة من أيقونة التطبيق لإدخال كلمة المرور.";
       btn.hidden = true;
     } else if (q || filter !== "all") {
       h.textContent = "مفيش نتائج";
@@ -3174,11 +3174,11 @@ async function captureVideoFrame() {
     const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
     if (!blob) throw new Error("تعذر تجهيز الصورة.");
 
-    const filename = "NOVRA-frame-" + new Date().toISOString().replace(/[:.]/g, "-") + ".png";
+    const filename = "Media-frame-" + new Date().toISOString().replace(/[:.]/g, "-") + ".png";
     const file = new File([blob], filename, { type: "image/png" });
 
     if (navigator.share && navigator.canShare?.({ files: [file] })) {
-      await navigator.share({ files: [file], title: "NOVRA VIDEO frame" });
+      await navigator.share({ files: [file], title: "لقطة من مشغل الوسائط" });
     } else {
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -3199,7 +3199,7 @@ async function deleteVideo(videoId) {
   if (!v) return;
   const isDeviceMedia = !!v.nativeUri;
   const message = isDeviceMedia
-    ? "إزالة هذا الملف من مكتبة NOVRA فقط؟ سيظل الملف الأصلي محفوظًا على الهاتف."
+    ? "إزالة هذا الملف من المكتبة فقط؟ سيظل الملف الأصلي محفوظًا على الهاتف."
     : "هل تريد حذف هذا الملف من مكتبة NOVRA ومساحة التخزين الخاصة بها؟ لا يمكن التراجع عن الحذف.";
   if (!confirm(message)) return;
   if (isDeviceMedia) {
@@ -3210,7 +3210,7 @@ async function deleteVideo(videoId) {
     try { const root = await rootDirPromise; if (v.filename) await root.removeEntry(v.filename); } catch {}
   }
   await dbRequest("readwrite", "delete", videoId);
-  toast(isDeviceMedia ? "تمت الإزالة من مكتبة NOVRA، والملف الأصلي لم يُحذف." : "تم حذف الملف من NOVRA.");
+  toast(isDeviceMedia ? "تمت الإزالة من المكتبة، والملف الأصلي لم يُحذف." : "تم حذف الملف من المكتبة.");
   await render();
 }
 async function storageInfo() {
@@ -3220,8 +3220,8 @@ async function storageInfo() {
 }
 async function exportData() {
   const videos=await dbRequest("readonly","all");
-  const blob=new Blob([JSON.stringify({app:"NOVRA VIDEO",version:1,exported:new Date().toISOString(),videos},null,2)],{type:"application/json"});
-  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="novra-video-library-backup.json";a.click();URL.revokeObjectURL(a.href);
+  const blob=new Blob([JSON.stringify({app:"Media Library",version:1,exported:new Date().toISOString(),videos},null,2)],{type:"application/json"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="media-library-backup.json";a.click();URL.revokeObjectURL(a.href);
 }
 function requestVaultAccess(purpose = "browse") {
   if (vaultOpen) {
