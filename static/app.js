@@ -687,7 +687,7 @@ async function extractMp3Metadata(file) {
   return metadata;
 }
 
-async function importLocal(file) {
+async function importLocal(file, options = {}) {
   const useVault = $("#chooseVault")?.checked === true;
   showProgress(`تجهيز ${file.name}`, 2);
 
@@ -696,7 +696,9 @@ async function importLocal(file) {
   }
 
   // Check exact content before inspecting, generating thumbnails or writing.
-  const duplicate = await findDuplicateMedia(file, useVault);
+  const duplicate = options.streaming
+    ? null
+    : await findDuplicateMedia(file, useVault);
 
   if (duplicate) {
     hideProgress();
@@ -711,7 +713,8 @@ async function importLocal(file) {
   let mediaInfo = null;
   const knownAudio = /\.(mp3|m4a|aac|wav|flac|ogg|oga|opus|weba)$/i.test(file.name);
   const needsFallbackInspection = !actualKind ||
-    (actualKind === "audio" && !knownAudio && (file.type || "").toLowerCase().startsWith("audio/"));
+    (!options.streaming && actualKind === "audio" && !knownAudio &&
+      (file.type || "").toLowerCase().startsWith("audio/"));
 
   if (needsFallbackInspection) {
     try {
@@ -724,14 +727,16 @@ async function importLocal(file) {
     }
   }
 
-  if (actualKind === "audio" && !/\.(mp3|m4a|aac|wav|flac|ogg|oga|opus|weba)$/i.test(file.name)) {
+  if (actualKind === "audio" &&
+      !/\.(mp3|m4a|aac|wav|flac|ogg|oga|opus|weba)$/i.test(file.name) &&
+      !(file.type || "").toLowerCase().startsWith("audio/")) {
     hideProgress();
     throw new Error("صيغة الصوت غير مدعومة. جرّب MP3 أو M4A أو AAC أو WAV أو FLAC أو OGG أو OPUS.");
   }
 
   showProgress(`تجهيز بيانات ${file.name}`, 25);
 
-  const audioMetadata = actualKind === "audio" && /\.mp3$/i.test(file.name)
+  const audioMetadata = !options.streaming && actualKind === "audio" && /\.mp3$/i.test(file.name)
     ? await extractMp3Metadata(file)
     : null;
   const audioCover = audioMetadata?.cover || "";
@@ -760,9 +765,11 @@ async function importLocal(file) {
       p => showProgress(`استيراد ${file.name}`, p)
     );
 
-    const duration = actualKind === "video"
-      ? (mediaInfo?.duration || 0)
-      : await getAudioDuration(file);
+    const duration = options.streaming
+      ? 0
+      : actualKind === "video"
+        ? (mediaInfo?.duration || 0)
+        : await getAudioDuration(file);
 
     const record = {
       id: mediaId,
@@ -796,7 +803,7 @@ async function importLocal(file) {
           : "تمت إضافة الفيديو إلى مكتبتك."
     );
 
-    if (actualKind === "video" && !mediaInfo?.thumb) {
+    if (actualKind === "video" && !mediaInfo?.thumb && !options.streaming) {
       const schedule = () => scheduleVideoThumbnail(mediaId, file);
       if ("requestIdleCallback" in window) {
         window.requestIdleCallback(schedule, { timeout: 4000 });
@@ -806,6 +813,7 @@ async function importLocal(file) {
     }
 
     if (useVault) currentCategory = "vault";
+    return mediaId;
   } catch (error) {
     try {
       const root = await rootDirPromise;
@@ -1036,13 +1044,31 @@ async function importNativeSharedFiles() {
         const localUrl = window.Capacitor?.convertFileSrc?.(item.path);
         if (!localUrl) throw new Error("تعذر فتح مسار الملف المستلم.");
         const response = await fetch(localUrl);
-        if (!response.ok) throw new Error("تعذر قراءة الملف المستلم.");
-        const blob = await response.blob();
-        const file = new File([blob], item.name || "shared-media", {
-          type: item.type || blob.type || "",
-          lastModified: Date.now()
-        });
-        await importLocal(file);
+        if (!response.ok || !response.body) throw new Error("تعذر قراءة الملف المستلم.");
+        const file = {
+          name: item.name || "shared-media",
+          type: item.type || response.headers.get("content-type") || "",
+          size: Number(item.size) || Number(response.headers.get("content-length")) || 0,
+          lastModified: Date.now(),
+          stream: () => response.body
+        };
+        if (!file.size) throw new Error("تعذر تحديد حجم الملف المستلم.");
+        const importedId = await importLocal(file, { streaming: true });
+
+        if (importedId && nativeMediaPlugin.getSharedMetadata) {
+          try {
+            const metadata = await nativeMediaPlugin.getSharedMetadata({ path: item.path });
+            const record = await dbRequest("readonly", "get", importedId);
+            if (record && (metadata?.thumb || metadata?.duration > 0)) {
+              if (metadata.thumb) record.thumb = "data:image/jpeg;base64," + metadata.thumb;
+              if (metadata.duration > 0) record.duration = metadata.duration;
+              await dbRequest("readwrite", "put", record);
+            }
+          } catch (metadataError) {
+            console.debug("NOVRA shared media metadata skipped:", metadataError);
+          }
+        }
+
         await nativeMediaPlugin.deleteSharedFile({ path: item.path });
         imported++;
       } catch (error) {
