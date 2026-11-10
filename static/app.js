@@ -1576,6 +1576,7 @@ function syncMusicEqControls() {
 // NOVRA VIDEO — LRC LYRICS
 let novraLyrics = [];
 let novraLyricsTrackId = null;
+let novraLyricsTimed = true;
 
 function parseNovraLrc(source) {
   const result = [];
@@ -1607,7 +1608,12 @@ function updateNovraLyrics() {
     return;
   }
 
-  const now = currentAudio.currentTime || 0;
+  if (!novraLyricsTimed) {
+    if (current) current.textContent = novraLyrics.map(line => line.text).join("\n");
+    if (next) next.textContent = "كلمات غير متزامنة";
+    return;
+  }
+  const now = currentAudio?.currentTime || 0;
   let index = -1;
 
   for (let i = 0; i < novraLyrics.length; i++) {
@@ -1639,6 +1645,7 @@ async function loadNovraLrc(file) {
 
     novraLyrics = parsed;
     novraLyricsTrackId = currentAudioId;
+    novraLyricsTimed = true;
 
     const panel = document.querySelector("#novraLyricsPanel");
     const button = document.querySelector("#novraLyricsBtn");
@@ -1655,6 +1662,51 @@ async function loadNovraLrc(file) {
 }
 // END NOVRA VIDEO — LRC LYRICS
 
+async function fetchTrackLyrics(track) {
+  if (!track?.name || !track?.artist) return;
+  const trackId = track.id;
+  ensureMusicEnhancementControls();
+  novraLyrics = [];
+  novraLyricsTrackId = trackId;
+  novraLyricsTimed = true;
+  const panel = $("#novraLyricsPanel");
+  const current = panel?.querySelector(".novra-lyrics-current");
+  const next = panel?.querySelector(".novra-lyrics-next");
+  if (panel) panel.hidden = false;
+  if (current) current.textContent = "جارٍ البحث عن كلمات الأغنية...";
+  if (next) next.textContent = "بحث تلقائي عن الكلمات المتاحة";
+  const params = new URLSearchParams({track_name:track.name,artist_name:track.artist,...(track.album?{album_name:track.album}:{}),...(Number(track.duration)>0?{duration:String(Math.round(track.duration))}:{})});
+  try {
+    const response = await fetch("https://lrclib.net/api/get?" + params.toString(), {headers:{"X-User-Agent":"NOVRA Media/1.1 (local media player)"}});
+    if (!response.ok) throw new Error(response.status === 404 ? "not-found" : "lyrics-service");
+    const data = await response.json();
+    if (currentAudioId !== trackId) return;
+    if (data.syncedLyrics) {
+      const parsed = parseNovraLrc(data.syncedLyrics);
+      if (parsed.length) { novraLyrics = parsed; novraLyricsTimed = true; }
+    }
+    if (!novraLyrics.length && data.plainLyrics) {
+      const lines = String(data.plainLyrics).split(/\r?\n/).map(text => text.trim()).filter(Boolean);
+      novraLyrics = lines.map(text => ({time:0,text}));
+      novraLyricsTimed = false;
+    }
+    novraLyricsTrackId = trackId;
+    const button = $("#novraLyricsBtn");
+    if (novraLyrics.length) {
+      if (panel) panel.hidden = false;
+      if (button) button.textContent = "إخفاء الكلمات";
+      updateNovraLyrics();
+    } else {
+      if (current) current.textContent = "الأغنية بدون كلمات متاحة.";
+      if (next) next.textContent = "";
+    }
+  } catch (error) {
+    if (currentAudioId !== trackId) return;
+    if (current) current.textContent = error.message === "not-found" ? "لم نعثر على كلمات مطابقة لهذه الأغنية." : "تعذر جلب الكلمات الآن. يمكنك تحميل ملف LRC يدويًا.";
+    if (next) next.textContent = "";
+    console.debug("Automatic lyrics lookup unavailable:", error);
+  }
+}
 function ensureMusicEnhancementControls() {
   const controls = $("#musicControls");
   if (!controls || $("#musicSleepBtn")) return;
@@ -2127,6 +2179,7 @@ async function playMusicTrack(id) {
     currentAudioId = id;
     currentMusicTitle = track.name || "بدون اسم";
     currentMusicTrack = track;
+    fetchTrackLyrics(track);
 
     const actualKind = mediaKind(track.type, track.filename);
 
