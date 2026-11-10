@@ -1,4 +1,4 @@
-const CACHE = "novra-video-shell-v25";
+const CACHE = "novra-video-shell-v26";
 const CACHE_PREFIX = "novra-video-shell-";
 
 const ASSETS = [
@@ -135,7 +135,7 @@ async function handleShare(request) {
     console.error("NOVRA VIDEO share error:", error);
 
     return new Response(
-      "تعذر استقبال الملفات. افتح NOVRA VIDEO وحاول المشاركة مرة أخرى.",
+      "تعذر استقبال الملفات. افتح التطبيق وحاول المشاركة مرة أخرى.",
       {
         status: 500,
         headers: {"Content-Type": "text/plain; charset=utf-8"}
@@ -187,7 +187,7 @@ self.addEventListener("fetch", event => {
         if (fallback) return fallback;
       }
 
-      return new Response("NOVRA VIDEO is offline and this file is not cached.", {
+      return new Response("التطبيق غير متصل، وهذا الملف غير محفوظ للاستخدام دون إنترنت.", {
         status: 503,
         headers: {"Content-Type": "text/plain; charset=utf-8"}
       });

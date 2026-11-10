@@ -3068,7 +3068,6 @@ async function playVideo(videoId, musicMode = false) {
       URL.revokeObjectURL(currentAudioUrl);
       currentAudioUrl = null;
     }
-    await releaseCurrentNativePlayback();
     const file = v.nativeUri ? null : await getFile(v.filename);
     const player = $("#videoPlayer");
     const screen = $("#playerScreen");
@@ -3078,6 +3077,7 @@ async function playVideo(videoId, musicMode = false) {
     player.pause();
     player.removeAttribute("src");
     player.load();
+    await releaseCurrentNativePlayback();
 
     currentObjectUrl = file ? URL.createObjectURL(file) : null;
     let playbackSource = currentObjectUrl;
