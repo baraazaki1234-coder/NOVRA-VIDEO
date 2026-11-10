@@ -19,6 +19,8 @@ let musicQueueSignature = "";
 let musicShuffleEnabled = false;
 let musicRepeatMode = "off"; // off | all | one
 let currentAudioId = null;
+let musicBrowseMode = "tracks";
+let musicGroupFilter = null;
 let currentMusicVideo = false;
 let currentMusicTitle = "";
 let musicLoadToken = 0;
@@ -2483,7 +2485,10 @@ async function render() {
   const filter = currentFilter();
   const sort = $("#sortSelect").value;
 
-  if (q) items = items.filter(v => (v.name || "").toLowerCase().includes(q));
+  if (q) items = items.filter(v => {
+    const searchable = currentCategory === "audio" ? [v.name, v.artist, v.album].join(" ").toLowerCase() : (v.name || "").toLowerCase();
+    return searchable.includes(q);
+  });
   if (filter === "recent") items = items.filter(v => Date.now()-(v.created||0)<7*86400000);
   if (filter === "continue") items = items.filter(v => (v.position||0)>5);
   if (filter === "favorites") items = items.filter(v => v.favorite);
@@ -2502,12 +2507,57 @@ async function render() {
   const cardFragment = document.createDocumentFragment();
   document.querySelector("#loadMoreMedia")?.remove();
   videoGrid.replaceChildren();
+  if (currentCategory === "audio" && musicBrowseMode !== "tracks" && !musicGroupFilter) {
+    videoGrid.hidden = false;
+    $("#emptyState").hidden = items.length > 0;
+    $("#musicBrowseBack").hidden = true;
+    const field = musicBrowseMode === "artists" ? "artist" : "album";
+    const groups = new Map();
+    for (const item of items) {
+      const label = String(item[field] || (field === "artist" ? "فنان غير معروف" : "ألبوم غير معروف")).trim();
+      if (!groups.has(label)) groups.set(label, []);
+      groups.get(label).push(item);
+    }
+    if (!groups.size) {
+      $("#emptyState").querySelector("h3").textContent = "لا توجد مجموعات بعد";
+      $("#emptyState").querySelector("p").textContent = "أضف ملفات موسيقى تحتوي على بيانات الفنان أو الألبوم لعرضها هنا.";
+      $("#emptyState button").hidden = true;
+      return;
+    }
+    const orderedGroups = [...groups.entries()].sort((a,b) => b[1].length - a[1].length || a[0].localeCompare(b[0]));
+    for (const [label, records] of orderedGroups) {
+      const groupCard = document.createElement("button");
+      groupCard.type = "button";
+      groupCard.className = "music-group-card";
+      const cover = document.createElement("span");
+      cover.className = "music-group-cover";
+      if (records[0].thumb) { const image = document.createElement("img"); image.src = records[0].thumb; image.alt = ""; cover.append(image); }
+      else cover.textContent = field === "artist" ? "♙" : "▤";
+      const details = document.createElement("span"); details.className = "music-group-details";
+      const name = document.createElement("strong"); name.textContent = label;
+      const count = document.createElement("small"); count.textContent = records.length + (records.length === 1 ? " أغنية" : " أغاني");
+      details.append(name,count); groupCard.append(cover,details);
+      groupCard.addEventListener("click", () => { musicGroupFilter = {field,value:label,label}; $("#musicBrowseBack").hidden = false; render(); });
+      cardFragment.append(groupCard);
+    }
+    videoGrid.append(cardFragment);
+    $("#emptyState").hidden = true;
+    const groupHeading = $("#libraryHeading");
+    if (groupHeading) groupHeading.textContent = musicBrowseMode === "artists" ? "الفنانون" : "الألبومات";
+    return;
+  }
+  if (currentCategory === "audio" && musicGroupFilter) {
+    items = items.filter(item => String(item[musicGroupFilter.field] || (musicGroupFilter.field === "artist" ? "فنان غير معروف" : "ألبوم غير معروف")).trim() === musicGroupFilter.value);
+    $("#musicBrowseBack").hidden = false;
+  } else if ($("#musicBrowseBack")) {
+    $("#musicBrowseBack").hidden = true;
+  }
   $("#videoGrid").hidden = playlistIndexView;
   $("#emptyState").hidden = playlistIndexView || items.length > 0;
 
   const heading = $("#libraryHeading");
   if (heading) heading.textContent = currentCategory === "vault" ? "الخزنة الخاصة" :
-    currentCategory === "audio" ? "الموسيقى والصوتيات" :
+    currentCategory === "audio" ? (musicGroupFilter?.label || "الموسيقى والصوتيات") :
     currentCategory === "playlists" ? (selectedPlaylist ? selectedPlaylist.name : "قوائم التشغيل") :
     "مكتبة الفيديوهات";
 
@@ -3387,6 +3437,8 @@ function applyPageVisibility(page) {
   if (discovery) discovery.hidden = page !== "music";
   const videoDiscovery = $("#onlineVideoDiscovery");
   if (videoDiscovery) videoDiscovery.hidden = page !== "videos";
+  const musicBrowse = $("#musicBrowsePanel");
+  if (musicBrowse) musicBrowse.hidden = page !== "music";
   document.querySelectorAll(".sidebar-link[data-page]").forEach(link => {
     link.classList.toggle("active", link.dataset.page === page);
     if (link.dataset.page === page) link.setAttribute("aria-current", "page");
@@ -3455,6 +3507,18 @@ function setupDiscoveryExperience() {
   panel.insertAdjacentHTML("beforeend", '<div class="licensed-audio-block"><div class="licensed-audio-heading"><strong>موسيقى مجانية بترخيص معلن</strong><button id="licensedAudioSearch" class="secondary-btn" type="button">بحث في Internet Archive</button></div><div id="licensedAudioStatus" class="online-status">ابحث عن تسجيلات وأعمال منشورة بتراخيص مفتوحة.</div><div id="licensedAudioResults" class="archive-results"></div></div>');
   $("#licensedAudioSearch").addEventListener("click", () => searchLicensedArchive($("#onlineMusicQuery").value, "audio"));
   tabs.after(panel);
+  const browsePanel = document.createElement("section");
+  browsePanel.id = "musicBrowsePanel";
+  browsePanel.className = "music-browse-panel";
+  browsePanel.innerHTML = '<div class="music-browse-head"><strong>مكتبتي الموسيقية</strong><button id="musicBrowseBack" class="secondary-btn" type="button" hidden>← رجوع للقائمة</button></div><nav class="music-browse-tabs"><button type="button" data-music-view="tracks" class="active">الأغاني</button><button type="button" data-music-view="artists">الفنانون</button><button type="button" data-music-view="albums">الألبومات</button></nav>';
+  panel.after(browsePanel);
+  browsePanel.querySelectorAll("[data-music-view]").forEach(button => button.addEventListener("click", () => {
+    musicBrowseMode = button.dataset.musicView;
+    musicGroupFilter = null;
+    browsePanel.querySelectorAll("[data-music-view]").forEach(tab => tab.classList.toggle("active", tab === button));
+    render();
+  }));
+  $("#musicBrowseBack").addEventListener("click", () => { musicGroupFilter = null; render(); });
   $("#onlineMusicForm").addEventListener("submit", event => {
     event.preventDefault();
     searchOnlineMusic($("#onlineMusicQuery").value);
