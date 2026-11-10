@@ -3351,6 +3351,8 @@ function applyPageVisibility(page) {
   $("#libraryPage").hidden = page === "home";
   const discovery = $("#onlineMusicSearch");
   if (discovery) discovery.hidden = page !== "music";
+  const videoDiscovery = $("#onlineVideoDiscovery");
+  if (videoDiscovery) videoDiscovery.hidden = page !== "videos";
   document.querySelectorAll(".sidebar-link[data-page]").forEach(link => {
     link.classList.toggle("active", link.dataset.page === page);
     if (link.dataset.page === page) link.setAttribute("aria-current", "page");
@@ -3400,6 +3402,13 @@ let onlinePreviewTrack = null;
 function setupDiscoveryExperience() {
   const tabs = document.querySelector(".library-tabs");
   if (!tabs || document.querySelector("#onlineMusicSearch")) return;
+  const videoPanel = document.createElement("section");
+  videoPanel.id = "onlineVideoDiscovery";
+  videoPanel.className = "online-video-discovery";
+  videoPanel.innerHTML = '<div class="discovery-heading"><div><p class="eyebrow">استكشاف الفيديو</p><h3>اكتشف فيديوهات جديدة</h3><p>محتوى مفتوح ومرخّص، مع بحث YouTube الرسمي.</p></div><span class="discovery-mark">▶</span></div><form id="onlineVideoForm" class="online-search-form"><input id="onlineVideoQuery" type="search" placeholder="ابحث عن فيديو أو موضوع..." aria-label="بحث فيديو"><button class="primary-btn" type="submit">بحث</button><button class="secondary-btn" id="youtubeSearchAction" type="button">YouTube</button></form><div id="onlineVideoStatus" class="online-status">اكتب موضوعًا للبحث.</div><div id="onlineVideoResults" class="archive-results"></div><p class="online-disclaimer">راجع الترخيص وصفحة المصدر قبل تنزيل أو إعادة استخدام أي محتوى.</p>';
+  videoPanel.querySelector("#onlineVideoForm").addEventListener("submit", event => { event.preventDefault(); searchLicensedArchive($("#onlineVideoQuery").value, "movies"); });
+  videoPanel.querySelector("#youtubeSearchAction").addEventListener("click", () => { const query = $("#onlineVideoQuery").value.trim(); if (!query) { toast("اكتب موضوع البحث أولًا."); return; } window.open("https://www.youtube.com/results?search_query=" + encodeURIComponent(query), "_blank", "noopener,noreferrer"); });
+  tabs.before(videoPanel);
   const panel = document.createElement("section");
   panel.id = "onlineMusicSearch";
   panel.className = "online-music-search";
@@ -3409,6 +3418,8 @@ function setupDiscoveryExperience() {
     <div id="onlineMusicStatus" class="online-status">اكتب اسم أغنية أو فنان لبدء البحث.</div>
     <div id="onlineMusicResults" class="online-music-results"></div>
     <p class="online-disclaimer">المعاينة المتاحة قد تكون قصيرة (حتى 30 ثانية). الاستماع الكامل والشراء أو التحميل يتم من المصدر الرسمي حسب التوفر وحقوق النشر.</p>`;
+  panel.insertAdjacentHTML("beforeend", '<div class="licensed-audio-block"><div class="licensed-audio-heading"><strong>موسيقى مجانية بترخيص معلن</strong><button id="licensedAudioSearch" class="secondary-btn" type="button">بحث في Internet Archive</button></div><div id="licensedAudioStatus" class="online-status">ابحث عن تسجيلات وأعمال منشورة بتراخيص مفتوحة.</div><div id="licensedAudioResults" class="archive-results"></div></div>');
+  $("#licensedAudioSearch").addEventListener("click", () => searchLicensedArchive($("#onlineMusicQuery").value, "audio"));
   tabs.after(panel);
   $("#onlineMusicForm").addEventListener("submit", event => {
     event.preventDefault();
@@ -3422,11 +3433,45 @@ function setupDiscoveryExperience() {
   });
   $("#onlineVideoSearchBtn")?.addEventListener("click", () => {
     const query = $("#searchInput")?.value.trim() || "";
-    const url = "https://www.youtube.com/results?search_query=" + encodeURIComponent(query);
-    window.open(url, "_blank", "noopener,noreferrer");
+    $("#onlineVideoQuery").value = query;
+    if (query) searchLicensedArchive(query, "movies"); else $("#onlineVideoQuery").focus();
+    $("#onlineVideoDiscovery").scrollIntoView({behavior:"smooth",block:"start"});
   });
 }
 
+async function searchLicensedArchive(query, mediaType) {
+  const term = String(query || "").trim();
+  const isAudio = mediaType === "audio";
+  const status = $(isAudio ? "#licensedAudioStatus" : "#onlineVideoStatus");
+  const results = $(isAudio ? "#licensedAudioResults" : "#onlineVideoResults");
+  if (!term) { status.textContent = "اكتب اسمًا أو موضوعًا للبحث أولًا."; return; }
+  status.textContent = "جارٍ البحث في المحتوى المفتوح..."; results.replaceChildren();
+  try {
+    const safeTerm = term.replace(/["\\]/g, " ").slice(0,100);
+    const q = "mediatype:" + mediaType + ' AND (licenseurl:http*creativecommons.org* OR licenseurl:http*publicdomain*) AND "' + safeTerm + '"';
+    const params = new URLSearchParams({q:q,rows:"18",page:"1",output:"json"});
+    ["identifier","title","creator","licenseurl","downloads"].forEach(field => params.append("fl[]",field));
+    const response = await fetch("https://archive.org/advancedsearch.php?" + params.toString());
+    if (!response.ok) throw new Error("archive-search");
+    const data = await response.json(); const docs = data.response?.docs || [];
+    if (!docs.length) { status.textContent = "لا توجد نتائج مرخّصة مطابقة. جرّب كلمات بحث مختلفة."; return; }
+    status.textContent = "نتائج مفتوحة: " + docs.length + ". راجع الترخيص داخل صفحة كل نتيجة.";
+    const fragment = document.createDocumentFragment();
+    for (const item of docs) {
+      if (!item.identifier || !item.licenseurl) continue;
+      const card = document.createElement("article"); card.className = "archive-result";
+      const cover = document.createElement("img"); cover.src = "https://archive.org/services/img/" + encodeURIComponent(item.identifier); cover.alt = ""; cover.loading = "lazy";
+      const info = document.createElement("div"); info.className = "archive-result-info";
+      const title = document.createElement("strong"); title.textContent = item.title || item.identifier;
+      const creator = document.createElement("small"); creator.textContent = item.creator || "صاحب العمل غير محدد";
+      const license = document.createElement("a"); license.href = String(item.licenseurl); license.target = "_blank"; license.rel = "noopener noreferrer"; license.textContent = "عرض الترخيص";
+      info.append(title,creator,license);
+      const source = document.createElement("a"); source.className = "archive-open"; source.href = "https://archive.org/details/" + encodeURIComponent(item.identifier); source.target = "_blank"; source.rel = "noopener noreferrer"; source.textContent = "فتح المصدر";
+      card.append(cover,info,source); fragment.append(card);
+    }
+    results.append(fragment);
+  } catch (error) { console.warn("Open archive search failed:",error); status.textContent = "تعذر الاتصال بمكتبة المحتوى المفتوح. تحقق من الإنترنت وحاول لاحقًا."; }
+}
 async function searchOnlineMusic(query) {
   const term = String(query || "").trim();
   const status = $("#onlineMusicStatus");
