@@ -2164,6 +2164,24 @@ function syncMusicQueue(items) {
   updateMusicControls();
 }
 
+async function writeBlobForNativePlayback(blob, track) {
+  if (!nativeMediaPlugin?.writePlaybackChunk || !nativeMediaPlugin?.finishPlaybackImport) return null;
+  const token = globalThis.crypto?.randomUUID?.() || ("viora" + Date.now().toString(36) + Math.random().toString(36).slice(2));
+  const chunkSize = 384 * 1024;
+  for (let offset = 0; offset < blob.size; offset += chunkSize) {
+    const bytes = new Uint8Array(await blob.slice(offset, Math.min(blob.size, offset + chunkSize)).arrayBuffer());
+    let binary = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) {
+      binary += String.fromCharCode(...bytes.subarray(i, Math.min(bytes.length, i + 0x8000)));
+    }
+    await nativeMediaPlugin.writePlaybackChunk({token,data:btoa(binary),first:offset === 0});
+  }
+  const rawName = String(track.filename || track.name || "");
+  const extension = rawName.includes(".") ? rawName.split(".").pop().toLowerCase().replace(/[^a-z0-9]/g, "") : "media";
+  const ready = await nativeMediaPlugin.finishPlaybackImport({token,extension});
+  return ready.path;
+}
+
 async function playMusicTrack(id) {
   stopListeningTracker();
   const token = ++musicLoadToken;
@@ -2252,6 +2270,19 @@ async function playMusicTrack(id) {
     await releaseCurrentNativePlayback();
 
     let playbackSource;
+    if (!track.nativeUri && nativeMediaPlugin?.writePlaybackChunk && nativeMediaPlugin?.playInBackground) {
+      const nativePath = await writeBlobForNativePlayback(file, track);
+      if (!nativePath) throw new Error("تعذر تجهيز الملف للتشغيل الأصلي.");
+      currentNativePlaybackPath = nativePath;
+      await nativeMediaPlugin.playInBackground({path:nativePath,title:currentMusicTitle,artist:track.artist || ""});
+      currentAudio = null;
+      currentMusicVideo = false;
+      nativeBackgroundPlayback = true;
+      nativeBackgroundPlaying = true;
+      startListeningTracker();
+      updateMusicControls();
+      return;
+    }
     if (track.nativeUri) {
       if (!nativeMediaPlugin?.preparePlayback) throw new Error("تشغيل ملفات الجهاز يحتاج إصدار Android المحدث.");
       const prepared = await nativeMediaPlugin.preparePlayback({uri:track.nativeUri});
