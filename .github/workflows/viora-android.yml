@@ -1,4 +1,5 @@
 name: Viora Android build
+run-name: Viora validation and APK build
 
 on:
   push:
