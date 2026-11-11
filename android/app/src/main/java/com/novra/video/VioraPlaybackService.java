@@ -2,6 +2,8 @@ package com.novra.video;
 
 import android.content.Intent;
 import android.os.IBinder;
+import android.os.Handler;
+import android.os.Looper;
 import androidx.annotation.Nullable;
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.MediaMetadata;
@@ -25,6 +27,13 @@ public final class VioraPlaybackService extends MediaSessionService {
 
     private ExoPlayer player;
     private MediaSession mediaSession;
+    private final Handler stateHandler = new Handler(Looper.getMainLooper());
+    private final Runnable stateTicker = new Runnable() {
+        @Override public void run() {
+            broadcastPlaybackState(false);
+            if (player != null && player.isPlaying()) stateHandler.postDelayed(this, 1000L);
+        }
+    };
 
     @Override
     public void onCreate() {
@@ -37,6 +46,16 @@ public final class VioraPlaybackService extends MediaSessionService {
         player.setAudioAttributes(audioAttributes, true);
         player.setHandleAudioBecomingNoisy(true);
         mediaSession = new MediaSession.Builder(this, player).build();
+        player.addListener(new androidx.media3.common.Player.Listener() {
+            @Override public void onIsPlayingChanged(boolean isPlaying) {
+                broadcastPlaybackState(false);
+                stateHandler.removeCallbacks(stateTicker);
+                if (isPlaying) stateHandler.post(stateTicker);
+            }
+            @Override public void onPlaybackStateChanged(int state) {
+                broadcastPlaybackState(state == androidx.media3.common.Player.STATE_ENDED);
+            }
+        });
     }
 
     @Nullable
@@ -87,6 +106,7 @@ public final class VioraPlaybackService extends MediaSessionService {
 
     @Override
     public void onDestroy() {
+        stateHandler.removeCallbacksAndMessages(null);
         if (mediaSession != null) {
             mediaSession.release();
             mediaSession = null;
