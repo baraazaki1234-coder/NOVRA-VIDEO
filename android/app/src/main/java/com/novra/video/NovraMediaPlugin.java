@@ -120,6 +120,42 @@ public class NovraMediaPlugin extends Plugin {
   }
 
   @PluginMethod
+  public void writePlaybackChunk(PluginCall call) {
+    String token = call.getString("token", "");
+    String encoded = call.getString("data", "");
+    boolean first = call.getBoolean("first", false);
+    if (!token.matches("[A-Za-z0-9_-]{16,80}") || encoded.isEmpty()) { call.reject("Invalid playback chunk."); return; }
+    File directory = new File(getContext().getCacheDir(), "novra-playback");
+    if (!directory.exists() && !directory.mkdirs()) { call.reject("Could not create playback cache."); return; }
+    File target = new File(directory, "web-" + token + ".part");
+    try {
+      byte[] bytes = Base64.decode(encoded, Base64.DEFAULT);
+      if (bytes.length == 0 || bytes.length > 1024 * 1024) { call.reject("Playback chunk is too large."); return; }
+      try (FileOutputStream output = new FileOutputStream(target, !first)) {
+        output.write(bytes);
+        output.getFD().sync();
+      }
+      JSObject result = new JSObject(); result.put("written", bytes.length); call.resolve(result);
+    } catch (Exception error) { call.reject("تعذر تجهيز ملف الصوت للتشغيل.", null, error); }
+  }
+
+  @PluginMethod
+  public void finishPlaybackImport(PluginCall call) {
+    String token = call.getString("token", "");
+    String extension = call.getString("extension", "media").toLowerCase().replaceAll("[^a-z0-9]", "");
+    if (!token.matches("[A-Za-z0-9_-]{16,80}")) { call.reject("Invalid playback token."); return; }
+    File directory;
+    try {
+      directory = new File(getContext().getCacheDir(), "novra-playback").getCanonicalFile();
+      File partial = new File(directory, "web-" + token + ".part").getCanonicalFile();
+      if (!directory.equals(partial.getParentFile()) || !partial.isFile() || partial.length() == 0) { call.reject("Playback file is incomplete."); return; }
+      File ready = new File(directory, "web-" + token + "." + (extension.isEmpty() ? "media" : extension)).getCanonicalFile();
+      if (!directory.equals(ready.getParentFile()) || !partial.renameTo(ready)) { call.reject("Could not finalize playback file."); return; }
+      JSObject result = new JSObject(); result.put("path", ready.getAbsolutePath()); result.put("size", ready.length()); call.resolve(result);
+    } catch (Exception error) { call.reject("تعذر إنهاء تجهيز ملف الصوت.", null, error); }
+  }
+
+  @PluginMethod
   public void controlBackgroundPlayback(PluginCall call) {
     String command = call.getString("command", "");
     String action;
