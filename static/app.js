@@ -2258,6 +2258,7 @@ async function playMusicTrack(id) {
       currentNativePlaybackPath = prepared.path;
       if (nativeMediaPlugin.playInBackground) {
         await nativeMediaPlugin.playInBackground({path:prepared.path,title:currentMusicTitle,artist:track.artist || ""});
+        currentAudio = null;
         nativeBackgroundPlayback = true;
         nativeBackgroundPlaying = true;
         currentMusicVideo = false;
@@ -3946,6 +3947,23 @@ async function init() {
       document.addEventListener("visibilitychange", () => {
         if (!document.hidden && db) refreshNativeMediaIfAllowed();
       });
+      if (nativeMediaPlugin.getAudioOutputs) {
+        const refreshAudioOutputs = async () => {
+          try {
+            const result = await nativeMediaPlugin.getAudioOutputs();
+            const outputs = result?.outputs || [];
+            const bluetooth = outputs.find(item => String(item.type || "").startsWith("bluetooth"));
+            const wired = outputs.find(item => String(item.type || "").startsWith("wired"));
+            const label = bluetooth ? "Bluetooth متصل" : wired ? "سماعة سلكية متصلة" : outputs.some(item => item.type === "speaker") ? "مكبر صوت الهاتف" : "مخرج الصوت حسب إعدادات Android";
+            const status = $("#musicOutputStatus");
+            if (status) status.textContent = label;
+          } catch (error) { console.debug("Audio output query unavailable:", error); }
+        };
+        refreshAudioOutputs();
+        if (typeof nativeMediaPlugin.addListener === "function") {
+          nativeMediaPlugin.addListener("audioOutputsChanged", refreshAudioOutputs).catch(() => {});
+        }
+      }
       if (typeof nativeMediaPlugin.addListener === "function") {
         let lastMediaEventAt = 0;
         Promise.resolve(nativeMediaPlugin.addListener("mediaChanged", () => {
