@@ -2176,6 +2176,11 @@ async function playMusicTrack(id) {
       toast("الملف غير متاح في قائمة الموسيقى.");
       return;
     }
+    if (nativeBackgroundPlayback) {
+      await nativeMediaPlugin?.controlBackgroundPlayback?.({command:"stop"}).catch(() => {});
+      nativeBackgroundPlayback = false;
+      nativeBackgroundPlaying = false;
+    }
 
     if (!musicBaseQueue.includes(id)) {
       musicBaseQueue.push(id);
