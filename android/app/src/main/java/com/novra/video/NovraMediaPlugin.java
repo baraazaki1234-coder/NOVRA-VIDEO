@@ -140,6 +140,18 @@ public class NovraMediaPlugin extends Plugin {
   }
 
   @PluginMethod
+  public void abortPlaybackImport(PluginCall call) {
+    String token = call.getString("token", "");
+    if (!token.matches("[A-Za-z0-9_-]{16,80}")) { call.reject("Invalid playback token."); return; }
+    File directory = new File(getContext().getCacheDir(), "novra-playback");
+    File partial = new File(directory, "web-" + token + ".part");
+    try {
+      if (directory.getCanonicalFile().equals(partial.getCanonicalFile().getParentFile())) partial.delete();
+      call.resolve();
+    } catch (Exception error) { call.reject("Could not clean incomplete playback cache.", null, error); }
+  }
+
+  @PluginMethod
   public void finishPlaybackImport(PluginCall call) {
     String token = call.getString("token", "");
     String extension = call.getString("extension", "media").toLowerCase().replaceAll("[^a-z0-9]", "");
