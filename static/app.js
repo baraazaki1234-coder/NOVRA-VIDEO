@@ -3591,7 +3591,11 @@ async function downloadLicensedArchive(item, mediaType, button) {
     if (!blob.size || blob.size > 250 * 1024 * 1024) throw new Error("size");
     const filename = candidate.name.split("/").pop() || (mediaType === "audio" ? "licensed-audio.mp3" : "licensed-video.mp4");
     const file = new File([blob], filename, {type:blob.type || (mediaType === "audio" ? "audio/mpeg" : "video/mp4"),lastModified:Date.now()});
-    await importLocal(file);
+    const destination = $("#importDestination");
+    const previousDestination = destination?.value;
+    if (destination) destination.value = mediaType === "audio" ? "audio" : "video";
+    try { await importLocal(file); }
+    finally { if (destination && previousDestination) destination.value = previousDestination; }
     toast("تم تنزيل المحتوى المرخّص وإضافته إلى مكتبتك.");
   } catch (error) {
     console.warn("Licensed Archive download failed:", error);
