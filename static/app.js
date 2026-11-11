@@ -33,6 +33,8 @@ let vaultSetupMode = false;
 let pendingVaultResolve = null;
 let vaultPurpose = "browse";
 let nativeMediaPlugin = null;
+let nativeBackgroundPlayback = false;
+let nativeBackgroundPlaying = false;
 const nativeThumbnailCache = new Map();
 const nativeThumbnailPending = new Set();
 const DEVICE_MEDIA_EXCLUSIONS_KEY = "novra-device-media-hidden-v1";
@@ -2057,9 +2059,10 @@ function updateMusicControls() {
 
   const hasQueue = musicQueue.length > 0;
   const hasPlayback = !!currentAudioId &&
-    (!!currentAudio || currentMusicVideo);
-  const isPlaying = currentMusicVideo
-    ? !$("#videoPlayer").paused
+    (!!currentAudio || currentMusicVideo || nativeBackgroundPlayback);
+  const isPlaying = nativeBackgroundPlayback
+    ? nativeBackgroundPlaying
+    : currentMusicVideo ? !$("#videoPlayer").paused
     : !!currentAudio && !currentAudio.paused;
 
   $("#musicPrevBtn").disabled = !hasQueue;
@@ -2194,6 +2197,11 @@ async function playMusicTrack(id) {
     const actualKind = mediaKind(track.type, track.filename);
 
     if (actualKind === "video") {
+      if (nativeBackgroundPlayback) {
+        await nativeMediaPlugin?.controlBackgroundPlayback?.({command:"stop"}).catch(() => {});
+        nativeBackgroundPlayback = false;
+        nativeBackgroundPlaying = false;
+      }
       currentMusicVideo = true;
 
       if (currentAudio) {
@@ -2243,6 +2251,15 @@ async function playMusicTrack(id) {
       if (!nativeMediaPlugin?.preparePlayback) throw new Error("تشغيل ملفات الجهاز يحتاج إصدار Android المحدث.");
       const prepared = await nativeMediaPlugin.preparePlayback({uri:track.nativeUri});
       currentNativePlaybackPath = prepared.path;
+      if (nativeMediaPlugin.playInBackground) {
+        await nativeMediaPlugin.playInBackground({path:prepared.path,title:currentMusicTitle,artist:track.artist || ""});
+        nativeBackgroundPlayback = true;
+        nativeBackgroundPlaying = true;
+        currentMusicVideo = false;
+        startListeningTracker();
+        updateMusicControls();
+        return;
+      }
       playbackSource = window.Capacitor?.convertFileSrc?.(prepared.path);
       if (!playbackSource) throw new Error("تعذر تجهيز مسار تشغيل الملف.");
     } else {
@@ -2291,7 +2308,11 @@ async function advanceMusic(direction) {
 
   const activePlayer = currentMusicVideo
     ? $("#videoPlayer")
-    : currentAudio;
+    : nativeBackgroundPlayback ? null : currentAudio;
+  if (nativeBackgroundPlayback && direction < 0) {
+    nativeMediaPlugin?.controlBackgroundPlayback?.({command:"seek",position:0}).catch(() => {});
+    return;
+  }
 
   // Previous button restarts the current track if it has played for 3 seconds.
   if (direction < 0 && activePlayer && activePlayer.currentTime > 3) {
@@ -2385,6 +2406,13 @@ function cycleMusicRepeat() {
 }
 
 function toggleMusicPlayPause() {
+  if (nativeBackgroundPlayback && nativeMediaPlugin?.controlBackgroundPlayback) {
+    nativeBackgroundPlaying = !nativeBackgroundPlaying;
+    nativeMediaPlugin.controlBackgroundPlayback({command:nativeBackgroundPlaying ? "resume" : "pause"}).catch(error => { console.warn(error); nativeBackgroundPlaying = !nativeBackgroundPlaying; });
+    if (nativeBackgroundPlaying) startListeningTracker(); else stopListeningTracker();
+    updateMusicControls();
+    return;
+  }
   if (!currentAudioId || (!currentAudio && !currentMusicVideo)) {
     if (musicQueue.length) playMusicTrack(musicQueue[0]);
     return;
@@ -3811,7 +3839,7 @@ function startListeningTracker() {
   listeningLastTick = Date.now();
   listeningPersistAt = listeningLastTick;
   listeningTick = setInterval(() => {
-    if (!currentAudio || currentAudio.paused || !currentAudioId || currentMusicVideo) return;
+    if ((!nativeBackgroundPlayback && (!currentAudio || currentAudio.paused)) || (nativeBackgroundPlayback && !nativeBackgroundPlaying) || !currentAudioId || currentMusicVideo) return;
     const now = Date.now();
     const elapsed = Math.min(3, Math.max(0, Math.floor((now - listeningLastTick) / 1000)));
     listeningLastTick = now;
