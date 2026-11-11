@@ -2331,7 +2331,13 @@ async function advanceMusic(direction) {
 
   if (nextIndex < 0 || nextIndex >= musicQueue.length) {
     if (musicRepeatMode !== "all") {
-      if (direction > 0 && activePlayer) {
+      if (direction > 0 && nativeBackgroundPlayback) {
+        nativeMediaPlugin?.controlBackgroundPlayback?.({command:"stop"}).catch(() => {});
+        nativeBackgroundPlayback = false;
+        nativeBackgroundPlaying = false;
+        stopListeningTracker();
+        updateMusicControls();
+      } else if (direction > 0 && activePlayer) {
         activePlayer.pause();
         updateMusicControls();
       }
