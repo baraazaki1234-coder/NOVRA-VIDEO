@@ -4566,7 +4566,7 @@ button,a,.thumb{-webkit-tap-highlight-color:transparent}button:focus-visible,a:f
 .main-content>.hero .hero-copy{width:100%;max-width:760px}
 
 /* Viora listening insights and personal wallpaper */
-body::before{background-image:var(--viora-wallpaper),radial-gradient(ellipse at 12% 15%,#49247730,transparent 34%),radial-gradient(ellipse at 88% 35%,#174c8730,transparent 36%);background-size:cover,auto,auto;background-position:center;background-attachment:fixed;background-repeat:no-repeat;opacity:.30}
+body::before{display:block!important;content:"";position:fixed;inset:0;z-index:0;pointer-events:none;background-image:var(--viora-wallpaper),radial-gradient(ellipse at 12% 15%,#49247730,transparent 34%),radial-gradient(ellipse at 88% 35%,#174c8730,transparent 36%);background-size:cover,auto,auto;background-position:center;background-attachment:fixed;background-repeat:no-repeat;opacity:.30}.app-shell{position:relative;z-index:1}
 body::after{backdrop-filter:blur(0);}
 .listening-stat{grid-column:span 1}
 .track-play-count{color:#b8a3ff;font-weight:700}
