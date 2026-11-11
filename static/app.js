@@ -2168,18 +2168,23 @@ async function writeBlobForNativePlayback(blob, track) {
   if (!nativeMediaPlugin?.writePlaybackChunk || !nativeMediaPlugin?.finishPlaybackImport) return null;
   const token = globalThis.crypto?.randomUUID?.() || ("viora" + Date.now().toString(36) + Math.random().toString(36).slice(2));
   const chunkSize = 384 * 1024;
-  for (let offset = 0; offset < blob.size; offset += chunkSize) {
-    const bytes = new Uint8Array(await blob.slice(offset, Math.min(blob.size, offset + chunkSize)).arrayBuffer());
-    let binary = "";
-    for (let i = 0; i < bytes.length; i += 0x8000) {
-      binary += String.fromCharCode(...bytes.subarray(i, Math.min(bytes.length, i + 0x8000)));
+  try {
+    for (let offset = 0; offset < blob.size; offset += chunkSize) {
+      const bytes = new Uint8Array(await blob.slice(offset, Math.min(blob.size, offset + chunkSize)).arrayBuffer());
+      let binary = "";
+      for (let i = 0; i < bytes.length; i += 0x8000) {
+        binary += String.fromCharCode(...bytes.subarray(i, Math.min(bytes.length, i + 0x8000)));
+      }
+      await nativeMediaPlugin.writePlaybackChunk({token,data:btoa(binary),first:offset === 0});
     }
-    await nativeMediaPlugin.writePlaybackChunk({token,data:btoa(binary),first:offset === 0});
+    const rawName = String(track.filename || track.name || "");
+    const extension = rawName.includes(".") ? rawName.split(".").pop().toLowerCase().replace(/[^a-z0-9]/g, "") : "media";
+    const ready = await nativeMediaPlugin.finishPlaybackImport({token,extension});
+    return ready.path;
+  } catch (error) {
+    await nativeMediaPlugin.abortPlaybackImport?.({token}).catch(() => {});
+    throw error;
   }
-  const rawName = String(track.filename || track.name || "");
-  const extension = rawName.includes(".") ? rawName.split(".").pop().toLowerCase().replace(/[^a-z0-9]/g, "") : "media";
-  const ready = await nativeMediaPlugin.finishPlaybackImport({token,extension});
-  return ready.path;
 }
 
 async function playMusicTrack(id) {
