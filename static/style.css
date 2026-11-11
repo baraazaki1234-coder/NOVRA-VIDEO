@@ -4582,3 +4582,6 @@ body::after{backdrop-filter:blur(0);}
 @media(max-width:850px){.brand-mark-viora{width:34px;height:34px;border-radius:11px}.space-sidebar{padding-bottom:max(6px,env(safe-area-inset-bottom));height:calc(66px + env(safe-area-inset-bottom));bottom:0;left:0;right:0;border-radius:20px 20px 0 0;border-left:0;border-right:0;border-bottom:0}.sidebar-link{font-size:10px}.nav-symbol svg{width:22px;height:22px}}
 
 .archive-result-actions{display:flex;flex-direction:column;gap:6px;align-items:stretch}.archive-download{font:inherit;font-size:10px;white-space:nowrap;padding:8px 10px;border-radius:9px;border:1px solid rgba(98,214,176,.2);background:var(--accent-soft);color:var(--accent)}.archive-download:disabled{opacity:.6;cursor:wait}.track-play-count{display:inline-flex;align-items:center;gap:4px;margin-top:4px}
+
+/* Native Android media session status */
+.music-output-status{display:block;margin-top:5px;font-size:10px;color:var(--accent)!important;opacity:.9}
