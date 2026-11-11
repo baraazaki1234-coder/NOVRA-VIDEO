@@ -2495,10 +2495,6 @@ async function render() {
   const filter = currentFilter();
   const sort = $("#sortSelect").value;
 
-  if (currentCategory === "audio" && sort === "mostPlayed") {
-    items.sort((a,b) => (Number(b.playCount)||0) - (Number(a.playCount)||0) || (Number(b.listenedSeconds)||0) - (Number(a.listenedSeconds)||0));
-  }
-
   if (q) items = items.filter(v => {
     const searchable = currentCategory === "audio" ? [v.name, v.artist, v.album].join(" ").toLowerCase() : (v.name || "").toLowerCase();
     return searchable.includes(q);
@@ -2508,9 +2504,11 @@ async function render() {
   if (filter === "favorites") items = items.filter(v => v.favorite);
 
   if (!(currentCategory === "playlists" && selectedPlaylist)) {
-    items.sort((a,b) => sort === "oldest" ? a.created-b.created :
-      sort === "name" ? a.name.localeCompare(b.name) :
-      sort === "largest" ? b.size-a.size : b.created-a.created);
+    items.sort((a,b) => sort === "mostPlayed" && currentCategory === "audio"
+      ? (Number(b.playCount)||0) - (Number(a.playCount)||0) || (Number(b.listenedSeconds)||0) - (Number(a.listenedSeconds)||0)
+      : sort === "oldest" ? a.created-b.created
+      : sort === "name" ? a.name.localeCompare(b.name)
+      : sort === "largest" ? b.size-a.size : b.created-a.created);
   }
 
   syncMusicQueue(items);
@@ -3736,29 +3734,36 @@ function formatListeningTime(seconds) {
   return `${total} ث`;
 }
 
+let listeningPendingSeconds = 0;
+async function persistListeningTime() {
+  if (!currentAudioId || !listeningPendingSeconds) return;
+  const amount = listeningPendingSeconds;
+  listeningPendingSeconds = 0;
+  const track = await dbRequest("readonly", "get", currentAudioId).catch(() => null);
+  if (!track) return;
+  track.listenedSeconds = (Number(track.listenedSeconds) || 0) + amount;
+  await dbRequest("readwrite", "put", track);
+  const stat = $("#listeningTimeValue");
+  if (stat) {
+    const all = await dbRequest("readonly", "all");
+    stat.textContent = formatListeningTime(all.filter(x => x.kind === "audio" && !isVaultItem(x)).reduce((sum,x) => sum + (Number(x.listenedSeconds)||0), 0));
+  }
+}
+
 function startListeningTracker() {
-  if (listeningTick) clearInterval(listeningTick);
+  stopListeningTracker();
   listeningLastTick = Date.now();
-  listeningTick = setInterval(async () => {
+  listeningPersistAt = listeningLastTick;
+  listeningTick = setInterval(() => {
     if (!currentAudio || currentAudio.paused || !currentAudioId || currentMusicVideo) return;
     const now = Date.now();
-    const elapsed = Math.min(5, Math.max(0, Math.floor((now - listeningLastTick) / 1000)));
+    const elapsed = Math.min(3, Math.max(0, Math.floor((now - listeningLastTick) / 1000)));
     listeningLastTick = now;
     if (!elapsed) return;
-    const track = await dbRequest("readonly", "get", currentAudioId).catch(() => null);
-    if (!track) return;
-    track.listenedSeconds = (Number(track.listenedSeconds) || 0) + elapsed;
-    const shouldPersist = now - listeningPersistAt >= 15000;
-    if (shouldPersist) {
+    listeningPendingSeconds += elapsed;
+    if (now - listeningPersistAt >= 10000) {
       listeningPersistAt = now;
-      await dbRequest("readwrite", "put", track);
-      const stat = $("#listeningTimeValue");
-      if (stat) {
-        const all = await dbRequest("readonly", "all");
-        stat.textContent = formatListeningTime(all.filter(x => x.kind === "audio" && !isVaultItem(x)).reduce((sum,x) => sum + (Number(x.listenedSeconds)||0), 0));
-      }
-    } else {
-      await dbRequest("readwrite", "put", track);
+      persistListeningTime().catch(error => console.warn("Listening stats save failed:", error));
     }
   }, 1000);
 }
@@ -3767,6 +3772,7 @@ function stopListeningTracker() {
   if (listeningTick) clearInterval(listeningTick);
   listeningTick = null;
   listeningLastTick = 0;
+  persistListeningTime().catch(error => console.warn("Listening stats save failed:", error));
 }
 
 function compressWallpaper(file) {
