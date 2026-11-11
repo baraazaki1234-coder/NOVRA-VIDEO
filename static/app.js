@@ -3559,6 +3559,50 @@ function setupDiscoveryExperience() {
   });
 }
 
+async function downloadLicensedArchive(item, mediaType, button) {
+  const license = String(item?.licenseurl || "");
+  let licenseHost = "";
+  try { licenseHost = new URL(license).hostname.toLowerCase(); } catch {}
+  if (!["creativecommons.org","www.creativecommons.org","publicdomain.org","www.publicdomain.org"].includes(licenseHost)) {
+    toast("لم يتم تنزيل الملف لأن الترخيص لم يمكن التحقق منه.");
+    return;
+  }
+  if (!item?.identifier) return;
+  const originalLabel = button?.textContent || "تنزيل";
+  if (button) { button.disabled = true; button.textContent = "جارٍ التجهيز…"; }
+  try {
+    const metadataResponse = await fetch("https://archive.org/metadata/" + encodeURIComponent(item.identifier));
+    if (!metadataResponse.ok) throw new Error("metadata");
+    const metadata = await metadataResponse.json();
+    const files = Array.isArray(metadata.files) ? metadata.files : [];
+    const allowedFormats = mediaType === "audio"
+      ? ["VBR MP3","MP3","Ogg Vorbis","FLAC","WAVE","MPEG4 Audio"]
+      : ["MPEG4","MPEG4 Movie","h.264","MPEG2"];
+    const candidate = files
+      .filter(file => file && file.name && allowedFormats.includes(String(file.format || "")))
+      .filter(file => !file.source || file.source === "original")
+      .filter(file => Number(file.size) > 0 && Number(file.size) <= 250 * 1024 * 1024)
+      .sort((a,b) => Number(a.size)-Number(b.size))[0];
+    if (!candidate) throw new Error("no-compatible-file");
+    const downloadUrl = "https://archive.org/download/" + encodeURIComponent(item.identifier) + "/" + candidate.name.split("/").map(encodeURIComponent).join("/");
+    const response = await fetch(downloadUrl);
+    if (!response.ok) throw new Error("download");
+    const blob = await response.blob();
+    if (!blob.size || blob.size > 250 * 1024 * 1024) throw new Error("size");
+    const filename = candidate.name.split("/").pop() || (mediaType === "audio" ? "licensed-audio.mp3" : "licensed-video.mp4");
+    const file = new File([blob], filename, {type:blob.type || (mediaType === "audio" ? "audio/mpeg" : "video/mp4"),lastModified:Date.now()});
+    await importLocal(file);
+    toast("تم تنزيل المحتوى المرخّص وإضافته إلى مكتبتك.");
+  } catch (error) {
+    console.warn("Licensed Archive download failed:", error);
+    toast(error.message === "no-compatible-file"
+      ? "لم نعثر على صيغة متوافقة بحجم أقل من 250 ميجابايت."
+      : "تعذر التنزيل من المصدر. يمكنك فتح صفحة العمل ومراجعة خيارات التنزيل.");
+  } finally {
+    if (button) { button.disabled = false; button.textContent = originalLabel; }
+  }
+}
+
 async function searchLicensedArchive(query, mediaType) {
   const term = String(query || "").trim();
   const isAudio = mediaType === "audio";
@@ -3586,8 +3630,15 @@ async function searchLicensedArchive(query, mediaType) {
       const creator = document.createElement("small"); creator.textContent = item.creator || "صاحب العمل غير محدد";
       const license = document.createElement("a"); license.href = String(item.licenseurl); license.target = "_blank"; license.rel = "noopener noreferrer"; license.textContent = "عرض الترخيص";
       info.append(title,creator,license);
+      const actions = document.createElement("div");
+      actions.className = "archive-result-actions";
       const source = document.createElement("a"); source.className = "archive-open"; source.href = "https://archive.org/details/" + encodeURIComponent(item.identifier); source.target = "_blank"; source.rel = "noopener noreferrer"; source.textContent = "فتح المصدر";
-      card.append(cover,info,source); fragment.append(card);
+      const download = document.createElement("button");
+      download.type = "button"; download.className = "archive-download";
+      download.textContent = isAudio ? "تنزيل الأغنية" : "تنزيل الفيديو";
+      download.addEventListener("click", () => downloadLicensedArchive(item, mediaType, download));
+      actions.append(source,download);
+      card.append(cover,info,actions); fragment.append(card);
     }
     results.append(fragment);
   } catch (error) { console.warn("Open archive search failed:",error); status.textContent = "تعذر الاتصال بمكتبة المحتوى المفتوح. تحقق من الإنترنت وحاول لاحقًا."; }
