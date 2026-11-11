@@ -4,6 +4,7 @@ import android.Manifest;
 import android.content.Context;
 import android.media.AudioManager;
 import android.media.AudioDeviceInfo;
+import android.media.AudioDeviceCallback;
 import android.graphics.Bitmap;
 import android.media.MediaMetadataRetriever;
 import android.util.Base64;
@@ -47,11 +48,24 @@ import com.getcapacitor.annotation.PermissionCallback;
 })
 public class NovraMediaPlugin extends Plugin {
   private ContentObserver mediaObserver;
+  private AudioDeviceCallback audioDeviceCallback;
 
   @Override
   public void load() {
     super.load();
     Handler handler = new Handler(Looper.getMainLooper());
+    AudioManager audioManager = (AudioManager) getContext().getSystemService(Context.AUDIO_SERVICE);
+    if (Build.VERSION.SDK_INT >= 23 && audioManager != null) {
+      audioDeviceCallback = new AudioDeviceCallback() {
+        @Override public void onAudioDevicesAdded(AudioDeviceInfo[] added) {
+          notifyListeners("audioOutputsChanged", new JSObject());
+        }
+        @Override public void onAudioDevicesRemoved(AudioDeviceInfo[] removed) {
+          notifyListeners("audioOutputsChanged", new JSObject());
+        }
+      };
+      audioManager.registerAudioDeviceCallback(audioDeviceCallback, handler);
+    }
     mediaObserver = new ContentObserver(handler) {
       @Override
       public void onChange(boolean selfChange, Uri uri) {
