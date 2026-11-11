@@ -2162,6 +2162,7 @@ function syncMusicQueue(items) {
 }
 
 async function playMusicTrack(id) {
+  stopListeningTracker();
   const token = ++musicLoadToken;
 
   try {
