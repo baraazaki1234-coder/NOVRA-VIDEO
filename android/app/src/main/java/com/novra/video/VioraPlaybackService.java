@@ -99,6 +99,17 @@ public final class VioraPlaybackService extends MediaSessionService {
         return super.onStartCommand(intent, flags, startId);
     }
 
+    private void broadcastPlaybackState(boolean ended) {
+        if (player == null) return;
+        Intent update = new Intent("com.novra.video.PLAYBACK_STATE");
+        update.setPackage(getPackageName());
+        update.putExtra("playing", player.isPlaying());
+        update.putExtra("ended", ended);
+        update.putExtra("position", player.getCurrentPosition());
+        update.putExtra("duration", player.getDuration());
+        sendBroadcast(update);
+    }
+
     @Override
     public void onTaskRemoved(Intent rootIntent) {
         if (player == null || !player.isPlaying()) stopSelf();
