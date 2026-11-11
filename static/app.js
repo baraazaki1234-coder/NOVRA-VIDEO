@@ -3947,6 +3947,27 @@ async function init() {
       document.addEventListener("visibilitychange", () => {
         if (!document.hidden && db) refreshNativeMediaIfAllowed();
       });
+      if (typeof nativeMediaPlugin.addListener === "function") {
+        nativeMediaPlugin.addListener("nativePlaybackState", state => {
+          if (!nativeBackgroundPlayback) return;
+          const wasPlaying = nativeBackgroundPlaying;
+          nativeBackgroundPlaying = !!state?.playing;
+          if (nativeBackgroundPlaying && !wasPlaying) startListeningTracker();
+          if (!nativeBackgroundPlaying && wasPlaying) stopListeningTracker();
+          if (state?.ended) {
+            nativeBackgroundPlaying = false;
+            stopListeningTracker();
+            if (musicRepeatMode === "one") {
+              nativeMediaPlugin.controlBackgroundPlayback({command:"seek",position:0})
+                .then(() => nativeMediaPlugin.controlBackgroundPlayback({command:"resume"}))
+                .catch(() => {});
+            } else {
+              advanceMusic(1);
+            }
+          }
+          updateMusicControls();
+        }).catch(error => console.debug("Native playback state listener unavailable:", error));
+      }
       if (nativeMediaPlugin.getAudioOutputs) {
         const refreshAudioOutputs = async () => {
           try {
