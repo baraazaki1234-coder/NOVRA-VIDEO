@@ -2,6 +2,8 @@ package com.novra.video;
 
 import android.Manifest;
 import android.content.Context;
+import android.content.BroadcastReceiver;
+import android.content.IntentFilter;
 import android.media.AudioManager;
 import android.media.AudioDeviceInfo;
 import android.media.AudioDeviceCallback;
@@ -49,11 +51,29 @@ import com.getcapacitor.annotation.PermissionCallback;
 public class NovraMediaPlugin extends Plugin {
   private ContentObserver mediaObserver;
   private AudioDeviceCallback audioDeviceCallback;
+  private BroadcastReceiver playbackStateReceiver;
 
   @Override
   public void load() {
     super.load();
     Handler handler = new Handler(Looper.getMainLooper());
+    playbackStateReceiver = new BroadcastReceiver() {
+      @Override public void onReceive(Context context, Intent intent) {
+        if (intent == null || !"com.novra.video.PLAYBACK_STATE".equals(intent.getAction())) return;
+        JSObject state = new JSObject();
+        state.put("playing", intent.getBooleanExtra("playing", false));
+        state.put("ended", intent.getBooleanExtra("ended", false));
+        state.put("position", intent.getLongExtra("position", 0L));
+        state.put("duration", intent.getLongExtra("duration", 0L));
+        notifyListeners("nativePlaybackState", state);
+      }
+    };
+    IntentFilter playbackFilter = new IntentFilter("com.novra.video.PLAYBACK_STATE");
+    if (Build.VERSION.SDK_INT >= 33) {
+      getContext().registerReceiver(playbackStateReceiver, playbackFilter, Context.RECEIVER_NOT_EXPORTED);
+    } else {
+      getContext().registerReceiver(playbackStateReceiver, playbackFilter);
+    }
     AudioManager audioManager = (AudioManager) getContext().getSystemService(Context.AUDIO_SERVICE);
     if (Build.VERSION.SDK_INT >= 23 && audioManager != null) {
       audioDeviceCallback = new AudioDeviceCallback() {
