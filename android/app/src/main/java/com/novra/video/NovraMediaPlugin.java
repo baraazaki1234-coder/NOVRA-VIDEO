@@ -1,6 +1,9 @@
 package com.novra.video;
 
 import android.Manifest;
+import android.content.Context;
+import android.media.AudioManager;
+import android.media.AudioDeviceInfo;
 import android.graphics.Bitmap;
 import android.media.MediaMetadataRetriever;
 import android.util.Base64;
@@ -64,6 +67,73 @@ public class NovraMediaPlugin extends Plugin {
       MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, true, mediaObserver
     );
   }
+  @PluginMethod
+  public void playInBackground(PluginCall call) {
+    String path = call.getString("path");
+    if (path == null || path.trim().isEmpty()) { call.reject("Missing playback file path."); return; }
+    try {
+      File source = new File(path).getCanonicalFile();
+      File cache = new File(getContext().getCacheDir(), "novra-playback").getCanonicalFile();
+      if (!source.isFile() || !cache.equals(source.getParentFile())) { call.reject("Invalid playback file path."); return; }
+      Intent intent = new Intent(getContext(), VioraPlaybackService.class);
+      intent.setAction(VioraPlaybackService.ACTION_PLAY);
+      intent.putExtra(VioraPlaybackService.EXTRA_URI, Uri.fromFile(source).toString());
+      intent.putExtra(VioraPlaybackService.EXTRA_TITLE, call.getString("title", "Viora"));
+      intent.putExtra(VioraPlaybackService.EXTRA_ARTIST, call.getString("artist", ""));
+      ContextCompat.startForegroundService(getContext(), intent);
+      JSObject result = new JSObject(); result.put("started", true); call.resolve(result);
+    } catch (Exception error) { call.reject("تعذر بدء مشغل أندرويد.", null, error); }
+  }
+
+  @PluginMethod
+  public void controlBackgroundPlayback(PluginCall call) {
+    String command = call.getString("command", "");
+    String action;
+    if ("pause".equals(command)) action = VioraPlaybackService.ACTION_PAUSE;
+    else if ("resume".equals(command)) action = VioraPlaybackService.ACTION_RESUME;
+    else if ("stop".equals(command)) action = VioraPlaybackService.ACTION_STOP;
+    else if ("seek".equals(command)) action = VioraPlaybackService.ACTION_SEEK;
+    else { call.reject("Unsupported playback command."); return; }
+    Intent intent = new Intent(getContext(), VioraPlaybackService.class);
+    intent.setAction(action);
+    if ("seek".equals(command)) intent.putExtra(VioraPlaybackService.EXTRA_POSITION, call.getLong("position", 0L));
+    try { getContext().startService(intent); call.resolve(); }
+    catch (Exception error) { call.reject("تعذر التحكم في التشغيل.", null, error); }
+  }
+
+  @PluginMethod
+  public void getAudioOutputs(PluginCall call) {
+    AudioManager manager = (AudioManager) getContext().getSystemService(Context.AUDIO_SERVICE);
+    JSArray outputs = new JSArray();
+    if (Build.VERSION.SDK_INT >= 23 && manager != null) {
+      for (AudioDeviceInfo device : manager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)) {
+        JSObject item = new JSObject();
+        item.put("id", device.getId());
+        item.put("type", audioDeviceType(device.getType()));
+        item.put("name", device.getProductName() == null ? "Audio device" : device.getProductName().toString());
+        item.put("connected", true);
+        outputs.put(item);
+      }
+    }
+    JSObject result = new JSObject(); result.put("outputs", outputs);
+    result.put("routingManagedByAndroid", true); call.resolve(result);
+  }
+
+  private String audioDeviceType(int type) {
+    switch (type) {
+      case AudioDeviceInfo.TYPE_BUILTIN_SPEAKER: return "speaker";
+      case AudioDeviceInfo.TYPE_BUILTIN_EARPIECE: return "earpiece";
+      case AudioDeviceInfo.TYPE_WIRED_HEADPHONES: return "wired-headphones";
+      case AudioDeviceInfo.TYPE_WIRED_HEADSET: return "wired-headset";
+      case AudioDeviceInfo.TYPE_BLUETOOTH_A2DP: return "bluetooth";
+      case AudioDeviceInfo.TYPE_BLUETOOTH_SCO: return "bluetooth-call";
+      case AudioDeviceInfo.TYPE_BLE_HEADSET: return "bluetooth-le";
+      case AudioDeviceInfo.TYPE_USB_HEADSET: return "usb-headset";
+      case AudioDeviceInfo.TYPE_HDMI: return "hdmi";
+      default: return "other";
+    }
+  }
+
   @PluginMethod
   public void requestAccess(PluginCall call) {
     String kind=call.getString("kind","video");
