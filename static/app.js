@@ -3507,8 +3507,8 @@ function setupDiscoveryExperience() {
     <div id="onlineMusicResults" class="online-music-results"></div>
     <p class="online-disclaimer">معاينة ترويجية من Apple قد تصل إلى 30 ثانية، وبجوارها رابط Apple Music للمحتوى الكامل.</p>`;
   panel.insertAdjacentHTML("beforeend", '<div class="licensed-audio-block"><div class="licensed-audio-heading"><strong>موسيقى مجانية بترخيص معلن</strong><button id="licensedAudioSearch" class="secondary-btn" type="button">بحث في Internet Archive</button></div><div id="licensedAudioStatus" class="online-status">ابحث عن تسجيلات وأعمال منشورة بتراخيص مفتوحة.</div><div id="licensedAudioResults" class="archive-results"></div></div>');
-  $("#licensedAudioSearch").addEventListener("click", () => searchLicensedArchive($("#onlineMusicQuery").value, "audio"));
   tabs.after(panel);
+  $("#licensedAudioSearch")?.addEventListener("click", () => searchLicensedArchive($("#onlineMusicQuery")?.value || "", "audio"));
   const browsePanel = document.createElement("section");
   browsePanel.id = "musicBrowsePanel";
   browsePanel.className = "music-browse-panel";
