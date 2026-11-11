@@ -19,6 +19,9 @@ let musicQueueSignature = "";
 let musicShuffleEnabled = false;
 let musicRepeatMode = "off"; // off | all | one
 let currentAudioId = null;
+let listeningTick = null;
+let listeningLastTick = 0;
+let listeningPersistAt = 0;
 let musicBrowseMode = "tracks";
 let musicGroupFilter = null;
 let currentMusicVideo = false;
@@ -2180,6 +2183,9 @@ async function playMusicTrack(id) {
 
     musicQueueIndex = musicQueue.indexOf(id);
     currentAudioId = id;
+    track.playCount = (Number(track.playCount) || 0) + 1;
+    track.lastPlayed = Date.now();
+    await dbRequest("readwrite", "put", track);
     currentMusicTitle = track.name || "بدون اسم";
     currentMusicTrack = track;
     fetchTrackLyrics(track);
@@ -2247,10 +2253,10 @@ async function playMusicTrack(id) {
 
     currentAudio.pause();
     currentAudio.src = playbackSource;
-    currentAudio.onended = handleMusicEnded;
+    currentAudio.onended = () => { stopListeningTracker(); handleMusicEnded(); };
 
     currentAudio.onplay = () => updateMusicControls();
-    currentAudio.onpause = () => updateMusicControls();
+    currentAudio.onpause = () => { stopListeningTracker(); updateMusicControls(); };
     currentAudio.onloadedmetadata = () => {
       syncMusicMediaSession();
       updateMusicMediaPosition();
@@ -2266,6 +2272,7 @@ async function playMusicTrack(id) {
     updateMusicControls();
 
     await currentAudio.play();
+    startListeningTracker();
     updateMusicControls();
   } catch (error) {
     if (token === musicLoadToken) {
@@ -2468,6 +2475,9 @@ async function render() {
     currentCategory === "playlists" ? (selectedPlaylist ? (selectedPlaylist.mediaIds || []).length : allPlaylists.length) :
     videosOnly.length;
   $("#watchedCount").textContent = videosOnly.filter(v => v.position > 5).length;
+  const totalListeningSeconds = audioOnly.reduce((sum, track) => sum + Math.max(0, Number(track.listenedSeconds) || 0), 0);
+  const listeningStat = $("#listeningTimeValue");
+  if (listeningStat) listeningStat.textContent = formatListeningTime(totalListeningSeconds);
   $("#storageUsed").textContent = formatBytes(all.reduce((n,v)=>n+(v.nativeUri?0:(Number(v.size)||0)),0));
 
   let items = currentCategory === "vault"
@@ -2484,6 +2494,10 @@ async function render() {
   const q = $("#searchInput").value.trim().toLowerCase();
   const filter = currentFilter();
   const sort = $("#sortSelect").value;
+
+  if (currentCategory === "audio" && sort === "mostPlayed") {
+    items.sort((a,b) => (Number(b.playCount)||0) - (Number(a.playCount)||0) || (Number(b.listenedSeconds)||0) - (Number(a.listenedSeconds)||0));
+  }
 
   if (q) items = items.filter(v => {
     const searchable = currentCategory === "audio" ? [v.name, v.artist, v.album].join(" ").toLowerCase() : (v.name || "").toLowerCase();
@@ -2667,6 +2681,12 @@ async function render() {
       trackInfo.textContent = [v.artist, v.album].filter(Boolean).join(" • ");
       trackInfo.style.cssText = "flex-basis:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap";
       meta.append(trackInfo);
+    }
+    if (kind === "audio") {
+      const plays = document.createElement("span");
+      plays.className = "track-play-count";
+      plays.textContent = `▶ ${Number(v.playCount) || 0} مرة تشغيل`;
+      meta.append(plays);
     }
 
     const actions = document.createElement("div");
@@ -3669,6 +3689,25 @@ function setupSettingsExperience() {
   document.documentElement.dataset.theme = theme;
   const themeSelect = $("#themeSetting");
   const speedSelect = $("#defaultSpeedSetting");
+  applySavedWallpaper();
+  const wallpaperInput = $("#wallpaperInput");
+  $("#chooseWallpaperBtn")?.addEventListener("click", () => wallpaperInput?.click());
+  wallpaperInput?.addEventListener("change", async () => {
+    const file = wallpaperInput.files?.[0];
+    if (!file || !file.type.startsWith("image/")) return;
+    try {
+      const image = await compressWallpaper(file);
+      localStorage.setItem("vioraCustomWallpaper", image);
+      applySavedWallpaper();
+      toast("تم تطبيق الخلفية الجديدة.");
+    } catch (error) { console.error(error); toast("تعذر تطبيق الصورة كخلفية."); }
+    wallpaperInput.value = "";
+  });
+  $("#clearWallpaperBtn")?.addEventListener("click", () => {
+    localStorage.removeItem("vioraCustomWallpaper");
+    applySavedWallpaper();
+    toast("تمت استعادة الخلفية الافتراضية.");
+  });
   if (themeSelect) {
     themeSelect.value = theme;
     themeSelect.addEventListener("change", () => {
@@ -3687,6 +3726,69 @@ function setupSettingsExperience() {
   $("#settingsScanVideo")?.addEventListener("click", () => syncDeviceMedia("video"));
   $("#settingsScanAudio")?.addEventListener("click", () => syncDeviceMedia("audio"));
   $("#settingsExportBtn")?.addEventListener("click", exportData);
+}
+
+function formatListeningTime(seconds) {
+  const total = Math.max(0, Math.floor(Number(seconds) || 0));
+  const hours = Math.floor(total / 3600), minutes = Math.floor((total % 3600) / 60);
+  if (hours) return `${hours} س ${minutes} د`;
+  if (minutes) return `${minutes} دقيقة`;
+  return `${total} ث`;
+}
+
+function startListeningTracker() {
+  if (listeningTick) clearInterval(listeningTick);
+  listeningLastTick = Date.now();
+  listeningTick = setInterval(async () => {
+    if (!currentAudio || currentAudio.paused || !currentAudioId || currentMusicVideo) return;
+    const now = Date.now();
+    const elapsed = Math.min(5, Math.max(0, Math.floor((now - listeningLastTick) / 1000)));
+    listeningLastTick = now;
+    if (!elapsed) return;
+    const track = await dbRequest("readonly", "get", currentAudioId).catch(() => null);
+    if (!track) return;
+    track.listenedSeconds = (Number(track.listenedSeconds) || 0) + elapsed;
+    const shouldPersist = now - listeningPersistAt >= 15000;
+    if (shouldPersist) {
+      listeningPersistAt = now;
+      await dbRequest("readwrite", "put", track);
+      const stat = $("#listeningTimeValue");
+      if (stat) {
+        const all = await dbRequest("readonly", "all");
+        stat.textContent = formatListeningTime(all.filter(x => x.kind === "audio" && !isVaultItem(x)).reduce((sum,x) => sum + (Number(x.listenedSeconds)||0), 0));
+      }
+    } else {
+      await dbRequest("readwrite", "put", track);
+    }
+  }, 1000);
+}
+
+function stopListeningTracker() {
+  if (listeningTick) clearInterval(listeningTick);
+  listeningTick = null;
+  listeningLastTick = 0;
+}
+
+function compressWallpaper(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file), image = new Image();
+    image.onload = () => {
+      const scale = Math.min(1, 1920 / Math.max(image.width, image.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(image.width * scale));
+      canvas.height = Math.max(1, Math.round(image.height * scale));
+      canvas.getContext("2d").drawImage(image, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      try { resolve(canvas.toDataURL("image/jpeg", 0.78)); } catch (error) { reject(error); }
+    };
+    image.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Invalid image")); };
+    image.src = url;
+  });
+}
+
+function applySavedWallpaper() {
+  const image = localStorage.getItem("vioraCustomWallpaper");
+  document.documentElement.style.setProperty("--viora-wallpaper", image ? `url("${image}")` : "none");
 }
 
 function setupPageRouter() {
@@ -4012,6 +4114,7 @@ async function init() {
 
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) return;
+    if (currentAudio && !currentAudio.paused) { /* keep listening while audio is playing */ }
 
     const vaultVideo = currentVideo && isVaultItem(currentVideo);
     const vaultAudio = currentCategory === "vault" && currentAudio;
