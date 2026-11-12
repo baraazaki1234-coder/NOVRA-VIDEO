@@ -123,23 +123,12 @@ private fun NovraApp() {
     var selected by remember { mutableStateOf("Home") }
     var navigationStack by remember { mutableStateOf<List<String>>(emptyList()) }
     var showExitDialog by remember { mutableStateOf(false) }
-    var language by remember { mutableStateOf("en") }
-    fun navigateTo(destination: String) {
-        if (destination != selected) { navigationStack = navigationStack + selected; navigateTo(destination) }
-        showNowPlaying = false
-    }
-    fun navigateBack() {
-        if (showNowPlaying) showNowPlaying = false
-        else if (navigationStack.isNotEmpty()) { selected = navigationStack.last(); navigationStack = navigationStack.dropLast(1) }
-        else if (selected != "Home") selected = "Home"
-        else showExitDialog = true
-    }
     val prefs = remember { context.getSharedPreferences("novra_preferences", android.content.Context.MODE_PRIVATE) }
+    var language by remember { mutableStateOf(prefs.getString("language", "en") ?: "en") }
     var wallpaperUri by remember { mutableStateOf(prefs.getString("wallpaper_uri", null)?.let(Uri::parse)) }
     var compactCards by remember { mutableStateOf(prefs.getBoolean("compact_cards", false)) }
     var cardStyle by remember { mutableStateOf(prefs.getString("card_style", "rounded") ?: "rounded") }
     var themeMode by remember { mutableStateOf(prefs.getString("theme_mode", "dark") ?: "dark") }
-    language = prefs.getString("language", "en") ?: "en"
     var wallpaperDim by remember { mutableFloatStateOf(prefs.getFloat("wallpaper_dim", 0.22f)) }
     var accentName by remember { mutableStateOf(prefs.getString("accent_name", "mint") ?: "mint") }
     val isLightTheme = themeMode == "light"
@@ -202,6 +191,21 @@ private fun NovraApp() {
     }
     var playQueue by remember { mutableStateOf<List<LocalMedia>>(emptyList()) }
     var showNowPlaying by remember { mutableStateOf(false) }
+    fun navigateTo(destination: String) {
+        if (destination != selected) {
+            navigationStack = navigationStack + selected
+            selected = destination
+        }
+        showNowPlaying = false
+    }
+    fun navigateBack() {
+        if (showNowPlaying) showNowPlaying = false
+        else if (navigationStack.isNotEmpty()) {
+            selected = navigationStack.last()
+            navigationStack = navigationStack.dropLast(1)
+        } else if (selected != "Home") selected = "Home"
+        else showExitDialog = true
+    }
     var controller by remember { mutableStateOf<MediaController?>(null) }
     var sleepTimerMinutes by remember { mutableIntStateOf(0) }
     LaunchedEffect(sleepTimerMinutes, controller) {
