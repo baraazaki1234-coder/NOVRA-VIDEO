@@ -193,8 +193,35 @@ class MainActivity : ComponentActivity() {
 }
 
 private fun mediaPermissions(): Array<String> = when {
-    Build.VERSION.SDK_INT >= 33 -> arrayOf(Manifest.permission.READ_MEDIA_VIDEO, Manifest.permission.READ_MEDIA_AUDIO)
+    Build.VERSION.SDK_INT >= 34 -> arrayOf(
+        Manifest.permission.READ_MEDIA_VIDEO,
+        Manifest.permission.READ_MEDIA_AUDIO,
+        Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED
+    )
+    Build.VERSION.SDK_INT >= 33 -> arrayOf(
+        Manifest.permission.READ_MEDIA_VIDEO,
+        Manifest.permission.READ_MEDIA_AUDIO
+    )
     else -> arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+}
+
+private fun hasMediaPermissions(context: android.content.Context): Boolean {
+    if (Build.VERSION.SDK_INT < 33) {
+        return ContextCompat.checkSelfPermission(
+            context, Manifest.permission.READ_EXTERNAL_STORAGE
+        ) == PackageManager.PERMISSION_GRANTED
+    }
+    val audioGranted = ContextCompat.checkSelfPermission(
+        context, Manifest.permission.READ_MEDIA_AUDIO
+    ) == PackageManager.PERMISSION_GRANTED
+    val videoGranted = ContextCompat.checkSelfPermission(
+        context, Manifest.permission.READ_MEDIA_VIDEO
+    ) == PackageManager.PERMISSION_GRANTED
+    val selectedVisualMediaGranted = Build.VERSION.SDK_INT >= 34 &&
+        ContextCompat.checkSelfPermission(
+            context, Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED
+        ) == PackageManager.PERMISSION_GRANTED
+    return audioGranted && (videoGranted || selectedVisualMediaGranted)
 }
 
 @Composable
@@ -433,9 +460,7 @@ private fun NovraApp() {
     var videos by remember { mutableStateOf<List<LocalMedia>>(emptyList()) }
     var tracks by remember { mutableStateOf<List<LocalMedia>>(emptyList()) }
     var hasPermission by remember {
-        mutableStateOf(mediaPermissions().all {
-            ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
-        })
+        mutableStateOf(hasMediaPermissions(context))
     }
     var loading by remember { mutableStateOf(false) }
     var mediaRefresh by remember { mutableIntStateOf(0) }
@@ -461,10 +486,8 @@ private fun NovraApp() {
     }
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) { result ->
-        hasPermission = mediaPermissions().all { permission ->
-            result[permission] == true || ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
-        }
+    ) { _ ->
+        hasPermission = hasMediaPermissions(context)
     }
 
     LaunchedEffect(hasPermission, mediaRefresh) {
