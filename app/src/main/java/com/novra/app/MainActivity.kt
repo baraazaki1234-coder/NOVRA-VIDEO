@@ -3,6 +3,9 @@ package com.novra.app
 import android.Manifest
 import android.content.pm.PackageManager
 import android.content.ComponentName
+import android.app.PictureInPictureParams
+import android.util.Rational
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -32,6 +35,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
+import androidx.media3.common.Player
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.session.MediaController
@@ -48,6 +54,16 @@ private val Muted = Color(0xFFA7B0A8)
 private val Accent = Color(0xFFC7E8D1)
 
 class MainActivity : ComponentActivity() {
+    var pipController: MediaController? = null
+    var pipVideoActive: Boolean = false
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && pipVideoActive && pipController?.isPlaying == true) {
+            enterPictureInPictureMode(PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9)).build())
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent { NovraApp() }
@@ -63,6 +79,17 @@ private fun mediaPermissions(): Array<String> = when {
 private fun NovraApp() {
     val context = androidx.compose.ui.platform.LocalContext.current
     var selected by remember { mutableStateOf("Home") }
+    val prefs = remember { context.getSharedPreferences("novra_preferences", android.content.Context.MODE_PRIVATE) }
+    var wallpaperUri by remember { mutableStateOf(prefs.getString("wallpaper_uri", null)?.let(Uri::parse)) }
+    var compactCards by remember { mutableStateOf(prefs.getBoolean("compact_cards", false)) }
+    var cardStyle by remember { mutableStateOf(prefs.getString("card_style", "rounded") ?: "rounded") }
+    val wallpaperPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            runCatching { context.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+            wallpaperUri = uri
+            prefs.edit().putString("wallpaper_uri", uri.toString()).apply()
+        }
+    }
     var selectedMedia by remember { mutableStateOf<LocalMedia?>(null) }
     var playQueue by remember { mutableStateOf<List<LocalMedia>>(emptyList()) }
     var showNowPlaying by remember { mutableStateOf(false) }
@@ -75,6 +102,18 @@ private fun NovraApp() {
             runCatching { controllerFuture.get() }.onSuccess { controller = it }
         }, ContextCompat.getMainExecutor(context))
         onDispose { MediaController.releaseFuture(controllerFuture) }
+    }
+    SideEffect {
+        (context as? MainActivity)?.apply {
+            pipController = controller
+            pipVideoActive = selectedMedia?.isVideo == true
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                setPictureInPictureParams(PictureInPictureParams.Builder()
+                    .setAspectRatio(Rational(16, 9))
+                    .setAutoEnterEnabled(pipVideoActive && controller?.isPlaying == true)
+                    .build())
+            }
+        }
     }
     LaunchedEffect(selectedMedia, controller) {
         val media = selectedMedia
@@ -147,7 +186,8 @@ private fun NovraApp() {
                         Triple("Home", Icons.Rounded.Home, "Home"),
                         Triple("Videos", Icons.Rounded.OndemandVideo, "Videos"),
                         Triple("Music", Icons.Rounded.MusicNote, "Music"),
-                        Triple("Playlists", Icons.Rounded.QueueMusic, "Playlists")
+                        Triple("Playlists", Icons.Rounded.QueueMusic, "Playlists"),
+                        Triple("Settings", Icons.Rounded.Settings, "Settings")
                     ).forEach { item ->
                         NavigationBarItem(
                             selected = selected == item.first,
@@ -172,14 +212,23 @@ private fun NovraApp() {
                 "Videos" -> MediaScreen(
                     Modifier.padding(padding), "Videos", videos, loading, hasPermission,
                     onGrant = { permissionLauncher.launch(mediaPermissions()) },
+                    compactCards = compactCards, cardStyle = cardStyle,
                     onPlay = { item -> selectedMedia = item; playQueue = videos; showNowPlaying = true }
                 )
                 "Music" -> MediaScreen(
                     Modifier.padding(padding), "Music", tracks, loading, hasPermission,
                     onGrant = { permissionLauncher.launch(mediaPermissions()) },
+                    compactCards = compactCards, cardStyle = cardStyle,
                     onPlay = { item -> selectedMedia = item; playQueue = tracks; showNowPlaying = true }
                 )
-                else -> PlaylistsScreen(Modifier.padding(padding))
+                "Playlists" -> PlaylistsScreen(Modifier.padding(padding))
+                else -> SettingsScreen(
+                    Modifier.padding(padding), wallpaperUri, compactCards, cardStyle,
+                    onChooseWallpaper = { wallpaperPicker.launch(arrayOf("image/*")) },
+                    onClearWallpaper = { wallpaperUri = null; prefs.edit().remove("wallpaper_uri").apply() },
+                    onCompactChange = { compactCards = it; prefs.edit().putBoolean("compact_cards", it).apply() },
+                    onCardStyleChange = { cardStyle = it; prefs.edit().putString("card_style", it).apply() }
+                )
             }
         }
     }
@@ -260,7 +309,7 @@ private fun CountCard(label: String, count: String, icon: androidx.compose.ui.gr
 @Composable
 private fun MediaScreen(
     modifier: Modifier, type: String, media: List<LocalMedia>, loading: Boolean,
-    hasPermission: Boolean, onGrant: () -> Unit, onPlay: (LocalMedia) -> Unit
+    hasPermission: Boolean, onGrant: () -> Unit, compactCards: Boolean, cardStyle: String, onPlay: (LocalMedia) -> Unit
 ) {
     var query by remember { mutableStateOf("") }
     var sortNewest by remember { mutableStateOf(true) }
@@ -314,8 +363,8 @@ private fun MediaScreen(
             else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(9.dp)) {
                 item { Text("${filtered.size} items", color = Muted, fontSize = 11.sp) }
                 items(filtered) { item ->
-                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(CardBg).clickable { onPlay(item) }.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(54.dp).clip(RoundedCornerShape(13.dp)).background(CardAlt), contentAlignment = Alignment.Center) {
+                    Row(Modifier.fillMaxWidth().clip(if (cardStyle == "square") RoundedCornerShape(7.dp) else RoundedCornerShape(16.dp)).background(CardBg).clickable { onPlay(item) }.padding(if (compactCards) 8.dp else 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(if (compactCards) 42.dp else 54.dp).clip(if (cardStyle == "square") RoundedCornerShape(5.dp) else RoundedCornerShape(13.dp)).background(CardAlt), contentAlignment = Alignment.Center) {
                             Icon(if (type == "Videos") Icons.Rounded.PlayArrow else Icons.Rounded.MusicNote, null, tint = Accent, modifier = Modifier.size(26.dp))
                         }
                         Spacer(Modifier.width(12.dp))
@@ -343,6 +392,8 @@ private fun formatDuration(duration: Long): String {
 
 @Composable
 private fun NowPlayingScreen(modifier: Modifier, media: LocalMedia, controller: MediaController?, onBack: () -> Unit) {
+    var shuffle by remember(controller) { mutableStateOf(controller?.shuffleModeEnabled == true) }
+    var repeatMode by remember(controller) { mutableIntStateOf(controller?.repeatMode ?: Player.REPEAT_MODE_OFF) }
     Column(modifier.fillMaxSize().padding(18.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.Rounded.KeyboardArrowDown, "Back", tint = Color.White) }
@@ -369,13 +420,78 @@ private fun NowPlayingScreen(modifier: Modifier, media: LocalMedia, controller: 
         Text(if (media.isVideo) "Video" else "Audio", color = Muted, fontSize = 12.sp)
         Spacer(Modifier.height(16.dp))
         if (!media.isVideo) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = { shuffle = !shuffle; controller?.shuffleModeEnabled = shuffle }) {
+                    Icon(Icons.Rounded.Shuffle, "Shuffle", tint = if (shuffle) Accent else Muted)
+                }
                 IconButton(onClick = { controller?.seekToPreviousMediaItem() }) { Icon(Icons.Rounded.SkipPrevious, null, tint = Color.White, modifier = Modifier.size(34.dp)) }
                 IconButton(onClick = { controller?.let { if (it.isPlaying) it.pause() else it.play() } }) {
                     Icon(if (controller?.isPlaying == true) Icons.Rounded.PauseCircleFilled else Icons.Rounded.PlayCircle, null, tint = Accent, modifier = Modifier.size(58.dp))
                 }
                 IconButton(onClick = { controller?.seekToNextMediaItem() }) { Icon(Icons.Rounded.SkipNext, null, tint = Color.White, modifier = Modifier.size(34.dp)) }
+                IconButton(onClick = {
+                    repeatMode = when (repeatMode) {
+                        Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ONE
+                        Player.REPEAT_MODE_ONE -> Player.REPEAT_MODE_ALL
+                        else -> Player.REPEAT_MODE_OFF
+                    }
+                    controller?.repeatMode = repeatMode
+                }) {
+                    Icon(if (repeatMode == Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat, "Repeat", tint = if (repeatMode == Player.REPEAT_MODE_OFF) Muted else Accent)
+                }
             }
+        }
+        Spacer(Modifier.height(20.dp))
+    }
+}
+
+@Composable
+private fun SettingsScreen(
+    modifier: Modifier, wallpaperUri: Uri?, compactCards: Boolean, cardStyle: String,
+    onChooseWallpaper: () -> Unit, onClearWallpaper: () -> Unit,
+    onCompactChange: (Boolean) -> Unit, onCardStyleChange: (String) -> Unit
+) {
+    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
+        Spacer(Modifier.height(20.dp))
+        Text("Settings", color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+        Text("Make NOVRA feel like yours.", color = Muted, fontSize = 13.sp)
+        Spacer(Modifier.height(24.dp))
+        Text("APPEARANCE", color = Accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+        Spacer(Modifier.height(10.dp))
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(CardBg).padding(15.dp)) {
+            Text("App background", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Text("Choose a picture from your gallery as your personal background.", color = Muted, fontSize = 11.sp)
+            if (wallpaperUri != null) {
+                Spacer(Modifier.height(12.dp))
+                AsyncImage(model = wallpaperUri, contentDescription = "Selected background", modifier = Modifier.fillMaxWidth().height(130.dp).clip(RoundedCornerShape(12.dp)), contentScale = ContentScale.Crop)
+            }
+            Spacer(Modifier.height(12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                Button(onClick = onChooseWallpaper) { Text("Choose from gallery") }
+                if (wallpaperUri != null) OutlinedButton(onClick = onClearWallpaper) { Text("Remove") }
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(CardBg).padding(15.dp)) {
+            Text("Media cards", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Compact cards", color = Color.White, fontSize = 13.sp)
+                    Text("Show more songs and videos on screen.", color = Muted, fontSize = 10.sp)
+                }
+                Switch(checked = compactCards, onCheckedChange = onCompactChange)
+            }
+            HorizontalDivider(color = CardAlt)
+            Text("Card corners", color = Color.White, fontSize = 13.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(selected = cardStyle == "rounded", onClick = { onCardStyleChange("rounded") }, label = { Text("Rounded") })
+                FilterChip(selected = cardStyle == "square", onClick = { onCardStyleChange("square") }, label = { Text("Square") })
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(CardBg).padding(15.dp)) {
+            Text("Playback", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Text("Video picture-in-picture is enabled when you leave NOVRA while a video is playing. Music playback continues through the media session.", color = Muted, fontSize = 11.sp)
         }
         Spacer(Modifier.height(20.dp))
     }
