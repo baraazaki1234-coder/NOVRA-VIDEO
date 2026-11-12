@@ -29,6 +29,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -1004,6 +1005,13 @@ private fun VideoNowPlayingScreen(
     language: String
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
+    var seekFeedback by remember(media.id) { mutableStateOf("") }
+    LaunchedEffect(seekFeedback) {
+        if (seekFeedback.isNotEmpty()) {
+            delay(700)
+            seekFeedback = ""
+        }
+    }
     var subtitleUri by remember(media.id) { mutableStateOf<Uri?>(null) }
     val subtitlePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
@@ -1037,16 +1045,48 @@ private fun VideoNowPlayingScreen(
     }
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 8.dp)) {
         Spacer(Modifier.height(6.dp))
-        AndroidView(
-            modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(15.dp)),
-            factory = { ctx -> PlayerView(ctx).apply {
-                useController = true
-                controllerAutoShow = true
-                controllerShowTimeoutMs = 3500
-                keepScreenOn = true
-            } },
-            update = { view -> view.player = controller }
-        )
+        Box(
+            Modifier.fillMaxWidth().aspectRatio(16f / 9f)
+                .clip(RoundedCornerShape(15.dp))
+                .pointerInput(controller, duration) {
+                    detectTapGestures(
+                        onDoubleTap = { offset ->
+                            val player = controller
+                            if (player != null) {
+                                val forward = offset.x >= size.width / 2f
+                                val delta = if (forward) 10_000L else -10_000L
+                                val target = (player.currentPosition + delta).coerceAtLeast(0L)
+                                    .let { if (duration > 0f) it.coerceAtMost(duration.toLong()) else it }
+                                player.seekTo(target)
+                                seekFeedback = if (forward) "+10s" else "−10s"
+                            }
+                        }
+                    )
+                }
+        ) {
+            AndroidView(
+                modifier = Modifier.fillMaxSize(),
+                factory = { ctx -> PlayerView(ctx).apply {
+                    useController = true
+                    controllerAutoShow = true
+                    controllerShowTimeoutMs = 3500
+                    keepScreenOn = true
+                } },
+                update = { view -> view.player = controller }
+            )
+            if (seekFeedback.isNotEmpty()) {
+                Text(
+                    seekFeedback,
+                    color = Color.White,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.align(Alignment.Center)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color.Black.copy(alpha = 0.72f))
+                        .padding(horizontal = 18.dp, vertical = 10.dp)
+                )
+            }
+        }
         Spacer(Modifier.height(16.dp))
         Text(media.title, color = TextPrimary, fontSize = 19.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
         Text(if (language == "ar") "فيديو من مكتبتك" else "Video from your library", color = Muted, fontSize = 12.sp)
