@@ -380,6 +380,14 @@ private fun NovraApp() {
                     onToggleFavorite = ::toggleFavorite,
                     onPlay = { item -> startMedia(item, tracks) }
                 )
+                "Favorites" -> MediaScreen(
+                    Modifier.padding(padding), "Favorites", (videos + tracks).distinctBy { mediaKey(it) }, loading, hasPermission,
+                    onGrant = { permissionLauncher.launch(mediaPermissions()) },
+                    compactCards = compactCards, cardStyle = cardStyle,
+                    playCounts = playCounts, favorites = favorites,
+                    onToggleFavorite = ::toggleFavorite,
+                    onPlay = { item -> startMedia(item, (videos + tracks).distinctBy { mediaKey(it) }) }
+                )
                 "Playlists" -> PlaylistsScreen(
                     Modifier.padding(padding), playlists, (videos + tracks).distinctBy { mediaKey(it) },
                     onCreate = { name -> savePlaylists(playlists + UserPlaylist(name, emptyList())) },
@@ -469,8 +477,10 @@ private fun HomeScreen(
             Text("SEE ALL", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
         }
         Spacer(Modifier.height(10.dp))
-        listOf("Recently played", "Favorites", "Playlists").forEach { label ->
-            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(15.dp)).background(CardBg).clickable { navigate("Playlists") }.padding(15.dp), verticalAlignment = Alignment.CenterVertically) {
+        listOf("Favorites", "Playlists").forEach { label ->
+            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(15.dp)).background(CardBg).clickable {
+                navigate(if (label == "Favorites") "Favorites" else "Playlists")
+            }.padding(15.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(when (label) {
                     "Favorites" -> Icons.Rounded.FavoriteBorder
                     "Playlists" -> Icons.Rounded.QueueMusic
@@ -517,7 +527,7 @@ private fun MediaScreen(
     var query by remember { mutableStateOf("") }
     var sortMenuExpanded by remember { mutableStateOf(false) }
     var sortBy by remember { mutableStateOf("Default") }
-    var mediaFilter by remember { mutableStateOf("All") }
+    var mediaFilter by remember(type) { mutableStateOf(if (type == "Favorites") "Favorites" else "All") }
     val filtered = media
         .filter { it.title.contains(query, ignoreCase = true) }
         .filter { mediaFilter != "Favorites" || mediaKey(it) in favorites }
@@ -546,7 +556,14 @@ private fun MediaScreen(
                 }
             }
         }
-        Text(if (type == "Videos") "Your video collection" else "Your music collection", color = Muted, fontSize = 12.sp)
+        Text(
+            when (type) {
+                "Videos" -> "Your video collection"
+                "Music" -> "Your music collection"
+                else -> "Everything you saved"
+            },
+            color = Muted, fontSize = 12.sp
+        )
         Spacer(Modifier.height(17.dp))
         OutlinedTextField(
             value = query, onValueChange = { query = it },
