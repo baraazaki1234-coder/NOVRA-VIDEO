@@ -5,6 +5,11 @@ on:
   pull_request:
     branches: [release/novra-android-next]
   workflow_dispatch:
+
+concurrency:
+  group: novra-native-android-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-latest
