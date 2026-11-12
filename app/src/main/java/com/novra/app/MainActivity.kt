@@ -95,6 +95,75 @@ data class UserPlaylist(val name: String, val mediaKeys: List<String>)
 
 private fun mediaKey(media: LocalMedia): String = "${if (media.isVideo) "v" else "a"}:${media.id}"
 
+private fun normalizeSearchText(value: String): String = value.lowercase()
+    .replace(Regex("[\\u064B-\\u065F\\u0670]"), "")
+    .replace('أ', 'ا').replace('إ', 'ا').replace('آ', 'ا')
+    .replace('ى', 'ي').replace('ة', 'ه')
+    .replace(Regex("[^\\p{L}\\p{N}]+"), " ")
+    .trim()
+
+private fun editDistanceAtMostOne(a: String, b: String): Boolean {
+    if (kotlin.math.abs(a.length - b.length) > 1) return false
+    var i = 0
+    var j = 0
+    var edits = 0
+    while (i < a.length && j < b.length) {
+        if (a[i] == b[j]) { i++; j++ }
+        else {
+            edits++
+            if (edits > 1) return false
+            if (a.length > b.length) i++
+            else if (b.length > a.length) j++
+            else { i++; j++ }
+        }
+    }
+    if (i < a.length || j < b.length) edits++
+    return edits <= 1
+}
+
+private fun mediaSearchScore(media: LocalMedia, query: String): Int? {
+    val q = normalizeSearchText(query)
+    if (q.isBlank()) return 0
+    val title = normalizeSearchText(media.title)
+    val artist = normalizeSearchText(media.artist)
+    val allText = "$title $artist"
+    val queryTokens = q.split(" ").filter(String::isNotBlank)
+    val titleTokens = title.split(" ").filter(String::isNotBlank)
+    val artistTokens = artist.split(" ").filter(String::isNotBlank)
+    var score = when {
+        title == q -> 1200
+        title.contains(q) -> 900
+        artist == q -> 850
+        artist.contains(q) -> 700
+        else -> 0
+    }
+    for (token in queryTokens) {
+        val titleMatch = titleTokens.maxOfOrNull { word ->
+            when {
+                word == token -> 300
+                word.startsWith(token) -> 240
+                word.contains(token) -> 190
+                token.length >= 4 && editDistanceAtMostOne(word, token) -> 120
+                else -> 0
+            }
+        } ?: 0
+        val artistMatch = artistTokens.maxOfOrNull { word ->
+            when {
+                word == token -> 230
+                word.startsWith(token) -> 180
+                word.contains(token) -> 140
+                token.length >= 4 && editDistanceAtMostOne(word, token) -> 100
+                else -> 0
+            }
+        } ?: 0
+        val best = maxOf(titleMatch, artistMatch)
+        if (best == 0) return null
+        score += best
+    }
+    return score
+}
+
+
 class MainActivity : ComponentActivity() {
     var pipController: MediaController? = null
     var pipVideoActive: Boolean = false
@@ -798,16 +867,19 @@ private fun MediaScreen(
     var sortMenuExpanded by remember { mutableStateOf(false) }
     var sortBy by remember { mutableStateOf("Default") }
     var mediaFilter by remember(type) { mutableStateOf(if (type == "Favorites") "Favorites" else "All") }
-    val filtered = media
-        .filter { it.title.contains(query, ignoreCase = true) }
-        .filter { mediaFilter != "Favorites" || mediaKey(it) in favorites }
+    val ranked = media.mapNotNull { item ->
+        mediaSearchScore(item, query)?.let { item to it }
+    }.filter { mediaFilter != "Favorites" || mediaKey(it.first) in favorites }
     val sortedMedia = when (sortBy) {
-        "Name" -> filtered.sortedBy { it.title.lowercase() }
-        "Duration" -> filtered.sortedByDescending { it.durationMs }
-        "Most played" -> filtered.sortedByDescending {
-            playCounts["play_count_${if (it.isVideo) "video" else "audio"}_${it.id}"] ?: 0
-        }
-        else -> filtered
+        "Name" -> ranked.sortedBy { it.first.title.lowercase() }.map { it.first }
+        "Duration" -> ranked.sortedByDescending { it.first.durationMs }.map { it.first }
+        "Most played" -> ranked.sortedByDescending {
+            playCounts["play_count_${if (it.first.isVideo) "video" else "audio"}_${it.first.id}"] ?: 0
+        }.map { it.first }
+        else -> ranked.sortedWith(
+            compareByDescending<Pair<LocalMedia, Int>> { it.second }
+                .thenByDescending { playCounts["play_count_${if (it.first.isVideo) "video" else "audio"}_${it.first.id}"] ?: 0 }
+        ).map { it.first }
     }
     Column(modifier.fillMaxSize().padding(horizontal = 18.dp)) {
         Spacer(Modifier.height(22.dp))
@@ -893,7 +965,11 @@ private fun MediaScreen(
                             Text(item.title, color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Spacer(Modifier.height(4.dp))
                             val countKey = "play_count_${if (item.isVideo) "video" else "audio"}_${item.id}"
-                            Text("${formatDuration(item.durationMs)}  •  ${playCounts[countKey] ?: 0} plays", color = Muted, fontSize = 10.sp)
+                            Text(
+                                if (!item.isVideo && item.artist.isNotBlank()) item.artist
+                                else "${formatDuration(item.durationMs)}  •  ${playCounts[countKey] ?: 0} plays",
+                                color = Muted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis
+                            )
                         }
                         IconButton(onClick = { onToggleFavorite(item) }) {
                             Icon(
