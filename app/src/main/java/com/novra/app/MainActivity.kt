@@ -59,6 +59,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -351,134 +352,257 @@ private fun NovraApp() {
             background = AppBg, surface = CardBg, surfaceVariant = CardAlt,
             primary = Accent, onBackground = TextPrimary, onSurface = TextPrimary
         )) {
-        Box(Modifier.fillMaxSize()) {
-            if (wallpaperUri != null) {
-                AsyncImage(
-                    model = wallpaperUri,
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
-            }
-            Scaffold(
-            containerColor = if (wallpaperUri != null) Color.Transparent else AppBg,
-            bottomBar = {
-                Column {
-                    if (selectedMedia != null && !showNowPlaying) {
-                        Row(Modifier.fillMaxWidth().background(CardAlt).clickable { showNowPlaying = true }.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(if (selectedMedia?.isVideo == true) Icons.Rounded.PlayCircle else Icons.Rounded.GraphicEq, null, tint = Accent)
-                            Spacer(Modifier.width(10.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(selectedMedia?.title.orEmpty(), color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 12.sp)
-                                Text("NOW PLAYING", color = Muted, fontSize = 9.sp)
+            val drawerState = rememberDrawerState(DrawerValue.Closed)
+            val drawerScope = rememberCoroutineScope()
+            val mainDestinations = listOf(
+                Triple("Home", Icons.Rounded.Home, "Home"),
+                Triple("Videos", Icons.Rounded.OndemandVideo, "Videos"),
+                Triple("Music", Icons.Rounded.MusicNote, "Music"),
+                Triple("Playlists", Icons.Rounded.QueueMusic, "Playlists"),
+                Triple("Favorites", Icons.Rounded.Favorite, "Favorites")
+            )
+            ModalNavigationDrawer(
+                drawerState = drawerState,
+                gesturesEnabled = !showNowPlaying,
+                drawerContent = {
+                    ModalDrawerSheet(
+                        drawerContainerColor = CardBg,
+                        drawerContentColor = TextPrimary,
+                        drawerShape = RoundedCornerShape(topEnd = 26.dp, bottomEnd = 26.dp)
+                    ) {
+                        Column(
+                            Modifier.fillMaxHeight().verticalScroll(rememberScrollState())
+                                .padding(horizontal = 14.dp, vertical = 18.dp)
+                        ) {
+                            Column(
+                                Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
+                                    .background(Brush.linearGradient(listOf(Color(0xFF385A49), Color(0xFF17271F))))
+                                    .padding(18.dp)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        Modifier.size(42.dp).clip(RoundedCornerShape(14.dp))
+                                            .background(Color.White.copy(alpha = 0.13f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(Icons.Rounded.GraphicEq, null, tint = Color.White, modifier = Modifier.size(25.dp))
+                                    }
+                                    Spacer(Modifier.width(11.dp))
+                                    Column {
+                                        Text("NOVRA", color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.Black, letterSpacing = 2.5.sp)
+                                        Text("MEDIA EXPERIENCE", color = Color(0xFFD0E2D6), fontSize = 9.sp, letterSpacing = 1.3.sp)
+                                    }
+                                }
+                                Spacer(Modifier.height(17.dp))
+                                Text("Your entertainment, organized.", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                             }
-                            IconButton(onClick = { controller?.let { if (it.isPlaying) it.pause() else it.play() } }) {
-                                Icon(if (controller?.isPlaying == true) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, null, tint = TextPrimary)
+                            Spacer(Modifier.height(22.dp))
+                            Text("LIBRARY", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.6.sp, modifier = Modifier.padding(start = 12.dp, bottom = 8.dp))
+                            mainDestinations.forEach { item ->
+                                NavigationDrawerItem(
+                                    label = { Text(item.third, fontSize = 14.sp, fontWeight = if (selected == item.first) FontWeight.SemiBold else FontWeight.Normal) },
+                                    selected = selected == item.first,
+                                    onClick = {
+                                        selected = item.first
+                                        showNowPlaying = false
+                                        drawerScope.launch { drawerState.close() }
+                                    },
+                                    icon = { Icon(item.second, contentDescription = item.third) },
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                                    shape = RoundedCornerShape(14.dp),
+                                    colors = NavigationDrawerItemDefaults.colors(
+                                        selectedContainerColor = CardAlt,
+                                        selectedIconColor = Accent,
+                                        selectedTextColor = Accent,
+                                        unselectedIconColor = Muted,
+                                        unselectedTextColor = TextPrimary
+                                    )
+                                )
                             }
-                            IconButton(onClick = { controller?.stop(); selectedMedia = null }) { Icon(Icons.Rounded.Close, null, tint = Muted) }
+                            Spacer(Modifier.height(18.dp))
+                            HorizontalDivider(color = CardAlt, modifier = Modifier.padding(horizontal = 10.dp))
+                            Spacer(Modifier.height(14.dp))
+                            Text("MORE", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.6.sp, modifier = Modifier.padding(start = 12.dp, bottom = 8.dp))
+                            listOf(
+                                Triple("Premium", Icons.Rounded.WorkspacePremium, "NOVRA Premium"),
+                                Triple("Settings", Icons.Rounded.Settings, "Settings")
+                            ).forEach { item ->
+                                NavigationDrawerItem(
+                                    label = { Text(item.third, fontSize = 14.sp) },
+                                    selected = selected == item.first,
+                                    onClick = {
+                                        selected = item.first
+                                        showNowPlaying = false
+                                        drawerScope.launch { drawerState.close() }
+                                    },
+                                    icon = { Icon(item.second, contentDescription = item.third) },
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                                    shape = RoundedCornerShape(14.dp),
+                                    colors = NavigationDrawerItemDefaults.colors(
+                                        selectedContainerColor = CardAlt,
+                                        selectedIconColor = Accent,
+                                        selectedTextColor = Accent,
+                                        unselectedIconColor = Muted,
+                                        unselectedTextColor = TextPrimary
+                                    )
+                                )
+                            }
+                            Spacer(Modifier.height(22.dp))
+                            Text("NOVRA · Play your world", color = Muted, fontSize = 10.sp, modifier = Modifier.padding(start = 12.dp))
                         }
                     }
-                    NavigationBar(containerColor = CardBg, tonalElevation = 0.dp) {
-                    listOf(
-                        Triple("Home", Icons.Rounded.Home, "Home"),
-                        Triple("Videos", Icons.Rounded.OndemandVideo, "Videos"),
-                        Triple("Music", Icons.Rounded.MusicNote, "Music"),
-                        Triple("Playlists", Icons.Rounded.QueueMusic, "Playlists"),
-                        Triple("Settings", Icons.Rounded.Settings, "Settings")
-                    ).forEach { item ->
-                        NavigationBarItem(
-                            selected = selected == item.first,
-                            onClick = { selected = item.first },
-                            icon = { Icon(item.second, contentDescription = item.third) },
-                            label = { Text(item.third, fontSize = 10.sp) },
-                            colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = Accent, selectedTextColor = Accent,
-                                indicatorColor = Color(0xFF35463A),
-                                unselectedIconColor = Muted, unselectedTextColor = Muted
-                            )
+                }
+            ) {
+                Box(Modifier.fillMaxSize()) {
+                    if (wallpaperUri != null) {
+                        AsyncImage(
+                            model = wallpaperUri,
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
                         )
                     }
+                    Scaffold(
+                        containerColor = if (wallpaperUri != null) Color.Transparent else AppBg,
+                        topBar = {
+                            Row(
+                                Modifier.fillMaxWidth().background(CardBg.copy(alpha = 0.96f))
+                                    .padding(horizontal = 12.dp, vertical = 7.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                IconButton(onClick = {
+                                    if (showNowPlaying) showNowPlaying = false
+                                    else drawerScope.launch { drawerState.open() }
+                                }) {
+                                    Icon(
+                                        if (showNowPlaying) Icons.Rounded.ArrowBack else Icons.Rounded.Menu,
+                                        contentDescription = if (showNowPlaying) "Back" else "Open navigation",
+                                        tint = TextPrimary
+                                    )
+                                }
+                                Column(Modifier.weight(1f).padding(start = 5.dp)) {
+                                    Text(
+                                        if (showNowPlaying) "Now Playing" else if (selected == "Home") "NOVRA" else selected,
+                                        color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        if (showNowPlaying) "Your current media" else "Your personal media space",
+                                        color = Muted, fontSize = 10.sp
+                                    )
+                                }
+                                if (!showNowPlaying) {
+                                    IconButton(onClick = { selected = "Settings" }) {
+                                        Icon(Icons.Rounded.Tune, contentDescription = "Settings", tint = Muted)
+                                    }
+                                }
+                            }
+                        },
+                        bottomBar = {
+                            if (selectedMedia != null && !showNowPlaying) {
+                                Row(
+                                    Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)
+                                        .clip(RoundedCornerShape(17.dp)).background(CardAlt)
+                                        .clickable { showNowPlaying = true }
+                                        .padding(start = 11.dp, end = 5.dp, top = 7.dp, bottom = 7.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        if (selectedMedia?.isVideo == true) Icons.Rounded.PlayCircle else Icons.Rounded.GraphicEq,
+                                        null, tint = Accent, modifier = Modifier.size(25.dp)
+                                    )
+                                    Spacer(Modifier.width(10.dp))
+                                    Column(Modifier.weight(1f)) {
+                                        Text(selectedMedia?.title.orEmpty(), color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 12.sp)
+                                        Text("NOW PLAYING · TAP TO OPEN", color = Muted, fontSize = 9.sp)
+                                    }
+                                    IconButton(onClick = { controller?.let { if (it.isPlaying) it.pause() else it.play() } }) {
+                                        Icon(if (controller?.isPlaying == true) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, null, tint = TextPrimary)
+                                    }
+                                    IconButton(onClick = { controller?.stop(); selectedMedia = null }) {
+                                        Icon(Icons.Rounded.Close, null, tint = Muted)
+                                    }
+                                }
+                            }
+                        }
+                    ) { padding ->
+                        if (showNowPlaying && selectedMedia != null) {
+                            NowPlayingScreen(
+                                Modifier.padding(padding), selectedMedia!!, controller, playQueue,
+                                sleepTimerMinutes, onSleepTimerChange = { sleepTimerMinutes = it },
+                                onMoveQueueItem = ::moveQueueItem, onRemoveQueueItem = ::removeQueueItem,
+                                onBack = { showNowPlaying = false }
+                            )
+                        } else when (selected) {
+                            "Home" -> HomeScreen(
+                                Modifier.padding(padding), videos.size, tracks.size,
+                                tracks.map { track ->
+                                    val key = "play_count_audio_\${track.id}"
+                                    track to (playCounts[key] ?: 0)
+                                }.filter { it.second > 0 }.sortedByDescending { it.second }.take(5),
+                                navigate = { selected = it },
+                                onPlay = { startMedia(it, tracks) }
+                            )
+                            "Videos" -> MediaScreen(
+                                Modifier.padding(padding), "Videos", videos, loading, hasPermission,
+                                onGrant = { permissionLauncher.launch(mediaPermissions()) },
+                                compactCards = compactCards, cardStyle = cardStyle,
+                                playCounts = playCounts, favorites = favorites,
+                                onToggleFavorite = ::toggleFavorite,
+                                onPlay = { item -> startMedia(item, videos) }
+                            )
+                            "Music" -> MediaScreen(
+                                Modifier.padding(padding), "Music", tracks, loading, hasPermission,
+                                onGrant = { permissionLauncher.launch(mediaPermissions()) },
+                                compactCards = compactCards, cardStyle = cardStyle,
+                                playCounts = playCounts, favorites = favorites,
+                                onToggleFavorite = ::toggleFavorite,
+                                onPlay = { item -> startMedia(item, tracks) }
+                            )
+                            "Favorites" -> MediaScreen(
+                                Modifier.padding(padding), "Favorites", (videos + tracks).distinctBy { mediaKey(it) }, loading, hasPermission,
+                                onGrant = { permissionLauncher.launch(mediaPermissions()) },
+                                compactCards = compactCards, cardStyle = cardStyle,
+                                playCounts = playCounts, favorites = favorites,
+                                onToggleFavorite = ::toggleFavorite,
+                                onPlay = { item -> startMedia(item, (videos + tracks).distinctBy { mediaKey(it) }) }
+                            )
+                            "Playlists" -> PlaylistsScreen(
+                                Modifier.padding(padding), playlists, (videos + tracks).distinctBy { mediaKey(it) },
+                                onCreate = { name -> savePlaylists(playlists + UserPlaylist(name, emptyList())) },
+                                onAdd = { playlistName, item ->
+                                    savePlaylists(playlists.map { playlist ->
+                                        if (playlist.name == playlistName && mediaKey(item) !in playlist.mediaKeys)
+                                            playlist.copy(mediaKeys = playlist.mediaKeys + mediaKey(item))
+                                        else playlist
+                                    })
+                                },
+                                onDelete = { playlistName -> savePlaylists(playlists.filterNot { it.name == playlistName }) },
+                                onPlay = { items -> if (items.isNotEmpty()) startMedia(items.first(), items) }
+                            )
+                            "Premium" -> PremiumScreen(
+                                Modifier.padding(padding),
+                                transactionReference = prefs.getString("premium_transaction_reference", "") ?: "",
+                                pendingReview = prefs.getBoolean("premium_pending_review", false),
+                                onReferenceChange = { prefs.edit().putString("premium_transaction_reference", it).apply() },
+                                onSubmit = { reference ->
+                                    prefs.edit().putString("premium_transaction_reference", reference)
+                                        .putBoolean("premium_pending_review", true).apply()
+                                }
+                            )
+                            else -> SettingsScreen(
+                                Modifier.padding(padding), wallpaperUri, compactCards, cardStyle, listenedSeconds, themeMode, accentName,
+                                onOpenPremium = { selected = "Premium" },
+                                onThemeChange = { themeMode = it; prefs.edit().putString("theme_mode", it).apply() },
+                                onAccentChange = { accentName = it; prefs.edit().putString("accent_name", it).apply() },
+                                onChooseWallpaper = { wallpaperPicker.launch(arrayOf("image/*")) },
+                                onClearWallpaper = { wallpaperUri = null; prefs.edit().remove("wallpaper_uri").apply() },
+                                onCompactChange = { compactCards = it; prefs.edit().putBoolean("compact_cards", it).apply() },
+                                onCardStyleChange = { cardStyle = it; prefs.edit().putString("card_style", it).apply() }
+                            )
+                        }
                     }
                 }
             }
-        ) { padding ->
-            if (showNowPlaying && selectedMedia != null) {
-                NowPlayingScreen(
-                    Modifier.padding(padding), selectedMedia!!, controller, playQueue,
-                    sleepTimerMinutes, onSleepTimerChange = { sleepTimerMinutes = it },
-                    onMoveQueueItem = ::moveQueueItem, onRemoveQueueItem = ::removeQueueItem,
-                    onBack = { showNowPlaying = false }
-                )
-            } else when (selected) {
-                "Home" -> HomeScreen(
-                    Modifier.padding(padding), videos.size, tracks.size,
-                    tracks.map { track ->
-                        val key = "play_count_audio_${track.id}"
-                        track to (playCounts[key] ?: 0)
-                    }.filter { it.second > 0 }.sortedByDescending { it.second }.take(5),
-                    navigate = { selected = it },
-                    onPlay = { startMedia(it, tracks) }
-                )
-                "Videos" -> MediaScreen(
-                    Modifier.padding(padding), "Videos", videos, loading, hasPermission,
-                    onGrant = { permissionLauncher.launch(mediaPermissions()) },
-                    compactCards = compactCards, cardStyle = cardStyle,
-                    playCounts = playCounts, favorites = favorites,
-                    onToggleFavorite = ::toggleFavorite,
-                    onPlay = { item -> startMedia(item, videos) }
-                )
-                "Music" -> MediaScreen(
-                    Modifier.padding(padding), "Music", tracks, loading, hasPermission,
-                    onGrant = { permissionLauncher.launch(mediaPermissions()) },
-                    compactCards = compactCards, cardStyle = cardStyle,
-                    playCounts = playCounts, favorites = favorites,
-                    onToggleFavorite = ::toggleFavorite,
-                    onPlay = { item -> startMedia(item, tracks) }
-                )
-                "Favorites" -> MediaScreen(
-                    Modifier.padding(padding), "Favorites", (videos + tracks).distinctBy { mediaKey(it) }, loading, hasPermission,
-                    onGrant = { permissionLauncher.launch(mediaPermissions()) },
-                    compactCards = compactCards, cardStyle = cardStyle,
-                    playCounts = playCounts, favorites = favorites,
-                    onToggleFavorite = ::toggleFavorite,
-                    onPlay = { item -> startMedia(item, (videos + tracks).distinctBy { mediaKey(it) }) }
-                )
-                "Playlists" -> PlaylistsScreen(
-                    Modifier.padding(padding), playlists, (videos + tracks).distinctBy { mediaKey(it) },
-                    onCreate = { name -> savePlaylists(playlists + UserPlaylist(name, emptyList())) },
-                    onAdd = { playlistName, item ->
-                        savePlaylists(playlists.map { playlist ->
-                            if (playlist.name == playlistName && mediaKey(item) !in playlist.mediaKeys)
-                                playlist.copy(mediaKeys = playlist.mediaKeys + mediaKey(item))
-                            else playlist
-                        })
-                    },
-                    onDelete = { playlistName -> savePlaylists(playlists.filterNot { it.name == playlistName }) },
-                    onPlay = { items -> if (items.isNotEmpty()) startMedia(items.first(), items) }
-                )
-                "Premium" -> PremiumScreen(
-                    Modifier.padding(padding),
-                    transactionReference = prefs.getString("premium_transaction_reference", "") ?: "",
-                    pendingReview = prefs.getBoolean("premium_pending_review", false),
-                    onReferenceChange = { prefs.edit().putString("premium_transaction_reference", it).apply() },
-                    onSubmit = { reference ->
-                        prefs.edit().putString("premium_transaction_reference", reference)
-                            .putBoolean("premium_pending_review", true).apply()
-                    }
-                )
-                else -> SettingsScreen(
-                    Modifier.padding(padding), wallpaperUri, compactCards, cardStyle, listenedSeconds, themeMode, accentName,
-                    onOpenPremium = { selected = "Premium" },
-                    onThemeChange = { themeMode = it; prefs.edit().putString("theme_mode", it).apply() },
-                    onAccentChange = { accentName = it; prefs.edit().putString("accent_name", it).apply() },
-                    onChooseWallpaper = { wallpaperPicker.launch(arrayOf("image/*")) },
-                    onClearWallpaper = { wallpaperUri = null; prefs.edit().remove("wallpaper_uri").apply() },
-                    onCompactChange = { compactCards = it; prefs.edit().putBoolean("compact_cards", it).apply() },
-                    onCardStyleChange = { cardStyle = it; prefs.edit().putString("card_style", it).apply() }
-                )
-            }
-            }
-        }
         }
     }
 }
