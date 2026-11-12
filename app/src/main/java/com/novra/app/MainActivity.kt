@@ -2086,7 +2086,6 @@ private fun SettingsScreen(
         Text(if (language == "ar") "الإعدادات" else "Settings", color = TextPrimary, fontSize = 30.sp, fontWeight = FontWeight.Bold)
         Text(if (language == "ar") "خصص Viora بالشكل اللي يناسبك." else "Make Viora feel like yours.", color = Muted, fontSize = 13.sp)
         Spacer(Modifier.height(18.dp))
-        Spacer(Modifier.height(18.dp))
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(CardBg).padding(15.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Rounded.Lock, null, tint = Accent, modifier = Modifier.size(22.dp))
