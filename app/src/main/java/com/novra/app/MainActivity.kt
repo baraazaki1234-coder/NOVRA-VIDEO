@@ -800,7 +800,9 @@ private fun NovraApp() {
                                             Text(selectedMedia?.title.orEmpty(), color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                                             Text(if (language == "ar") "يعمل الآن" else "NOW PLAYING", color = Accent, fontSize = 9.sp, letterSpacing = 1.sp)
                                         }
+                                        IconButton(onClick = { controller?.let { if (it.currentPosition > 3_000L) it.seekTo(0L) else it.seekToPreviousMediaItem() } }) { Icon(Icons.Rounded.SkipPrevious, if (language == "ar") "السابق" else "Previous", tint = Muted) }
                                         IconButton(onClick = { controller?.let { if (it.isPlaying) it.pause() else it.play() } }) { Icon(if (controller?.isPlaying == true) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, null, tint = TextPrimary) }
+                                        IconButton(onClick = { controller?.seekToNextMediaItem() }) { Icon(Icons.Rounded.SkipNext, if (language == "ar") "التالي" else "Next", tint = Muted) }
                                         IconButton(onClick = { controller?.stop(); selectedMedia = null }) { Icon(Icons.Rounded.Close, null, tint = Muted) }
                                     }
                                     Spacer(Modifier.height(8.dp))
