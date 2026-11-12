@@ -205,6 +205,10 @@ private fun NovraApp() {
         "ocean" -> if (isLightTheme) Color(0xFF0369A1) else Color(0xFF7DD3FC)
         "violet" -> if (isLightTheme) Color(0xFF6D28D9) else Color(0xFFC4B5FD)
         "rose" -> if (isLightTheme) Color(0xFFBE123C) else Color(0xFFFDA4AF)
+        "amber" -> if (isLightTheme) Color(0xFFB45309) else Color(0xFFFCD34D)
+        "cyan" -> if (isLightTheme) Color(0xFF0E7490) else Color(0xFF67E8F9)
+        "indigo" -> if (isLightTheme) Color(0xFF4338CA) else Color(0xFFA5B4FC)
+        "orange" -> if (isLightTheme) Color(0xFFC2410C) else Color(0xFFFDBA74)
         else -> if (isLightTheme) Color(0xFF286B47) else Color(0xFFC7E8D1)
     }
     val palette = (if (isLightTheme) LightPalette else DarkPalette).copy(accent = chosenAccent)
@@ -1272,7 +1276,7 @@ private fun SettingsScreen(
             Text("Accent color", color = TextPrimary, fontSize = 13.sp)
             Spacer(Modifier.height(6.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                listOf("mint" to "Mint", "ocean" to "Ocean", "violet" to "Violet", "rose" to "Rose").forEach { (key, label) ->
+                listOf("mint" to "Mint", "ocean" to "Ocean", "violet" to "Violet", "rose" to "Rose", "amber" to "Amber", "cyan" to "Cyan", "indigo" to "Indigo", "orange" to "Orange").forEach { (key, label) ->
                     FilterChip(selected = accentName == key, onClick = { onAccentChange(key) }, label = { Text(label, fontSize = 10.sp) })
                 }
             }
