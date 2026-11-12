@@ -25,6 +25,7 @@ import java.security.SecureRandom
 import javax.crypto.KeyGenerator
 import javax.crypto.Mac
 import javax.crypto.SecretKey
+import kotlinx.coroutines.delay
 import javax.crypto.spec.SecretKeySpec
 
 /**
@@ -84,10 +85,21 @@ internal object AppPinVault {
         return valid
     }
 
+    fun lockoutRemainingMillis(context: Context): Long {
+        val until = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getLong("pin_lock_until", 0L)
+        return (until - System.currentTimeMillis()).coerceAtLeast(0L)
+    }
+
     @Synchronized
     fun disable(context: Context) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .remove(SALT).remove(VERIFIER).commit()
+            .remove(SALT).remove(VERIFIER)
+            .remove("pin_failed_attempts").remove("pin_lock_until").commit()
+        runCatching {
+            KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+                .deleteEntry(KEY_ALIAS)
+        }
     }
 
     private fun calculate(salt: ByteArray, pin: String): ByteArray {
@@ -124,7 +136,22 @@ internal fun AppPinGate(
     var pin by remember { mutableStateOf("") }
     var confirmation by remember { mutableStateOf("") }
     var error by remember { mutableStateOf(false) }
+    var cooldownSeconds by remember { mutableIntStateOf(0) }
+    val context = androidx.compose.ui.platform.LocalContext.current
     val setup = confirmLabel.isNotBlank()
+
+    LaunchedEffect(error) {
+        if (error) {
+            while (true) {
+                val remaining = AppPinVault.lockoutRemainingMillis(context)
+                cooldownSeconds = ((remaining + 999L) / 1000L).toInt()
+                if (remaining <= 0L) break
+                delay(250L)
+            }
+        } else {
+            cooldownSeconds = 0
+        }
+    }
     Column(
         Modifier.fillMaxSize().background(Color(0xFF101310)).padding(28.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -167,7 +194,11 @@ internal fun AppPinGate(
         }
         if (error) {
             Spacer(Modifier.height(8.dp))
-            Text(errorLabel, color = Color(0xFFFF8A80), fontSize = 12.sp)
+            Text(
+                if (cooldownSeconds > 0) "Too many attempts. Try again in ${cooldownSeconds}s."
+                else errorLabel,
+                color = Color(0xFFFF8A80), fontSize = 12.sp
+            )
         }
         Spacer(Modifier.height(18.dp))
         Button(
@@ -175,7 +206,7 @@ internal fun AppPinGate(
                 error = if (setup && pin != confirmation) true else !onSubmit(pin)
                 if (!error) { pin = ""; confirmation = "" }
             },
-            enabled = pin.length in 4..8 && (!setup || confirmation.length in 4..8),
+            enabled = pin.length in 4..8 && (!setup || confirmation.length in 4..8) && cooldownSeconds == 0,
             modifier = Modifier.fillMaxWidth(),
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC7E8D1), contentColor = Color(0xFF101310))
         ) { Text(if (setup) "Save PIN" else "Unlock") }
