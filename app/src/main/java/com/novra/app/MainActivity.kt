@@ -91,12 +91,12 @@ private data class NovraPalette(
     val muted: Color, val accent: Color, val text: Color
 )
 private val DarkPalette = NovraPalette(
-    Color(0xFF101310), Color(0xFF1D241F), Color(0xFF2A332D),
-    Color(0xFFA7B0A8), Color(0xFFC7E8D1), Color(0xFFFFFFFF)
+    Color(0xFF080A12), Color(0xE6171B2A), Color(0xF0222940),
+    Color(0xFF9AA4BC), Color(0xFFB9A5FF), Color(0xFFF5F4FF)
 )
 private val LightPalette = NovraPalette(
-    Color(0xFFF3F6F3), Color(0xFFFFFFFF), Color(0xFFE5ECE7),
-    Color(0xFF66736A), Color(0xFF286B47), Color(0xFF17221A)
+    Color(0xFFF4F3FA), Color(0xEFFFFFFF), Color(0xFFF0EDFA),
+    Color(0xFF77748C), Color(0xFF7052D8), Color(0xFF201B32)
 )
 private val LocalNovraPalette = staticCompositionLocalOf { DarkPalette }
 private val AppBg: Color @Composable get() = LocalNovraPalette.current.background
@@ -284,24 +284,24 @@ private fun NovraApp() {
     var themeMode by remember { mutableStateOf(prefs.getString("theme_mode", "dark") ?: "dark") }
     var pureBlack by remember { mutableStateOf(prefs.getBoolean("pure_black", false)) }
     var wallpaperDim by remember { mutableFloatStateOf(prefs.getFloat("wallpaper_dim", 0.22f)) }
-    var accentName by remember { mutableStateOf(prefs.getString("accent_name", "mint") ?: "mint") }
+    var accentName by remember { mutableStateOf(prefs.getString("accent_name", "violet") ?: "violet") }
     val isLightTheme = themeMode == "light"
     val chosenAccent = when (accentName) {
         "ocean" -> if (isLightTheme) Color(0xFF0369A1) else Color(0xFF7DD3FC)
-        "violet" -> if (isLightTheme) Color(0xFF6D28D9) else Color(0xFFC4B5FD)
+        "violet", "mint" -> if (isLightTheme) Color(0xFF7052D8) else Color(0xFFB9A5FF)
         "rose" -> if (isLightTheme) Color(0xFFBE123C) else Color(0xFFFDA4AF)
         "amber" -> if (isLightTheme) Color(0xFFB45309) else Color(0xFFFCD34D)
         "cyan" -> if (isLightTheme) Color(0xFF0E7490) else Color(0xFF67E8F9)
         "indigo" -> if (isLightTheme) Color(0xFF4338CA) else Color(0xFFA5B4FC)
         "orange" -> if (isLightTheme) Color(0xFFC2410C) else Color(0xFFFDBA74)
-        else -> if (isLightTheme) Color(0xFF286B47) else Color(0xFFC7E8D1)
+        else -> if (isLightTheme) Color(0xFF7052D8) else Color(0xFFB9A5FF)
     }
     val basePalette = if (isLightTheme) LightPalette else DarkPalette
     val palette = if (!isLightTheme && pureBlack) {
         basePalette.copy(
             background = Color.Black,
-            surface = Color(0xFF080808),
-            surfaceVariant = Color(0xFF151515),
+            surface = Color(0xE610111B),
+            surfaceVariant = Color(0xF01A1B2A),
             accent = chosenAccent
         )
     } else basePalette.copy(accent = chosenAccent)
@@ -611,6 +611,10 @@ private fun NovraApp() {
             secondary = Accent, tertiary = Accent
         )) {
             Box(Modifier.fillMaxSize()) {
+            if (!isLightTheme && wallpaperUri == null) {
+                Box(Modifier.align(Alignment.TopEnd).offset(x = 110.dp, y = (-90).dp).size(270.dp).blur(90.dp).background(Color(0xFF6750C8).copy(alpha = 0.20f), CircleShape))
+                Box(Modifier.align(Alignment.BottomStart).offset(x = (-110).dp, y = 90.dp).size(230.dp).blur(85.dp).background(Color(0xFF287E9A).copy(alpha = 0.13f), CircleShape))
+            }
             if (!pinLocked && pinFlowMode == "none" && showExitDialog) AlertDialog(
                 onDismissRequest = { showExitDialog = false },
                 title = { Text(if (language == "ar") "الخروج من Viora؟" else "Exit Viora?") },
@@ -733,7 +737,7 @@ private fun NovraApp() {
                         containerColor = if (wallpaperUri != null) Color.Transparent else AppBg,
                         topBar = {
                             Column(
-                                Modifier.fillMaxWidth().background(CardBg.copy(alpha = 0.97f))
+                                Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(CardBg.copy(alpha = 0.94f), AppBg.copy(alpha = 0.90f))))
                             ) {
                                 Row(
                                     Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 9.dp),
@@ -745,11 +749,11 @@ private fun NovraApp() {
                                         }
                                     } else {
                                         Box(
-                                            Modifier.size(38.dp).clip(RoundedCornerShape(13.dp))
-                                                .background(CardAlt),
+                                            Modifier.size(42.dp).clip(RoundedCornerShape(15.dp))
+                                                .background(Brush.linearGradient(listOf(Color(0xFF9C83FF), Color(0xFF53C8D9)))),
                                             contentAlignment = Alignment.Center
                                         ) {
-                                            Icon(Icons.Rounded.GraphicEq, contentDescription = "Viora", tint = Accent, modifier = Modifier.size(23.dp))
+                                            Icon(Icons.Rounded.GraphicEq, contentDescription = "Viora", tint = Color.White, modifier = Modifier.size(24.dp))
                                         }
                                     }
                                     Column(Modifier.weight(1f).padding(start = 10.dp)) {
@@ -766,7 +770,7 @@ private fun NovraApp() {
                                                 "Settings" -> "الإعدادات"
                                                 else -> selected
                                             } else selected,
-                                            color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis
+                                            color = TextPrimary, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis
                                         )
                                         Text(
                                             if (showNowPlaying) {
@@ -782,67 +786,41 @@ private fun NovraApp() {
                                         }
                                     }
                                 }
-                                if (!showNowPlaying && selected in topDestinations) {
-                                    val tabIndex = topDestinations.indexOf(selected).coerceAtLeast(0)
-                                    ScrollableTabRow(
-                                        selectedTabIndex = tabIndex,
-                                        containerColor = CardBg,
-                                        contentColor = Accent,
-                                        edgePadding = 12.dp,
-                                        divider = { HorizontalDivider(color = CardAlt, thickness = 1.dp) }
-                                    ) {
-                                        topDestinations.forEachIndexed { index, destination ->
-                                            Tab(
-                                                selected = tabIndex == index,
-                                                onClick = {
-                                                    selected = destination
-                                                    showNowPlaying = false
-                                                },
-                                                text = {
-                                                    Text(
-                                                        if (language == "ar") when (destination) {
-                                                            "Home" -> "الرئيسية"
-                                                            "Videos" -> "الفيديوهات"
-                                                            "Music" -> "الأغاني"
-                                                            "Playlists" -> "قوائمي"
-                                                            "Explore" -> "استكشف"
-                                                            else -> "المفضلة"
-                                                        } else destination,
-                                                        fontSize = 13.sp,
-                                                        fontWeight = if (tabIndex == index) FontWeight.SemiBold else FontWeight.Medium
-                                                    )
-                                                },
-                                                selectedContentColor = Accent,
-                                                unselectedContentColor = Muted
-                                            )
-                                        }
-                                    }
-                                }
+
                             }
                         },
                         bottomBar = {
-                            if (selectedMedia != null && !showNowPlaying) {
-                                Row(
-                                    Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)
-                                        .clip(RoundedCornerShape(17.dp)).background(CardAlt)
-                                        .clickable { showNowPlaying = true }
-                                        .padding(start = 11.dp, end = 5.dp, top = 7.dp, bottom = 7.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        if (selectedMedia?.isVideo == true) Icons.Rounded.PlayCircle else Icons.Rounded.GraphicEq,
-                                        null, tint = Accent, modifier = Modifier.size(25.dp)
-                                    )
-                                    Spacer(Modifier.width(10.dp))
-                                    Column(Modifier.weight(1f)) {
-                                        Text(selectedMedia?.title.orEmpty(), color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 12.sp)
-                                        Text(if (language == "ar") "يعمل الآن · اضغط للفتح" else "NOW PLAYING · TAP TO OPEN", color = Muted, fontSize = 9.sp)
+                            Column(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color.Transparent, AppBg.copy(alpha = 0.96f)))).padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 5.dp)) {
+                                if (selectedMedia != null && !showNowPlaying) {
+                                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Brush.linearGradient(listOf(CardAlt.copy(alpha = 0.98f), CardBg.copy(alpha = 0.96f)))).padding(start = 10.dp, end = 5.dp, top = 7.dp, bottom = 7.dp).clickable { showNowPlaying = true }, verticalAlignment = Alignment.CenterVertically) {
+                                        MediaArtwork(selectedMedia!!, Modifier.size(44.dp).clip(RoundedCornerShape(13.dp)))
+                                        Spacer(Modifier.width(11.dp))
+                                        Column(Modifier.weight(1f)) {
+                                            Text(selectedMedia?.title.orEmpty(), color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                            Text(if (language == "ar") "يعمل الآن" else "NOW PLAYING", color = Accent, fontSize = 9.sp, letterSpacing = 1.sp)
+                                        }
+                                        IconButton(onClick = { controller?.let { if (it.isPlaying) it.pause() else it.play() } }) { Icon(if (controller?.isPlaying == true) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, null, tint = TextPrimary) }
+                                        IconButton(onClick = { controller?.stop(); selectedMedia = null }) { Icon(Icons.Rounded.Close, null, tint = Muted) }
                                     }
-                                    IconButton(onClick = { controller?.let { if (it.isPlaying) it.pause() else it.play() } }) {
-                                        Icon(if (controller?.isPlaying == true) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, null, tint = TextPrimary)
-                                    }
-                                    IconButton(onClick = { controller?.stop(); selectedMedia = null }) {
-                                        Icon(Icons.Rounded.Close, null, tint = Muted)
+                                    Spacer(Modifier.height(8.dp))
+                                }
+                                if (!showNowPlaying) {
+                                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(25.dp)).background(CardBg.copy(alpha = 0.96f)).padding(horizontal = 3.dp, vertical = 4.dp), horizontalArrangement = Arrangement.SpaceAround, verticalAlignment = Alignment.CenterVertically) {
+                                        val dockItems = listOf(
+                                            Triple("Home", Icons.Rounded.Home, if (language == "ar") "الرئيسية" else "Home"),
+                                            Triple("Videos", Icons.Rounded.OndemandVideo, if (language == "ar") "فيديو" else "Videos"),
+                                            Triple("Music", Icons.Rounded.MusicNote, if (language == "ar") "موسيقى" else "Music"),
+                                            Triple("Playlists", Icons.Rounded.QueueMusic, if (language == "ar") "قوائم" else "Playlists"),
+                                            Triple("Favorites", Icons.Rounded.Favorite, if (language == "ar") "المفضلة" else "Saved")
+                                        )
+                                        dockItems.forEach { item ->
+                                            val active = selected == item.first
+                                            Column(Modifier.weight(1f).clip(RoundedCornerShape(18.dp)).background(if (active) Accent.copy(alpha = 0.16f) else Color.Transparent).clickable { selected = item.first; showNowPlaying = false }.padding(vertical = 7.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                                Icon(item.second, contentDescription = item.third, tint = if (active) Accent else Muted, modifier = Modifier.size(21.dp))
+                                                Spacer(Modifier.height(3.dp))
+                                                Text(item.third, color = if (active) TextPrimary else Muted, fontSize = 9.sp, fontWeight = if (active) FontWeight.Bold else FontWeight.Medium, maxLines = 1)
+                                            }
+                                        }
                                     }
                                 }
                             }
