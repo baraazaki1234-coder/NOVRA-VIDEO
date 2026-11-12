@@ -59,12 +59,18 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
 
 private val AppBg = Color(0xFF101310)
 private val CardBg = Color(0xFF1D241F)
 private val CardAlt = Color(0xFF2A332D)
 private val Muted = Color(0xFFA7B0A8)
 private val Accent = Color(0xFFC7E8D1)
+
+data class UserPlaylist(val name: String, val mediaKeys: List<String>)
+
+private fun mediaKey(media: LocalMedia): String = "${if (media.isVideo) "v" else "a"}:${media.id}"
 
 class MainActivity : ComponentActivity() {
     var pipController: MediaController? = null
@@ -104,6 +110,32 @@ private fun NovraApp() {
         }
     }
     var selectedMedia by remember { mutableStateOf<LocalMedia?>(null) }
+    var playlists by remember {
+        mutableStateOf(runCatching {
+            val stored = JSONArray(prefs.getString("playlists_json", "[]"))
+            buildList {
+                for (index in 0 until stored.length()) {
+                    val entry = stored.getJSONObject(index)
+                    val keys = entry.getJSONArray("items")
+                    add(UserPlaylist(entry.getString("name"), buildList {
+                        for (itemIndex in 0 until keys.length()) add(keys.getString(itemIndex))
+                    }))
+                }
+            }
+        }.getOrDefault(emptyList()))
+    }
+    fun savePlaylists(updated: List<UserPlaylist>) {
+        playlists = updated
+        val json = JSONArray()
+        updated.forEach { playlist ->
+            val entry = JSONObject().put("name", playlist.name)
+            val items = JSONArray()
+            playlist.mediaKeys.forEach(items::put)
+            entry.put("items", items)
+            json.put(entry)
+        }
+        prefs.edit().putString("playlists_json", json.toString()).apply()
+    }
     var listenedSeconds by remember { mutableLongStateOf(prefs.getLong("listened_seconds", 0L)) }
     val playCounts = remember {
         mutableStateMapOf<String, Int>().apply {
@@ -300,7 +332,19 @@ private fun NovraApp() {
                     compactCards = compactCards, cardStyle = cardStyle,
                     playCounts = playCounts, onPlay = { item -> startMedia(item, tracks) }
                 )
-                "Playlists" -> PlaylistsScreen(Modifier.padding(padding))
+                "Playlists" -> PlaylistsScreen(
+                    Modifier.padding(padding), playlists, (videos + tracks).distinctBy { mediaKey(it) },
+                    onCreate = { name -> savePlaylists(playlists + UserPlaylist(name, emptyList())) },
+                    onAdd = { playlistName, item ->
+                        savePlaylists(playlists.map { playlist ->
+                            if (playlist.name == playlistName && mediaKey(item) !in playlist.mediaKeys)
+                                playlist.copy(mediaKeys = playlist.mediaKeys + mediaKey(item))
+                            else playlist
+                        })
+                    },
+                    onDelete = { playlistName -> savePlaylists(playlists.filterNot { it.name == playlistName }) },
+                    onPlay = { items -> if (items.isNotEmpty()) startMedia(items.first(), items) }
+                )
                 else -> SettingsScreen(
                     Modifier.padding(padding), wallpaperUri, compactCards, cardStyle, listenedSeconds,
                     onChooseWallpaper = { wallpaperPicker.launch(arrayOf("image/*")) },
@@ -735,26 +779,115 @@ private fun SettingsScreen(
 }
 
 @Composable
-private fun PlaylistsScreen(modifier: Modifier) {
-    Column(modifier.fillMaxSize().padding(22.dp)) {
+private fun PlaylistsScreen(
+    modifier: Modifier,
+    playlists: List<UserPlaylist>,
+    media: List<LocalMedia>,
+    onCreate: (String) -> Unit,
+    onAdd: (String, LocalMedia) -> Unit,
+    onDelete: (String) -> Unit,
+    onPlay: (List<LocalMedia>) -> Unit
+) {
+    var showCreate by remember { mutableStateOf(false) }
+    var newName by remember { mutableStateOf("") }
+    var addToPlaylist by remember { mutableStateOf<String?>(null) }
+    val resolved = playlists.associateWith { playlist ->
+        playlist.mediaKeys.mapNotNull { key -> media.firstOrNull { mediaKey(it) == key } }
+    }
+    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(22.dp)) {
         Spacer(Modifier.height(20.dp))
-        Text("Playlists", color = Color.White, fontSize = 29.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(5.dp))
-        Text("Your mixes, favorites and listening queue.", color = Muted, fontSize = 12.sp)
-        Spacer(Modifier.height(22.dp))
-        listOf(
-            "Favorites" to Icons.Rounded.Favorite,
-            "Recently played" to Icons.Rounded.History,
-            "Create a playlist" to Icons.Rounded.Add,
-            "Now playing queue" to Icons.Rounded.QueueMusic
-        ).forEach { (label, icon) ->
-            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(17.dp)).background(CardBg).clickable { }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(icon, null, tint = Accent)
-                Spacer(Modifier.width(14.dp))
-                Text(label, color = Color.White, fontSize = 14.sp, modifier = Modifier.weight(1f))
-                Icon(Icons.Rounded.ChevronRight, null, tint = Muted)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Playlists", color = Color.White, fontSize = 29.sp, fontWeight = FontWeight.Bold)
+                Text("${playlists.size} personal playlists", color = Muted, fontSize = 12.sp)
             }
-            Spacer(Modifier.height(9.dp))
+            Button(onClick = { newName = ""; showCreate = true }) {
+                Icon(Icons.Rounded.Add, null)
+                Spacer(Modifier.width(5.dp))
+                Text("Create")
+            }
         }
+        Spacer(Modifier.height(20.dp))
+        if (playlists.isEmpty()) {
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(CardBg).padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(Icons.Rounded.QueueMusic, null, tint = Accent, modifier = Modifier.size(38.dp))
+                Spacer(Modifier.height(10.dp))
+                Text("Your playlists start here", color = Color.White, fontWeight = FontWeight.SemiBold)
+                Text("Create a playlist, then add songs or videos from your device.", color = Muted, fontSize = 12.sp)
+            }
+        }
+        playlists.forEach { playlist ->
+            val items = resolved[playlist].orEmpty()
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(CardBg).padding(14.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.QueueMusic, null, tint = Accent, modifier = Modifier.size(26.dp))
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(playlist.name, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                        Text("${items.size} items", color = Muted, fontSize = 11.sp)
+                    }
+                    IconButton(onClick = { addToPlaylist = playlist.name }) { Icon(Icons.Rounded.Add, "Add media", tint = Accent) }
+                    IconButton(onClick = { onDelete(playlist.name) }) { Icon(Icons.Rounded.DeleteOutline, "Delete playlist", tint = Muted) }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = { onPlay(items) }, enabled = items.isNotEmpty(), modifier = Modifier.weight(1f)) {
+                        Icon(Icons.Rounded.PlayArrow, null)
+                        Text("Play")
+                    }
+                    OutlinedButton(onClick = { addToPlaylist = playlist.name }, modifier = Modifier.weight(1f)) {
+                        Icon(Icons.Rounded.Add, null)
+                        Text("Add media")
+                    }
+                }
+                items.take(3).forEach { item ->
+                    Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        MediaArtwork(item, Modifier.size(34.dp).clip(RoundedCornerShape(7.dp)))
+                        Spacer(Modifier.width(9.dp))
+                        Text(item.title, color = Muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+        }
+    }
+    if (showCreate) {
+        AlertDialog(
+            onDismissRequest = { showCreate = false },
+            title = { Text("Create playlist") },
+            text = {
+                OutlinedTextField(value = newName, onValueChange = { newName = it }, singleLine = true, label = { Text("Playlist name") })
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val name = newName.trim()
+                    if (name.isNotEmpty() && playlists.none { it.name.equals(name, ignoreCase = true) }) onCreate(name)
+                    showCreate = false
+                }) { Text("Create") }
+            },
+            dismissButton = { TextButton(onClick = { showCreate = false }) { Text("Cancel") } }
+        )
+    }
+    addToPlaylist?.let { playlistName ->
+        AlertDialog(
+            onDismissRequest = { addToPlaylist = null },
+            title = { Text("Add to $playlistName") },
+            text = {
+                if (media.isEmpty()) Text("No device media found yet. Grant media access and scan your library first.")
+                else Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
+                    media.forEach { item ->
+                        Row(Modifier.fillMaxWidth().clickable { onAdd(playlistName, item) }.padding(vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+                            MediaArtwork(item, Modifier.size(38.dp).clip(RoundedCornerShape(8.dp)))
+                            Spacer(Modifier.width(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(item.title, color = Color.White, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(if (item.isVideo) "Video" else "Audio", color = Muted, fontSize = 10.sp)
+                            }
+                            Icon(Icons.Rounded.AddCircleOutline, null, tint = Accent)
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { addToPlaylist = null }) { Text("Done") } }
+        )
     }
 }
