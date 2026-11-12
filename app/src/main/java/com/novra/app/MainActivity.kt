@@ -6,6 +6,10 @@ import android.content.ComponentName
 import android.app.PictureInPictureParams
 import android.util.Rational
 import android.net.Uri
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.media.MediaMetadataRetriever
+import android.util.Size
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -30,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -419,9 +424,7 @@ private fun MediaScreen(
                 item { Text("${filtered.size} items", color = Muted, fontSize = 11.sp) }
                 items(filtered) { item ->
                     Row(Modifier.fillMaxWidth().clip(if (cardStyle == "square") RoundedCornerShape(7.dp) else RoundedCornerShape(16.dp)).background(CardBg).clickable { onPlay(item) }.padding(if (compactCards) 8.dp else 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(if (compactCards) 42.dp else 54.dp).clip(if (cardStyle == "square") RoundedCornerShape(5.dp) else RoundedCornerShape(13.dp)).background(CardAlt), contentAlignment = Alignment.Center) {
-                            Icon(if (type == "Videos") Icons.Rounded.PlayArrow else Icons.Rounded.MusicNote, null, tint = Accent, modifier = Modifier.size(26.dp))
-                        }
+                        MediaArtwork(item, Modifier.size(if (compactCards) 42.dp else 54.dp).clip(if (cardStyle == "square") RoundedCornerShape(5.dp) else RoundedCornerShape(13.dp)))
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             Text(item.title, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -447,6 +450,45 @@ private fun formatDuration(duration: Long): String {
 
 
 @Composable
+private fun MediaArtwork(media: LocalMedia, modifier: Modifier = Modifier) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val bitmap by produceState<Bitmap?>(initialValue = null, media.uri) {
+        value = withContext(Dispatchers.IO) {
+            runCatching {
+                if (media.isVideo && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    context.contentResolver.loadThumbnail(media.uri, Size(512, 512), null)
+                } else if (!media.isVideo) {
+                    val retriever = MediaMetadataRetriever()
+                    try {
+                        retriever.setDataSource(context, media.uri)
+                        retriever.embeddedPicture?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
+                    } finally {
+                        retriever.release()
+                    }
+                } else null
+            }.getOrNull()
+        }
+    }
+    Box(modifier.background(CardAlt), contentAlignment = Alignment.Center) {
+        if (bitmap != null) {
+            androidx.compose.foundation.Image(
+                bitmap = bitmap!!.asImageBitmap(),
+                contentDescription = media.title,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        } else {
+            Icon(
+                if (media.isVideo) Icons.Rounded.PlayArrow else Icons.Rounded.Album,
+                contentDescription = null,
+                tint = Accent,
+                modifier = Modifier.size(42.dp)
+            )
+        }
+    }
+}
+
+@Composable
 private fun NowPlayingScreen(modifier: Modifier, media: LocalMedia, controller: MediaController?, onBack: () -> Unit) {
     var shuffle by remember(controller) { mutableStateOf(controller?.shuffleModeEnabled == true) }
     var repeatMode by remember(controller) { mutableIntStateOf(controller?.repeatMode ?: Player.REPEAT_MODE_OFF) }
@@ -463,13 +505,7 @@ private fun NowPlayingScreen(modifier: Modifier, media: LocalMedia, controller: 
                 update = { view -> view.player = controller }
             )
         } else {
-            Box(Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(24.dp)).background(CardBg), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Rounded.Album, null, tint = Accent, modifier = Modifier.size(112.dp))
-                    Spacer(Modifier.height(20.dp))
-                    Text("NOVRA MUSIC", color = Muted, fontSize = 10.sp, letterSpacing = 3.sp)
-                }
-            }
+            MediaArtwork(media, Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(24.dp)))
         }
         Spacer(Modifier.height(22.dp))
         Text(media.title, color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
