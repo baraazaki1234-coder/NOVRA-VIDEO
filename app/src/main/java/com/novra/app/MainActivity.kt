@@ -1127,6 +1127,15 @@ private fun PremiumScreen(
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val walletNumber = "01131023695"
+    var receiptUri by remember { mutableStateOf<Uri?>(null) }
+    val receiptPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            receiptUri = uri
+        }
+    }
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
         Spacer(Modifier.height(18.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1169,19 +1178,19 @@ private fun PremiumScreen(
             }
         }
         Spacer(Modifier.height(18.dp))
-        Text("PAY WITH CASH WALLET", color = Accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp)
+        Text("PAY WITH VODAFONE CASH", color = Accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp)
         Spacer(Modifier.height(9.dp))
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(CardBg).padding(16.dp)) {
-            Text("Transfer 50 EGP to this wallet number:", color = Muted, fontSize = 12.sp)
+            Text("Transfer 50 EGP to this Vodafone Cash number:", color = Muted, fontSize = 12.sp)
             Spacer(Modifier.height(7.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(walletNumber, color = TextPrimary, fontSize = 21.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                 OutlinedButton(onClick = {
                     val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("NOVRA wallet number", walletNumber))
+                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("NOVRA Vodafone Cash number", walletNumber))
                 }) { Text("Copy") }
             }
-            Text("After transferring, enter the transaction reference below and send the request for manual review.", color = Muted, fontSize = 11.sp)
+            Text("After transferring, attach the receipt image and enter its transaction reference. Your request will be reviewed manually.", color = Muted, fontSize = 11.sp)
         }
         Spacer(Modifier.height(14.dp))
         OutlinedTextField(
@@ -1192,27 +1201,40 @@ private fun PremiumScreen(
             label = { Text("Transfer transaction reference") },
             placeholder = { Text("Enter the reference shown in your receipt") }
         )
+        Spacer(Modifier.height(10.dp))
+        OutlinedButton(
+            onClick = { receiptPicker.launch(arrayOf("image/*")) },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(Icons.Rounded.AttachFile, null)
+            Spacer(Modifier.width(8.dp))
+            Text(if (receiptUri == null) "Attach transfer receipt image" else "Receipt attached — change image")
+        }
         Spacer(Modifier.height(12.dp))
         Button(
             onClick = {
                 val reference = transactionReference.trim()
-                if (reference.isNotEmpty()) {
+                val receipt = receiptUri
+                if (reference.isNotEmpty() && receipt != null) {
                     onSubmit(reference)
-                    val message = "NOVRA Premium — 50 EGP / 1 month\nWallet transfer to: $walletNumber\nTransaction reference: $reference\nPlease verify this payment and activate the one-month membership."
+                    val message = "NOVRA Premium — 50 EGP / 1 month\nVodafone Cash transfer to: $walletNumber\nTransaction reference: $reference\nPlease verify this payment and activate the one-month membership."
                     val sendIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                        type = "text/plain"
+                        type = "image/*"
                         putExtra(android.content.Intent.EXTRA_SUBJECT, "NOVRA Premium payment verification")
                         putExtra(android.content.Intent.EXTRA_TEXT, message)
+                        putExtra(android.content.Intent.EXTRA_STREAM, receipt)
+                        clipData = android.content.ClipData.newUri(context.contentResolver, "NOVRA transfer receipt", receipt)
+                        addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     }
-                    context.startActivity(android.content.Intent.createChooser(sendIntent, "Send payment details"))
+                    context.startActivity(android.content.Intent.createChooser(sendIntent, "Send payment receipt"))
                 }
             },
-            enabled = transactionReference.trim().isNotEmpty(),
+            enabled = transactionReference.trim().isNotEmpty() && receiptUri != null,
             modifier = Modifier.fillMaxWidth()
         ) {
             Icon(Icons.Rounded.Send, null)
             Spacer(Modifier.width(8.dp))
-            Text("Send payment details for review")
+            Text("Send receipt for manual review")
         }
         if (pendingReview) {
             Spacer(Modifier.height(12.dp))
@@ -1224,7 +1246,7 @@ private fun PremiumScreen(
         }
         Spacer(Modifier.height(10.dp))
         Text(
-            "Important: sending this request does not verify the transfer or activate Premium automatically. Activation must happen after the payment is checked.",
+            "Sending this request does not verify the transfer or activate Premium automatically. Never share your wallet PIN or OTP.",
             color = Muted, fontSize = 10.sp
         )
         Spacer(Modifier.height(24.dp))
