@@ -241,7 +241,10 @@ private fun audioOutputDescription(device: AudioDeviceInfo, language: String): S
         AudioDeviceInfo.TYPE_WIRED_HEADSET -> if (language == "ar") "سماعة سلكية بميكروفون" else "Wired headset"
         AudioDeviceInfo.TYPE_WIRED_HEADPHONES -> if (language == "ar") "سماعة سلكية" else "Wired headphones"
         AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
-        AudioDeviceInfo.TYPE_BLUETOOTH_SCO -> "Bluetooth"
+        AudioDeviceInfo.TYPE_BLUETOOTH_SCO,
+        AudioDeviceInfo.TYPE_BLE_HEADSET,
+        AudioDeviceInfo.TYPE_BLE_SPEAKER,
+        AudioDeviceInfo.TYPE_HEARING_AID -> "Bluetooth"
         AudioDeviceInfo.TYPE_USB_DEVICE,
         AudioDeviceInfo.TYPE_USB_HEADSET -> if (language == "ar") "سماعة USB" else "USB audio"
         AudioDeviceInfo.TYPE_HDMI,
