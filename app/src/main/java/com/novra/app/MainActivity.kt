@@ -1539,22 +1539,42 @@ private fun MediaArtwork(media: LocalMedia, modifier: Modifier = Modifier) {
         value = withContext(Dispatchers.IO) {
             val cacheKey = media.uri.toString()
             mediaArtworkCache.get(cacheKey) ?: runCatching {
-                if (media.isVideo && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    context.contentResolver.loadThumbnail(media.uri, Size(256, 256), null)
-                } else if (!media.isVideo) {
-                    val retriever = MediaMetadataRetriever()
-                    try {
-                        retriever.setDataSource(context, media.uri)
+                val retriever = MediaMetadataRetriever()
+                try {
+                    retriever.setDataSource(context, media.uri)
+                    if (media.isVideo) {
+                        // Prefer Android's generated thumbnail, then fall back to
+                        // decoding an actual frame for providers that omit it.
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            runCatching {
+                                context.contentResolver.loadThumbnail(media.uri, Size(256, 256), null)
+                            }.getOrNull()
+                        } ?: retriever.getFrameAtTime(
+                            0L,
+                            MediaMetadataRetriever.OPTION_CLOSEST_SYNC
+                        )?.let { frame ->
+                            val maxSide = maxOf(frame.width, frame.height)
+                            if (maxSide > 512) {
+                                val scale = 512f / maxSide
+                                Bitmap.createScaledBitmap(
+                                    frame,
+                                    (frame.width * scale).toInt().coerceAtLeast(1),
+                                    (frame.height * scale).toInt().coerceAtLeast(1),
+                                    true
+                                ).also { if (it !== frame) frame.recycle() }
+                            } else frame
+                        }
+                    } else {
                         retriever.embeddedPicture?.let { imageBytes ->
                             BitmapFactory.decodeByteArray(
                                 imageBytes, 0, imageBytes.size,
                                 BitmapFactory.Options().apply { inSampleSize = 4 }
                             )
                         }
-                    } finally {
-                        retriever.release()
                     }
-                } else null
+                } finally {
+                    retriever.release()
+                }
             }.getOrNull()?.also { bitmap ->
                 mediaArtworkCache.put(cacheKey, bitmap)
             }
