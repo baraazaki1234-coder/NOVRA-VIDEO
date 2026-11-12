@@ -605,7 +605,10 @@ private fun NovraApp() {
                                     }
                                     Column(Modifier.weight(1f).padding(start = 10.dp)) {
                                         Text(
-                                            if (showNowPlaying) (if (language == "ar") "يعمل الآن" else "Now Playing") else if (selected == "Home") "NOVRA" else if (language == "ar") when (selected) {
+                                            if (showNowPlaying) {
+                                                if (selectedMedia?.isVideo == true) (if (language == "ar") "مشغل الفيديو" else "Video player")
+                                                else (if (language == "ar") "يعمل الآن" else "Now Playing")
+                                            } else if (selected == "Home") "NOVRA" else if (language == "ar") when (selected) {
                                                 "Videos" -> "الفيديوهات"
                                                 "Music" -> "الأغاني"
                                                 "Playlists" -> "قوائم التشغيل"
@@ -618,7 +621,10 @@ private fun NovraApp() {
                                             color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold
                                         )
                                         Text(
-                                            if (showNowPlaying) (if (language == "ar") "الوسائط الحالية" else "Your current media") else if (language == "ar") "مساحتك للوسائط" else "Your personal media space",
+                                            if (showNowPlaying) {
+                                                if (selectedMedia?.isVideo == true) (if (language == "ar") "شاهد الفيديو وتحكم في التشغيل" else "Watch and control your video")
+                                                else (if (language == "ar") "الوسائط الحالية" else "Your current media")
+                                            } else if (language == "ar") "مساحتك للوسائط" else "Your personal media space",
                                             color = Muted, fontSize = 10.sp
                                         )
                                     }
@@ -853,11 +859,7 @@ private fun VideoNowPlayingScreen(
     language: String
 ) {
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 8.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.Rounded.ArrowBack, null, tint = TextPrimary) }
-            Text(if (language == "ar") "مشغل الفيديو" else "Video player", color = TextPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-        }
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(6.dp))
         AndroidView(
             modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(15.dp)),
             factory = { ctx -> PlayerView(ctx).apply {
@@ -1219,11 +1221,7 @@ private fun NowPlayingScreen(
         return
     }
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.Rounded.KeyboardArrowDown, "Back", tint = TextPrimary) }
-            Text(if (language == "ar") "يعمل الآن" else "Now Playing", color = TextPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-        }
-        Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(10.dp))
         if (media.isVideo) {
             AndroidView(
                 modifier = Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(20.dp)),
