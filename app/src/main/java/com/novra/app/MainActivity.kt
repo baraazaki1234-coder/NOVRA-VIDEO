@@ -335,12 +335,16 @@ private fun NovraApp() {
 
     LaunchedEffect(hasPermission, mediaRefresh) {
         if (hasPermission) {
+            delay(300)
             loading = true
-            val result = withContext(Dispatchers.IO) {
-                runCatching { MediaLibrary.videos(context) to MediaLibrary.music(context) }
+            try {
+                val result = withContext(Dispatchers.IO) {
+                    runCatching { MediaLibrary.videos(context) to MediaLibrary.music(context) }
+                }
+                result.onSuccess { (v, a) -> videos = v; tracks = a }
+            } finally {
+                loading = false
             }
-            result.onSuccess { (v, a) -> videos = v; tracks = a }
-            loading = false
         }
     }
 
@@ -354,6 +358,7 @@ private fun NovraApp() {
         )) {
             val drawerState = rememberDrawerState(DrawerValue.Closed)
             val drawerScope = rememberCoroutineScope()
+            val topDestinations = listOf("Home", "Videos", "Music", "Playlists", "Favorites")
             val mainDestinations = listOf(
                 Triple("Home", Icons.Rounded.Home, "Home"),
                 Triple("Videos", Icons.Rounded.OndemandVideo, "Videos"),
@@ -363,7 +368,7 @@ private fun NovraApp() {
             )
             ModalNavigationDrawer(
                 drawerState = drawerState,
-                gesturesEnabled = !showNowPlaying,
+                gesturesEnabled = false,
                 drawerContent = {
                     ModalDrawerSheet(
                         drawerContainerColor = CardBg,
@@ -465,34 +470,69 @@ private fun NovraApp() {
                     Scaffold(
                         containerColor = if (wallpaperUri != null) Color.Transparent else AppBg,
                         topBar = {
-                            Row(
-                                Modifier.fillMaxWidth().background(CardBg.copy(alpha = 0.96f))
-                                    .padding(horizontal = 12.dp, vertical = 7.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                            Column(
+                                Modifier.fillMaxWidth().background(CardBg.copy(alpha = 0.97f))
                             ) {
-                                IconButton(onClick = {
-                                    if (showNowPlaying) showNowPlaying = false
-                                    else drawerScope.launch { drawerState.open() }
-                                }) {
-                                    Icon(
-                                        if (showNowPlaying) Icons.Rounded.ArrowBack else Icons.Rounded.Menu,
-                                        contentDescription = if (showNowPlaying) "Back" else "Open navigation",
-                                        tint = TextPrimary
-                                    )
+                                Row(
+                                    Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 9.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    if (showNowPlaying) {
+                                        IconButton(onClick = { showNowPlaying = false }) {
+                                            Icon(Icons.Rounded.ArrowBack, contentDescription = "Back", tint = TextPrimary)
+                                        }
+                                    } else {
+                                        Box(
+                                            Modifier.size(38.dp).clip(RoundedCornerShape(13.dp))
+                                                .background(CardAlt),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(Icons.Rounded.GraphicEq, contentDescription = "NOVRA", tint = Accent, modifier = Modifier.size(23.dp))
+                                        }
+                                    }
+                                    Column(Modifier.weight(1f).padding(start = 10.dp)) {
+                                        Text(
+                                            if (showNowPlaying) "Now Playing" else if (selected == "Home") "NOVRA" else selected,
+                                            color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            if (showNowPlaying) "Your current media" else "Your personal media space",
+                                            color = Muted, fontSize = 10.sp
+                                        )
+                                    }
+                                    if (!showNowPlaying) {
+                                        IconButton(onClick = { selected = "Settings" }) {
+                                            Icon(Icons.Rounded.Tune, contentDescription = "Settings", tint = if (selected == "Settings") Accent else Muted)
+                                        }
+                                    }
                                 }
-                                Column(Modifier.weight(1f).padding(start = 5.dp)) {
-                                    Text(
-                                        if (showNowPlaying) "Now Playing" else if (selected == "Home") "NOVRA" else selected,
-                                        color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        if (showNowPlaying) "Your current media" else "Your personal media space",
-                                        color = Muted, fontSize = 10.sp
-                                    )
-                                }
-                                if (!showNowPlaying) {
-                                    IconButton(onClick = { selected = "Settings" }) {
-                                        Icon(Icons.Rounded.Tune, contentDescription = "Settings", tint = Muted)
+                                if (!showNowPlaying && selected in topDestinations) {
+                                    val tabIndex = topDestinations.indexOf(selected).coerceAtLeast(0)
+                                    ScrollableTabRow(
+                                        selectedTabIndex = tabIndex,
+                                        containerColor = CardBg,
+                                        contentColor = Accent,
+                                        edgePadding = 12.dp,
+                                        divider = { HorizontalDivider(color = CardAlt, thickness = 1.dp) }
+                                    ) {
+                                        topDestinations.forEachIndexed { index, destination ->
+                                            Tab(
+                                                selected = tabIndex == index,
+                                                onClick = {
+                                                    selected = destination
+                                                    showNowPlaying = false
+                                                },
+                                                text = {
+                                                    Text(
+                                                        destination,
+                                                        fontSize = 13.sp,
+                                                        fontWeight = if (tabIndex == index) FontWeight.SemiBold else FontWeight.Medium
+                                                    )
+                                                },
+                                                selectedContentColor = Accent,
+                                                unselectedContentColor = Muted
+                                            )
+                                        }
                                     }
                                 }
                             }
