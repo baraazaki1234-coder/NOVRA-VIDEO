@@ -2,6 +2,7 @@ package com.novra.app
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.content.Intent
 import android.content.ComponentName
 import android.app.PictureInPictureParams
 import android.util.Rational
@@ -37,6 +38,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.layout.layoutId
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -126,37 +128,36 @@ private fun mediaSearchScore(media: LocalMedia, query: String): Int? {
     if (q.isBlank()) return 0
     val title = normalizeSearchText(media.title)
     val artist = normalizeSearchText(media.artist)
-    val allText = "$title $artist"
     val queryTokens = q.split(" ").filter(String::isNotBlank)
     val titleTokens = title.split(" ").filter(String::isNotBlank)
     val artistTokens = artist.split(" ").filter(String::isNotBlank)
+
+    // Prefer the artist identity over incidental words in unrelated song titles.
     var score = when {
-        title == q -> 1200
-        title.contains(q) -> 900
-        artist == q -> 850
-        artist.contains(q) -> 700
+        artist == q -> 1800
+        artist.startsWith("$q ") -> 1550
+        artist.contains(q) -> 1300
+        title == q -> 1150
+        title.startsWith("$q ") -> 950
+        title.contains(q) -> 750
         else -> 0
     }
     for (token in queryTokens) {
-        val titleMatch = titleTokens.maxOfOrNull { word ->
-            when {
-                word == token -> 300
-                word.startsWith(token) -> 240
-                word.contains(token) -> 190
-                token.length >= 4 && editDistanceAtMostOne(word, token) -> 120
-                else -> 0
-            }
-        } ?: 0
         val artistMatch = artistTokens.maxOfOrNull { word ->
             when {
-                word == token -> 230
-                word.startsWith(token) -> 180
-                word.contains(token) -> 140
-                token.length >= 4 && editDistanceAtMostOne(word, token) -> 100
+                word == token -> 360
+                word.startsWith(token) -> 140
                 else -> 0
             }
         } ?: 0
-        val best = maxOf(titleMatch, artistMatch)
+        val titleMatch = titleTokens.maxOfOrNull { word ->
+            when {
+                word == token -> 260
+                word.startsWith(token) -> 100
+                else -> 0
+            }
+        } ?: 0
+        val best = maxOf(artistMatch, titleMatch)
         if (best == 0) return null
         score += best
     }
@@ -470,7 +471,7 @@ private fun NovraApp() {
             )
             val drawerState = rememberDrawerState(DrawerValue.Closed)
             val drawerScope = rememberCoroutineScope()
-            val topDestinations = listOf("Home", "Videos", "Music", "Playlists", "Favorites")
+            val topDestinations = listOf("Home", "Videos", "Music", "Explore", "Playlists", "Favorites")
             val mainDestinations = listOf(
                 Triple("Home", Icons.Rounded.Home, "Home"),
                 Triple("Videos", Icons.Rounded.OndemandVideo, "Videos"),
@@ -570,7 +571,7 @@ private fun NovraApp() {
                     }
                 }
             ) {
-                Box(Modifier.fillMaxSize()) {
+                Box(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
                     if (wallpaperUri != null) {
                         AsyncImage(
                             model = wallpaperUri,
@@ -609,6 +610,7 @@ private fun NovraApp() {
                                                 "Videos" -> "الفيديوهات"
                                                 "Music" -> "الأغاني"
                                                 "Playlists" -> "قوائم التشغيل"
+                                                "Explore" -> "استكشف"
                                                 "Favorites" -> "المفضلة"
                                                 "Settings" -> "الإعدادات"
                                                 "Premium" -> "NOVRA Premium"
@@ -650,6 +652,7 @@ private fun NovraApp() {
                                                             "Videos" -> "الفيديوهات"
                                                             "Music" -> "الأغاني"
                                                             "Playlists" -> "قوائمي"
+                                                            "Explore" -> "استكشف"
                                                             else -> "المفضلة"
                                                         } else destination,
                                                         fontSize = 13.sp,
@@ -727,6 +730,7 @@ private fun NovraApp() {
                                 onPlay = { item -> startMedia(item, tracks) },
                                 language = language
                             )
+                            "Explore" -> OnlineSearchScreen(language = language)
                             "Favorites" -> MediaScreen(
                                 Modifier.padding(padding), "Favorites", (videos + tracks).distinctBy { mediaKey(it) }, loading, hasPermission,
                                 onGrant = { permissionLauncher.launch(mediaPermissions()) },
@@ -778,6 +782,120 @@ private fun NovraApp() {
                 }
             }
         }
+    }
+}
+
+
+@Composable
+private fun OnlineSearchScreen(language: String) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var query by remember { mutableStateOf("") }
+    var provider by remember { mutableStateOf("web") }
+    fun openSearch(term: String) {
+        val clean = term.trim()
+        if (clean.isBlank()) return
+        val target = when (provider) {
+            "youtube" -> "https://www.youtube.com/results?search_query=${Uri.encode(clean)}"
+            "spotify" -> "https://open.spotify.com/search/${Uri.encode(clean)}"
+            else -> "https://www.google.com/search?q=${Uri.encode(clean)}"
+        }
+        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(target))) }
+    }
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
+        Spacer(Modifier.height(18.dp))
+        Text(if (language == "ar") "استكشف على الإنترنت" else "Explore online", color = TextPrimary, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+        Text(
+            if (language == "ar") "ابحث خارج مكتبتك المحلية عن فنانين وأغانٍ وفيديوهات." else "Search beyond your device library for artists, songs and videos.",
+            color = Muted, fontSize = 13.sp
+        )
+        Spacer(Modifier.height(22.dp))
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            shape = RoundedCornerShape(17.dp),
+            placeholder = { Text(if (language == "ar") "اسم فنان أو أغنية أو فيديو" else "Artist, song or video", color = Muted) },
+            leadingIcon = { Icon(Icons.Rounded.Public, null, tint = Accent) },
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Accent, unfocusedBorderColor = CardAlt,
+                focusedTextColor = TextPrimary, unfocusedTextColor = TextPrimary, cursorColor = Accent
+            )
+        )
+        Spacer(Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(selected = provider == "web", onClick = { provider = "web" }, label = { Text(if (language == "ar") "الويب" else "Web") })
+            FilterChip(selected = provider == "youtube", onClick = { provider = "youtube" }, label = { Text("YouTube") })
+            FilterChip(selected = provider == "spotify", onClick = { provider = "spotify" }, label = { Text("Spotify") })
+        }
+        Spacer(Modifier.height(14.dp))
+        Button(onClick = { openSearch(query) }, enabled = query.isNotBlank(), modifier = Modifier.fillMaxWidth()) {
+            Icon(Icons.Rounded.Search, null)
+            Spacer(Modifier.width(8.dp))
+            Text(if (language == "ar") "ابحث الآن" else "Search online")
+        }
+        Spacer(Modifier.height(22.dp))
+        Text(if (language == "ar") "بحث منفصل عن مكتبتك" else "Separate from your library", color = Accent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        Text(
+            if (language == "ar") "نتائج الإنترنت تُفتح في التطبيق أو المتصفح المناسب. البحث داخل الهاتف يظل في تبويب الأغاني أو الفيديوهات." else "Online results open in the selected service or browser. Searches inside your phone stay in the Music and Videos tabs.",
+            color = Muted, fontSize = 12.sp, lineHeight = 19.sp
+        )
+    }
+}
+
+@Composable
+private fun VideoNowPlayingScreen(
+    modifier: Modifier,
+    media: LocalMedia,
+    controller: MediaController?,
+    position: Float,
+    duration: Float,
+    onBack: () -> Unit,
+    language: String
+) {
+    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) { Icon(Icons.Rounded.ArrowBack, null, tint = TextPrimary) }
+            Text(if (language == "ar") "مشغل الفيديو" else "Video player", color = TextPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        }
+        Spacer(Modifier.height(10.dp))
+        AndroidView(
+            modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(15.dp)),
+            factory = { ctx -> PlayerView(ctx).apply {
+                useController = true
+                controllerAutoShow = true
+                controllerShowTimeoutMs = 3500
+                keepScreenOn = true
+            } },
+            update = { view -> view.player = controller }
+        )
+        Spacer(Modifier.height(16.dp))
+        Text(media.title, color = TextPrimary, fontSize = 19.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text(if (language == "ar") "فيديو من مكتبتك" else "Video from your library", color = Muted, fontSize = 12.sp)
+        Spacer(Modifier.height(12.dp))
+        Slider(
+            value = position.coerceIn(0f, duration.coerceAtLeast(1f)),
+            onValueChange = { controller?.seekTo(it.toLong()) },
+            valueRange = 0f..duration.coerceAtLeast(1f),
+            colors = SliderDefaults.colors(thumbColor = Accent, activeTrackColor = Accent, inactiveTrackColor = CardAlt)
+        )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(formatDuration(position.toLong()), color = Muted, fontSize = 11.sp)
+            Text(formatDuration(duration.toLong()), color = Muted, fontSize = 11.sp)
+        }
+        Spacer(Modifier.height(8.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = { controller?.seekTo((controller.currentPosition - 10_000L).coerceAtLeast(0L)) }) {
+                Icon(Icons.Rounded.Replay10, null, tint = TextPrimary, modifier = Modifier.size(32.dp))
+            }
+            IconButton(onClick = { controller?.let { if (it.isPlaying) it.pause() else it.play() } }) {
+                Icon(if (controller?.isPlaying == true) Icons.Rounded.PauseCircleFilled else Icons.Rounded.PlayCircle, null, tint = Accent, modifier = Modifier.size(54.dp))
+            }
+            IconButton(onClick = { controller?.seekTo(controller.currentPosition + 10_000L) }) {
+                Icon(Icons.Rounded.Forward10, null, tint = TextPrimary, modifier = Modifier.size(32.dp))
+            }
+        }
+        Spacer(Modifier.height(20.dp))
     }
 }
 
@@ -1089,7 +1207,19 @@ private fun NowPlayingScreen(
             delay(500)
         }
     }
-    Column(modifier.fillMaxSize().padding(18.dp)) {
+    if (media.isVideo) {
+        VideoNowPlayingScreen(
+            modifier = modifier,
+            media = media,
+            controller = controller,
+            position = playbackPosition,
+            duration = playbackDuration,
+            onBack = onBack,
+            language = language
+        )
+        return
+    }
+    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.Rounded.KeyboardArrowDown, "Back", tint = TextPrimary) }
             Text(if (language == "ar") "يعمل الآن" else "Now Playing", color = TextPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
@@ -1102,11 +1232,11 @@ private fun NowPlayingScreen(
                 update = { view -> view.player = controller }
             )
         } else {
-            MediaArtwork(media, Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(24.dp)))
+            MediaArtwork(media, Modifier.fillMaxWidth().aspectRatio(1f).padding(horizontal = 18.dp).clip(RoundedCornerShape(24.dp)))
         }
         Spacer(Modifier.height(22.dp))
         Text(media.title, color = TextPrimary, fontSize = 21.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        if (!media.isVideo && media.artist.isNotBlank()) Text(media.artist, color = Muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (media.artist.isNotBlank()) Text(media.artist, color = Muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(if (language == "ar") { if (media.isVideo) "فيديو" else "صوت" } else if (media.isVideo) "Video" else "Audio", color = Muted, fontSize = 12.sp)
         Spacer(Modifier.height(12.dp))
         Slider(
