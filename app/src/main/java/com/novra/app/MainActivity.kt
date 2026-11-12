@@ -926,7 +926,13 @@ private fun OnlineSearchScreen(language: String) {
 
 @Composable
 private fun EqualizerPanel(controller: MediaController?, language: String) {
-    val sessionId = controller?.audioSessionId ?: 0
+    var sessionId by remember { mutableIntStateOf(NovraPlaybackService.currentAudioSessionId) }
+    LaunchedEffect(controller) {
+        while (sessionId == 0) {
+            delay(300)
+            sessionId = NovraPlaybackService.currentAudioSessionId
+        }
+    }
     val equalizer = remember(sessionId) {
         if (sessionId > 0) runCatching { Equalizer(0, sessionId).apply { enabled = true } }.getOrNull() else null
     }
