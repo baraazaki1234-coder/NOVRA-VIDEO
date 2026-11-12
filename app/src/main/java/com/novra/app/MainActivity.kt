@@ -30,6 +30,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.*
@@ -1375,9 +1376,20 @@ private fun MediaScreen(
     var sortMenuExpanded by remember { mutableStateOf(false) }
     var sortBy by remember { mutableStateOf("Default") }
     var mediaFilter by remember(type) { mutableStateOf(if (type == "Favorites") "Favorites" else "All") }
+    var smartFolder by remember(type) { mutableStateOf("All") }
+    val nowSeconds = System.currentTimeMillis() / 1000L
     val ranked = media.mapNotNull { item ->
         mediaSearchScore(item, query)?.let { item to it }
     }.filter { mediaFilter != "Favorites" || mediaKey(it.first) in favorites }
+        .filter { pair ->
+            val item = pair.first
+            when (smartFolder) {
+                "Recent" -> item.dateAddedSeconds > 0L && nowSeconds - item.dateAddedSeconds <= 30L * 24L * 60L * 60L
+                "Short" -> item.isVideo && item.durationMs in 1L..180_000L
+                "Large" -> item.sizeBytes >= 500L * 1024L * 1024L
+                else -> true
+            }
+        }
     val sortedMedia = when (sortBy) {
         "Name" -> ranked.sortedBy { it.first.title.lowercase() }.map { it.first }
         "Duration" -> ranked.sortedByDescending { it.first.durationMs }.map { it.first }
@@ -1429,7 +1441,7 @@ private fun MediaScreen(
             )
         )
         Spacer(Modifier.height(12.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf("All" to if (language == "ar") "الكل" else "All", "Favorites" to if (language == "ar") "المفضلة" else "Favorites").forEach { (key, label) ->
                 Surface(
                     color = if (mediaFilter == key) Accent else CardBg,
@@ -1443,6 +1455,18 @@ private fun MediaScreen(
                         modifier = Modifier.padding(horizontal = 15.dp, vertical = 9.dp)
                     )
                 }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            val folders = buildList {
+                add("All" to if (language == "ar") "الكل" else "All")
+                add("Recent" to if (language == "ar") "أُضيف حديثًا" else "Recent")
+                if (type == "Videos" || type == "Favorites") add("Short" to if (language == "ar") "فيديوهات قصيرة" else "Short videos")
+                add("Large" to if (language == "ar") "ملفات كبيرة" else "Large files")
+            }
+            folders.forEach { (key, label) ->
+                FilterChip(selected = smartFolder == key, onClick = { smartFolder = key }, label = { Text(label, fontSize = 10.sp) })
             }
             Text("Sort: $sortBy", color = Muted, fontSize = 10.sp, modifier = Modifier.align(Alignment.CenterVertically))
         }
@@ -1613,7 +1637,33 @@ private fun NowPlayingScreen(
                 update = { view -> view.player = controller }
             )
         } else {
-            MediaArtwork(media, Modifier.fillMaxWidth().padding(horizontal = 18.dp).aspectRatio(1f).clip(RoundedCornerShape(24.dp)))
+            MediaArtwork(
+                media,
+                Modifier.fillMaxWidth().padding(horizontal = 18.dp).aspectRatio(1f)
+                    .clip(RoundedCornerShape(24.dp))
+                    .pointerInput(media.id, queue.size) {
+                        var totalX = 0f
+                        var totalY = 0f
+                        detectDragGestures(
+                            onDrag = { change, amount ->
+                                change.consume()
+                                totalX += amount.x
+                                totalY += amount.y
+                            },
+                            onDragEnd = {
+                                val threshold = 72.dp.toPx()
+                                when {
+                                    kotlin.math.abs(totalX) > kotlin.math.abs(totalY) && totalX <= -threshold -> controller?.seekToNextMediaItem()
+                                    kotlin.math.abs(totalX) > kotlin.math.abs(totalY) && totalX >= threshold -> controller?.seekToPreviousMediaItem()
+                                    totalY >= threshold && kotlin.math.abs(totalY) > kotlin.math.abs(totalX) -> onBack()
+                                }
+                                totalX = 0f
+                                totalY = 0f
+                            },
+                            onDragCancel = { totalX = 0f; totalY = 0f }
+                        )
+                    }
+            )
         }
         Spacer(Modifier.height(22.dp))
         Text(media.title, color = TextPrimary, fontSize = 21.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
