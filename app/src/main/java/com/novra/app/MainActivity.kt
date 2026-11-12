@@ -31,6 +31,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -647,7 +648,7 @@ private fun NovraApp() {
                         ) {
                             Column(
                                 Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
-                                    .background(Brush.linearGradient(listOf(Color(0xFF385A49), Color(0xFF17271F))))
+                                    .background(Brush.linearGradient(listOf(Color(0xFF7356C9), Color(0xFF253E59))))
                                     .padding(18.dp)
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1386,8 +1387,8 @@ private fun HomeScreen(
         Text(if (language == "ar") "إيه حابب تسمع أو\nتشاهد النهارده؟" else "What feels like\nplaying today?", color = TextPrimary, fontSize = 32.sp, lineHeight = 46.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(21.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            HomeTile(if (language == "ar") "مشغل الفيديو" else "VIDEO PLAYER", if (language == "ar") "شاهد فيديوهاتك" else "Watch your videos", Icons.Rounded.PlayCircle, Brush.linearGradient(listOf(Color(0xFF536E61), Color(0xFF293C35))), Modifier.weight(1f)) { navigate("Videos") }
-            HomeTile(if (language == "ar") "مشغل الموسيقى" else "MUSIC PLAYER", if (language == "ar") "استمع لأغانيك" else "Listen to your music", Icons.Rounded.GraphicEq, Brush.linearGradient(listOf(Color(0xFF79634D), Color(0xFF3C3028))), Modifier.weight(1f)) { navigate("Music") }
+            HomeTile(if (language == "ar") "مشغل الفيديو" else "VIDEO PLAYER", if (language == "ar") "شاهد فيديوهاتك" else "Watch your videos", Icons.Rounded.PlayCircle, Brush.linearGradient(listOf(Color(0xFF7656D8), Color(0xFF34265F))), Modifier.weight(1f)) { navigate("Videos") }
+            HomeTile(if (language == "ar") "مشغل الموسيقى" else "MUSIC PLAYER", if (language == "ar") "استمع لأغانيك" else "Listen to your music", Icons.Rounded.GraphicEq, Brush.linearGradient(listOf(Color(0xFF238D9D), Color(0xFF164354))), Modifier.weight(1f)) { navigate("Music") }
         }
         Spacer(Modifier.height(27.dp))
         Text(if (language == "ar") "مكتبتك" else "YOUR MEDIA", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
@@ -1445,22 +1446,38 @@ private fun HomeScreen(
 
 @Composable
 private fun HomeTile(tag: String, title: String, icon: androidx.compose.ui.graphics.vector.ImageVector, brush: Brush, modifier: Modifier, onClick: () -> Unit) {
-    Column(modifier.clip(RoundedCornerShape(22.dp)).background(brush).clickable(onClick = onClick).padding(15.dp)) {
-        Icon(icon, null, tint = TextPrimary, modifier = Modifier.size(30.dp))
-        Spacer(Modifier.height(26.dp))
-        Text(tag, color = TextPrimary.copy(alpha = 0.7f), fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-        Spacer(Modifier.height(4.dp))
-        Text(title, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+    Box(modifier.clip(RoundedCornerShape(26.dp)).background(brush).clickable(onClick = onClick)) {
+        Box(Modifier.align(Alignment.TopEnd).offset(x = 35.dp, y = (-35).dp).size(125.dp).blur(42.dp).background(Color.White.copy(alpha = 0.15f), CircleShape))
+        Column(Modifier.fillMaxWidth().padding(17.dp)) {
+            Box(Modifier.size(48.dp).clip(RoundedCornerShape(17.dp)).background(Color.White.copy(alpha = 0.15f)).border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(17.dp)), contentAlignment = Alignment.Center) {
+                Icon(icon, null, tint = Color.White, modifier = Modifier.size(27.dp))
+            }
+            Spacer(Modifier.height(27.dp))
+            Text(tag, color = Color.White.copy(alpha = 0.72f), fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+            Spacer(Modifier.height(5.dp))
+            Text(title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 2)
+            Spacer(Modifier.height(4.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(if (tag.contains("VIDEO", true) || tag.contains("فيديو")) "Explore library" else "Open collection", color = Color.White.copy(alpha = 0.70f), fontSize = 10.sp, modifier = Modifier.weight(1f))
+                Icon(Icons.Rounded.ArrowOutward, null, tint = Color.White.copy(alpha = 0.85f), modifier = Modifier.size(16.dp))
+            }
+        }
     }
 }
 
 @Composable
 private fun CountCard(label: String, count: String, icon: androidx.compose.ui.graphics.vector.ImageVector, modifier: Modifier, onClick: () -> Unit) {
-    Column(modifier.clip(RoundedCornerShape(18.dp)).background(CardBg).clickable(onClick = onClick).padding(15.dp)) {
-        Icon(icon, null, tint = Accent)
-        Spacer(Modifier.height(12.dp))
-        Text(count, color = TextPrimary, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-        Text(label, color = Muted, fontSize = 9.sp, letterSpacing = 1.sp)
+    Column(modifier.clip(RoundedCornerShape(22.dp)).background(Brush.linearGradient(listOf(CardBg, CardAlt.copy(alpha = 0.72f)))).border(1.dp, Color.White.copy(alpha = 0.055f), RoundedCornerShape(22.dp)).clickable(onClick = onClick).padding(16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(36.dp).clip(RoundedCornerShape(12.dp)).background(Accent.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
+                Icon(icon, null, tint = Accent, modifier = Modifier.size(19.dp))
+            }
+            Spacer(Modifier.weight(1f))
+            Icon(Icons.Rounded.ArrowOutward, null, tint = Muted, modifier = Modifier.size(15.dp))
+        }
+        Spacer(Modifier.height(13.dp))
+        Text(count, color = TextPrimary, fontSize = 28.sp, fontWeight = FontWeight.ExtraBold)
+        Text(label, color = Muted, fontSize = 9.sp, letterSpacing = 1.1.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -1603,8 +1620,9 @@ private fun MediaScreen(
                             val countKey = "play_count_video_${item.id}"
                             Column(
                                 Modifier.fillMaxWidth()
-                                    .clip(if (cardStyle == "square") RoundedCornerShape(8.dp) else RoundedCornerShape(19.dp))
-                                    .background(CardBg)
+                                    .clip(if (cardStyle == "square") RoundedCornerShape(8.dp) else RoundedCornerShape(22.dp))
+                                    .background(Brush.linearGradient(listOf(CardBg, CardAlt.copy(alpha = 0.62f))))
+                                    .border(1.dp, Color.White.copy(alpha = 0.055f), if (cardStyle == "square") RoundedCornerShape(8.dp) else RoundedCornerShape(22.dp))
                                     .clickable { onPlay(item) }
                                     .padding(if (compactCards) 8.dp else 10.dp)
                             ) {
@@ -1666,8 +1684,9 @@ private fun MediaScreen(
                             val countKey = "play_count_audio_${item.id}"
                             Row(
                                 Modifier.fillMaxWidth()
-                                    .clip(if (cardStyle == "square") RoundedCornerShape(7.dp) else RoundedCornerShape(15.dp))
-                                    .background(CardBg)
+                                    .clip(if (cardStyle == "square") RoundedCornerShape(7.dp) else RoundedCornerShape(19.dp))
+                                    .background(Brush.linearGradient(listOf(CardBg, CardAlt.copy(alpha = 0.62f))))
+                                    .border(1.dp, Color.White.copy(alpha = 0.055f), if (cardStyle == "square") RoundedCornerShape(7.dp) else RoundedCornerShape(19.dp))
                                     .clickable { onPlay(item) }
                                     .padding(if (compactCards) 8.dp else 11.dp),
                                 verticalAlignment = Alignment.CenterVertically
