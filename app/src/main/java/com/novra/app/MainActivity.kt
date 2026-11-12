@@ -480,6 +480,14 @@ private fun NovraApp() {
         val count = prefs.getInt(key, 0) + 1
         prefs.edit().putInt(key, count).apply()
         playCounts[key] = count
+    }    fun enqueueMedia(item: LocalMedia) {
+        val currentQueue = playQueue.ifEmpty { listOfNotNull(selectedMedia) }
+        if (currentQueue.isEmpty()) {
+            startMedia(item, listOf(item))
+            return
+        }
+        if (currentQueue.any { mediaKey(it) == mediaKey(item) }) return
+        updatePlaybackQueue(currentQueue + item)
     }
     val controllerFuture = remember(context) {
         MediaController.Builder(context, SessionToken(context, ComponentName(context, NovraPlaybackService::class.java))).buildAsync()
@@ -853,6 +861,7 @@ private fun NovraApp() {
                                 playCounts = playCounts, favorites = favorites,
                                 onToggleFavorite = ::toggleFavorite,
                                 onPlay = { item -> startMedia(item, videos) },
+                                onAddToQueue = ::enqueueMedia,
                                 language = language
                             )
                             "Music" -> MediaScreen(
@@ -862,6 +871,7 @@ private fun NovraApp() {
                                 playCounts = playCounts, favorites = favorites,
                                 onToggleFavorite = ::toggleFavorite,
                                 onPlay = { item -> startMedia(item, tracks) },
+                                onAddToQueue = ::enqueueMedia,
                                 language = language
                             )
                             "Explore" -> OnlineSearchScreen(language = language)
@@ -872,6 +882,7 @@ private fun NovraApp() {
                                 playCounts = playCounts, favorites = favorites,
                                 onToggleFavorite = ::toggleFavorite,
                                 onPlay = { item -> startMedia(item, (videos + tracks).distinctBy { mediaKey(it) }) },
+                                onAddToQueue = ::enqueueMedia,
                                 language = language
                             )
                             "Playlists" -> PlaylistsScreen(
@@ -1494,6 +1505,7 @@ private fun MediaScreen(
     hasPermission: Boolean, onGrant: () -> Unit, compactCards: Boolean, cardStyle: String,
     playCounts: Map<String, Int>, favorites: Set<String>,
     onToggleFavorite: (LocalMedia) -> Unit, onPlay: (LocalMedia) -> Unit,
+    onAddToQueue: (LocalMedia) -> Unit = {},
     language: String = "en"
 ) {
     var query by remember { mutableStateOf("") }
@@ -1665,6 +1677,9 @@ private fun MediaScreen(
                                             color = Muted, fontSize = 10.sp, maxLines = 1
                                         )
                                     }
+                                    IconButton(onClick = { onAddToQueue(item) }) {
+                                        Icon(Icons.Rounded.QueueMusic, if (language == "ar") "إضافة إلى قائمة التشغيل الحالية" else "Add to queue", tint = Muted)
+                                    }
                                     IconButton(onClick = { onToggleFavorite(item) }) {
                                         Icon(
                                             if (mediaKey(item) in favorites) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
@@ -1719,6 +1734,9 @@ private fun MediaScreen(
                                         "${formatDuration(item.durationMs)}  ·  ${playCounts[countKey] ?: 0} plays",
                                         color = Muted.copy(alpha = 0.8f), fontSize = 9.sp, maxLines = 1
                                     )
+                                }
+                                IconButton(onClick = { onAddToQueue(item) }) {
+                                    Icon(Icons.Rounded.QueueMusic, if (language == "ar") "إضافة إلى قائمة التشغيل الحالية" else "Add to queue", tint = Muted)
                                 }
                                 IconButton(onClick = { onToggleFavorite(item) }) {
                                     Icon(
