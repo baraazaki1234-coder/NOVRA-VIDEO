@@ -56,14 +56,32 @@ internal object AppPinVault {
     fun verify(context: Context, pin: String): Boolean {
         if (pin.length !in 4..8 || !pin.all(Char::isDigit)) return false
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val now = System.currentTimeMillis()
+        val lockUntil = prefs.getLong("pin_lock_until", 0L)
+        if (now < lockUntil) return false
+        if (lockUntil != 0L) {
+            prefs.edit().remove("pin_lock_until").putInt("pin_failed_attempts", 0).apply()
+        }
         val saltText = prefs.getString(SALT, null) ?: return false
         val expectedText = prefs.getString(VERIFIER, null) ?: return false
-        return runCatching {
+        val valid = runCatching {
             val salt = Base64.decode(saltText, Base64.NO_WRAP)
             val expected = Base64.decode(expectedText, Base64.NO_WRAP)
             val actual = calculate(salt, pin)
             java.security.MessageDigest.isEqual(expected, actual)
         }.getOrDefault(false)
+        if (valid) {
+            prefs.edit().remove("pin_lock_until").putInt("pin_failed_attempts", 0).apply()
+        } else {
+            val attempts = prefs.getInt("pin_failed_attempts", 0) + 1
+            if (attempts >= 5) {
+                prefs.edit().putInt("pin_failed_attempts", 0)
+                    .putLong("pin_lock_until", now + 30_000L).apply()
+            } else {
+                prefs.edit().putInt("pin_failed_attempts", attempts).apply()
+            }
+        }
+        return valid
     }
 
     @Synchronized
