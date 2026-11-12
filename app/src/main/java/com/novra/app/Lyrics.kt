@@ -6,13 +6,13 @@ private val lrcTimestamp = Regex("""\[(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?]""")
 
 fun parseLrc(source: String): List<LyricLine> {
     val result = mutableListOf<LyricLine>()
-    source.lineSequence().forEach { rawLine ->
+    source.lineSequence().forEach lineLoop@ { rawLine ->
         val matches = lrcTimestamp.findAll(rawLine).toList()
-        if (matches.isEmpty()) return@forEach
+        if (matches.isEmpty()) return@lineLoop
         val lyricText = rawLine.substring(matches.last().range.last + 1).trim()
-        if (lyricText.isEmpty()) return@forEach
-        matches.forEach { match ->
-            val minutes = match.groupValues[1].toLongOrNull() ?: return@forEach
+        if (lyricText.isEmpty()) return@lineLoop
+        matches.forEach timestampLoop@ { match ->
+            val minutes = match.groupValues[1].toLongOrNull() ?: return@timestampLoop
             val seconds = match.groupValues[2].toLongOrNull() ?: return@forEach
             val fractionText = match.groupValues[3]
             val millis = when (fractionText.length) {
