@@ -163,6 +163,14 @@ private fun NovraApp() {
     var playQueue by remember { mutableStateOf<List<LocalMedia>>(emptyList()) }
     var showNowPlaying by remember { mutableStateOf(false) }
     var controller by remember { mutableStateOf<MediaController?>(null) }
+    var sleepTimerMinutes by remember { mutableIntStateOf(0) }
+    LaunchedEffect(sleepTimerMinutes, controller) {
+        if (sleepTimerMinutes > 0) {
+            delay(sleepTimerMinutes * 60_000L)
+            controller?.pause()
+            sleepTimerMinutes = 0
+        }
+    }
     var isPlaying by remember { mutableStateOf(false) }
     DisposableEffect(controller) {
         val listener = object : Player.Listener {
@@ -329,7 +337,7 @@ private fun NovraApp() {
             }
         ) { padding ->
             if (showNowPlaying && selectedMedia != null) {
-                NowPlayingScreen(Modifier.padding(padding), selectedMedia!!, controller, playQueue, onBack = { showNowPlaying = false })
+                NowPlayingScreen(Modifier.padding(padding), selectedMedia!!, controller, playQueue, sleepTimerMinutes, onSleepTimerChange = { sleepTimerMinutes = it }, onBack = { showNowPlaying = false })
             } else when (selected) {
                 "Home" -> HomeScreen(
                     Modifier.padding(padding), videos.size, tracks.size,
@@ -601,21 +609,16 @@ private fun MediaArtwork(media: LocalMedia, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun NowPlayingScreen(modifier: Modifier, media: LocalMedia, controller: MediaController?, queue: List<LocalMedia>, onBack: () -> Unit) {
+private fun NowPlayingScreen(
+    modifier: Modifier, media: LocalMedia, controller: MediaController?, queue: List<LocalMedia>,
+    sleepTimerMinutes: Int, onSleepTimerChange: (Int) -> Unit, onBack: () -> Unit
+) {
     var shuffle by remember(controller) { mutableStateOf(controller?.shuffleModeEnabled == true) }
     var repeatMode by remember(controller) { mutableIntStateOf(controller?.repeatMode ?: Player.REPEAT_MODE_OFF) }
     var currentQueueIndex by remember(controller) { mutableIntStateOf(controller?.currentMediaItemIndex ?: 0) }
     var playbackPosition by remember(controller) { mutableFloatStateOf(0f) }
     var playbackDuration by remember(controller) { mutableFloatStateOf(media.durationMs.coerceAtLeast(1L).toFloat()) }
     var playbackSpeed by remember(controller) { mutableFloatStateOf(1f) }
-    var sleepTimerMinutes by remember(controller) { mutableIntStateOf(0) }
-    LaunchedEffect(sleepTimerMinutes, controller) {
-        if (sleepTimerMinutes > 0) {
-            delay(sleepTimerMinutes * 60_000L)
-            controller?.pause()
-            sleepTimerMinutes = 0
-        }
-    }
     LaunchedEffect(controller, media.id) {
         while (true) {
             val duration = controller?.duration?.takeIf { it > 0L } ?: media.durationMs
@@ -705,12 +708,12 @@ private fun NowPlayingScreen(modifier: Modifier, media: LocalMedia, controller: 
                 listOf(15, 30, 45, 60).forEach { minutes ->
                     FilterChip(
                         selected = sleepTimerMinutes == minutes,
-                        onClick = { sleepTimerMinutes = minutes },
+                        onClick = { onSleepTimerChange(minutes) },
                         label = { Text("${minutes}m", fontSize = 10.sp) }
                     )
                 }
                 if (sleepTimerMinutes > 0) {
-                    FilterChip(selected = false, onClick = { sleepTimerMinutes = 0 }, label = { Text("Off", fontSize = 10.sp) })
+                    FilterChip(selected = false, onClick = { onSleepTimerChange(0) }, label = { Text("Off", fontSize = 10.sp) })
                 }
             }
         }
