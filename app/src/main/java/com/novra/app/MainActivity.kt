@@ -30,6 +30,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -1006,6 +1007,7 @@ private fun VideoNowPlayingScreen(
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var seekFeedback by remember(media.id) { mutableStateOf("") }
+    var dragSeekDelta by remember(media.id) { mutableFloatStateOf(0f) }
     LaunchedEffect(seekFeedback) {
         if (seekFeedback.isNotEmpty()) {
             delay(700)
@@ -1063,6 +1065,25 @@ private fun VideoNowPlayingScreen(
                         }
                     )
                 }
+                .pointerInput(controller, duration) {
+                    detectHorizontalDragGestures(
+                        onHorizontalDrag = { change, dragAmount ->
+                            change.consume()
+                            dragSeekDelta = (dragSeekDelta + dragAmount).coerceIn(-size.width.toFloat(), size.width.toFloat())
+                        },
+                        onDragEnd = {
+                            val player = controller
+                            if (player != null && duration > 0f && size.width > 0) {
+                                val deltaMs = (dragSeekDelta / size.width * 60_000f).toLong()
+                                val target = (player.currentPosition + deltaMs).coerceIn(0L, duration.toLong())
+                                player.seekTo(target)
+                                if (deltaMs != 0L) seekFeedback = if (deltaMs > 0) "+${formatDuration(deltaMs)}" else "−${formatDuration(-deltaMs)}"
+                            }
+                            dragSeekDelta = 0f
+                        },
+                        onDragCancel = { dragSeekDelta = 0f }
+                    )
+                }
         ) {
             AndroidView(
                 modifier = Modifier.fillMaxSize(),
@@ -1074,7 +1095,20 @@ private fun VideoNowPlayingScreen(
                 } },
                 update = { view -> view.player = controller }
             )
-            if (seekFeedback.isNotEmpty()) {
+            if (dragSeekDelta != 0f && duration > 0f) {
+                val previewPosition = ((controller?.currentPosition ?: 0L) + (dragSeekDelta / 360f * 60_000f).toLong())
+                    .coerceIn(0L, duration.toLong())
+                Text(
+                    formatDuration(previewPosition),
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.align(Alignment.Center)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color.Black.copy(alpha = 0.78f))
+                        .padding(horizontal = 18.dp, vertical = 10.dp)
+                )
+            } else if (seekFeedback.isNotEmpty()) {
                 Text(
                     seekFeedback,
                     color = Color.White,
