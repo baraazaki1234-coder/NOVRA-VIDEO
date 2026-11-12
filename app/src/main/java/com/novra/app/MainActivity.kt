@@ -50,6 +50,8 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -1102,7 +1104,10 @@ private fun VideoNowPlayingScreen(
             delay(180)
         }
     }
-    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 8.dp)) {
+    Box(modifier.fillMaxSize()) {
+        MediaArtwork(media, Modifier.fillMaxSize().blur(34.dp).graphicsLayer(alpha = 0.34f))
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.70f), Color.Black.copy(alpha = 0.88f)))))
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 8.dp)) {
         Spacer(Modifier.height(6.dp))
         Box(
             Modifier.fillMaxWidth().aspectRatio(16f / 9f)
@@ -1261,6 +1266,7 @@ private fun VideoNowPlayingScreen(
             }
         }
         Spacer(Modifier.height(20.dp))
+        }
     }
 }
 
@@ -1628,7 +1634,10 @@ private fun NowPlayingScreen(
         )
         return
     }
-    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp)) {
+    Box(modifier.fillMaxSize()) {
+        MediaArtwork(media, Modifier.fillMaxSize().blur(38.dp).graphicsLayer(alpha = 0.32f))
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.72f), Color.Black.copy(alpha = 0.90f)))))
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp)) {
         Spacer(Modifier.height(10.dp))
         if (media.isVideo) {
             AndroidView(
@@ -1824,6 +1833,7 @@ private fun NowPlayingScreen(
             }
         }
         Spacer(Modifier.height(20.dp))
+        }
     }
 }
 
