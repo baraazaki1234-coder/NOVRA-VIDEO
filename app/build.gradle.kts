@@ -9,7 +9,7 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.novra.app"
+        applicationId = "com.novra.media"
         minSdk = 26
         targetSdk = 36
         versionCode = 3
