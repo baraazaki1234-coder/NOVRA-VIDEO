@@ -1100,7 +1100,7 @@ private fun EqualizerPanel(controller: MediaController?, language: String) {
     val range = remember(equalizer) {
         equalizer?.bandLevelRange?.let { it[0].toFloat() / 100f..it[1].toFloat() / 100f } ?: (-12f..12f)
     }
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(CardBg).padding(12.dp)) {
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Brush.linearGradient(listOf(CardBg, CardAlt.copy(alpha = 0.48f)))).border(1.dp, Color.White.copy(alpha = 0.055f), RoundedCornerShape(20.dp)).padding(14.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(if (language == "ar") "معادل الصوت" else "AUDIO EQUALIZER", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
@@ -1304,7 +1304,7 @@ private fun VideoNowPlayingScreen(
             }
         }
         Spacer(Modifier.height(10.dp))
-        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(15.dp)).background(CardBg).padding(12.dp)) {
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Brush.linearGradient(listOf(CardBg, CardAlt.copy(alpha = 0.48f)))).border(1.dp, Color.White.copy(alpha = 0.055f), RoundedCornerShape(20.dp)).padding(14.dp)) {
             Text(if (language == "ar") "الترجمة الخارجية" else "EXTERNAL SUBTITLES", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(6.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1880,7 +1880,8 @@ private fun NowPlayingScreen(
             MediaArtwork(
                 media,
                 Modifier.fillMaxWidth().padding(horizontal = 18.dp).aspectRatio(1f)
-                    .clip(RoundedCornerShape(24.dp))
+                    .clip(RoundedCornerShape(28.dp))
+                    .border(1.dp, Accent.copy(alpha = 0.24f), RoundedCornerShape(28.dp))
                     .pointerInput(media.id, queue.size) {
                         var totalX = 0f
                         var totalY = 0f
@@ -1970,8 +1971,14 @@ private fun NowPlayingScreen(
                     Icon(Icons.Rounded.Shuffle, "Shuffle", tint = if (shuffle) Accent else Muted)
                 }
                 IconButton(onClick = { controller?.seekToPreviousMediaItem() }) { Icon(Icons.Rounded.SkipPrevious, null, tint = TextPrimary, modifier = Modifier.size(34.dp)) }
-                IconButton(onClick = { controller?.let { if (it.isPlaying) it.pause() else it.play() } }) {
-                    Icon(if (controller?.isPlaying == true) Icons.Rounded.PauseCircleFilled else Icons.Rounded.PlayCircle, null, tint = Accent, modifier = Modifier.size(58.dp))
+                Box(
+                    Modifier.size(70.dp).clip(CircleShape)
+                        .background(Brush.linearGradient(listOf(Color(0xFF9B83FF), Color(0xFF5A46B5))))
+                        .border(1.dp, Color.White.copy(alpha = 0.22f), CircleShape)
+                        .clickable { controller?.let { if (it.isPlaying) it.pause() else it.play() } },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(if (controller?.isPlaying == true) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, null, tint = Color.White, modifier = Modifier.size(37.dp))
                 }
                 IconButton(onClick = { controller?.seekToNextMediaItem() }) { Icon(Icons.Rounded.SkipNext, null, tint = TextPrimary, modifier = Modifier.size(34.dp)) }
                 IconButton(onClick = {
@@ -2083,7 +2090,7 @@ private fun SettingsScreen(
         Text(if (language == "ar") "الإعدادات" else "Settings", color = TextPrimary, fontSize = 30.sp, fontWeight = FontWeight.Bold)
         Text(if (language == "ar") "خصص Viora بالشكل اللي يناسبك." else "Make Viora feel like yours.", color = Muted, fontSize = 13.sp)
         Spacer(Modifier.height(18.dp))
-        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(CardBg).padding(15.dp)) {
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Brush.linearGradient(listOf(CardBg, CardAlt.copy(alpha = 0.48f)))).border(1.dp, Color.White.copy(alpha = 0.055f), RoundedCornerShape(22.dp)).padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Rounded.Lock, null, tint = Accent, modifier = Modifier.size(22.dp))
                 Spacer(Modifier.width(9.dp))
