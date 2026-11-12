@@ -498,7 +498,7 @@ private fun NovraApp() {
             Box(Modifier.fillMaxSize()) {
             if (!pinLocked && pinFlowMode == "none" && showExitDialog) AlertDialog(
                 onDismissRequest = { showExitDialog = false },
-                title = { Text(if (language == "ar") "الخروج من NOVRA؟" else "Exit NOVRA?") },
+                title = { Text(if (language == "ar") "الخروج من Viora؟" else "Exit Viora?") },
                 text = { Text(if (language == "ar") "هل أنت متأكد أنك تريد إغلاق التطبيق؟" else "Are you sure you want to close the app?") },
                 confirmButton = { TextButton(onClick = { showExitDialog = false; (context as? MainActivity)?.finish() }) { Text(if (language == "ar") "خروج" else "Exit") } },
                 dismissButton = { TextButton(onClick = { showExitDialog = false }) { Text(if (language == "ar") "إلغاء" else "Cancel") } }
@@ -541,7 +541,7 @@ private fun NovraApp() {
                                     }
                                     Spacer(Modifier.width(11.dp))
                                     Column {
-                                        Text("NOVRA", color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.Black, letterSpacing = 2.5.sp)
+                                        Text("Viora", color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.Black, letterSpacing = 2.5.sp)
                                         Text("MEDIA EXPERIENCE", color = Color(0xFFD0E2D6), fontSize = 9.sp, letterSpacing = 1.3.sp)
                                     }
                                 }
@@ -599,7 +599,7 @@ private fun NovraApp() {
                                 )
                             }
                             Spacer(Modifier.height(22.dp))
-                            Text("NOVRA · Play your world", color = Muted, fontSize = 10.sp, modifier = Modifier.padding(start = 12.dp))
+                            Text("Viora · Play your world", color = Muted, fontSize = 10.sp, modifier = Modifier.padding(start = 12.dp))
                         }
                     }
                 }
@@ -634,7 +634,7 @@ private fun NovraApp() {
                                                 .background(CardAlt),
                                             contentAlignment = Alignment.Center
                                         ) {
-                                            Icon(Icons.Rounded.GraphicEq, contentDescription = "NOVRA", tint = Accent, modifier = Modifier.size(23.dp))
+                                            Icon(Icons.Rounded.GraphicEq, contentDescription = "Viora", tint = Accent, modifier = Modifier.size(23.dp))
                                         }
                                     }
                                     Column(Modifier.weight(1f).padding(start = 10.dp)) {
@@ -642,7 +642,7 @@ private fun NovraApp() {
                                             if (showNowPlaying) {
                                                 if (selectedMedia?.isVideo == true) (if (language == "ar") "مشغل الفيديو" else "Video player")
                                                 else (if (language == "ar") "يعمل الآن" else "Now Playing")
-                                            } else if (selected == "Home") "NOVRA" else if (language == "ar") when (selected) {
+                                            } else if (selected == "Home") "Viora" else if (language == "ar") when (selected) {
                                                 "Videos" -> "الفيديوهات"
                                                 "Music" -> "الأغاني"
                                                 "Playlists" -> "قوائم التشغيل"
@@ -818,7 +818,7 @@ private fun NovraApp() {
                 val isVerification = pinFlowMode == "verify_change" || pinFlowMode == "verify_disable"
                 AppPinGate(
                     title = when {
-                        pinLocked -> if (language == "ar") "افتح NOVRA" else "Unlock NOVRA"
+                        pinLocked -> if (language == "ar") "افتح Viora" else "Unlock Viora"
                         isSetup -> if (language == "ar") "إنشاء رمز القفل" else "Create app PIN"
                         pinFlowMode == "verify_change" -> if (language == "ar") "تأكيد هويتك" else "Verify your PIN"
                         else -> if (language == "ar") "تعطيل القفل" else "Disable app lock"
@@ -832,7 +832,7 @@ private fun NovraApp() {
                     errorLabel = if (language == "ar") "الرمز غير صحيح أو حدث خطأ. حاول مرة أخرى." else "Incorrect PIN or a security error. Try again.",
                     pinLabel = if (language == "ar") if (isSetup) "رمز جديد" else "الرقم السري" else if (isSetup) "New PIN" else "PIN",
                     confirmationFieldLabel = if (language == "ar") "تأكيد الرمز" else "Confirm PIN",
-                    submitLabel = if (language == "ar") when { isSetup -> "حفظ الرمز"; pinLocked -> "فتح NOVRA"; else -> "تأكيد" } else if (isSetup) "Save PIN" else if (pinLocked) "Unlock" else "Confirm",
+                    submitLabel = if (language == "ar") when { isSetup -> "حفظ الرمز"; pinLocked -> "فتح Viora"; else -> "تأكيد" } else if (isSetup) "Save PIN" else if (pinLocked) "Unlock" else "Confirm",
                     cancelLabel = if (language == "ar") "إلغاء" else "Cancel",
                     lockoutMessage = { seconds -> if (language == "ar") "محاولات كثيرة. حاول بعد ${seconds} ثانية." else "Too many attempts. Try again in ${seconds}s." },
                     onSubmit = { entered ->
@@ -913,7 +913,7 @@ private fun OnlineSearchScreen(language: String) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(if (language == "ar") "استكشف" else "Explore", color = TextPrimary, fontSize = 27.sp, fontWeight = FontWeight.Bold)
-                Text(if (language == "ar") "ابحث واكتشف من داخل NOVRA" else "Discover without leaving NOVRA", color = Muted, fontSize = 12.sp)
+                Text(if (language == "ar") "ابحث واكتشف من داخل Viora" else "Discover without leaving Viora", color = Muted, fontSize = 12.sp)
             }
             if (submittedUrl != null) {
                 IconButton(onClick = { webView.reload() }) { Icon(Icons.Rounded.Refresh, if (language == "ar") "تحديث" else "Refresh", tint = Muted) }
@@ -1081,7 +1081,7 @@ private fun VideoNowPlayingScreen(
             val subtitle = MediaItem.SubtitleConfiguration.Builder(uri)
                 .setMimeType("application/x-subrip")
                 .setLanguage("und")
-                .setLabel("NOVRA subtitle")
+                .setLabel("Viora subtitle")
                 .build()
             val item = MediaItem.Builder().setUri(media.uri)
                 .setSubtitleConfigurations(listOf(subtitle)).build()
@@ -1280,7 +1280,7 @@ private fun HomeScreen(
         Spacer(Modifier.height(22.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("NOVRA", color = TextPrimary, fontSize = 25.sp, fontWeight = FontWeight.Black, letterSpacing = 3.sp)
+                Text("Viora", color = TextPrimary, fontSize = 25.sp, fontWeight = FontWeight.Black, letterSpacing = 3.sp)
                 Text(if (language == "ar") "شغّل عالمك." else "Play your world.", color = Muted, fontSize = 11.sp)
             }
             IconButton(onClick = { navigate("Explore") }) { Icon(Icons.Rounded.Search, "Explore online", tint = TextPrimary) }
@@ -1482,7 +1482,7 @@ private fun MediaScreen(
                 Icon(Icons.Rounded.FolderOpen, null, tint = Accent, modifier = Modifier.size(45.dp))
                 Spacer(Modifier.height(14.dp))
                 Text("Allow media access", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                Text("NOVRA needs permission to show your $type.", color = Muted, fontSize = 12.sp)
+                Text("Viora needs permission to show your $type.", color = Muted, fontSize = 12.sp)
                 Spacer(Modifier.height(14.dp))
                 Button(onClick = onGrant) { Text("Grant access") }
             }
@@ -1871,7 +1871,7 @@ private fun SettingsScreen(
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
         Spacer(Modifier.height(20.dp))
         Text(if (language == "ar") "الإعدادات" else "Settings", color = TextPrimary, fontSize = 30.sp, fontWeight = FontWeight.Bold)
-        Text(if (language == "ar") "خصص NOVRA بالشكل اللي يناسبك." else "Make NOVRA feel like yours.", color = Muted, fontSize = 13.sp)
+        Text(if (language == "ar") "خصص Viora بالشكل اللي يناسبك." else "Make Viora feel like yours.", color = Muted, fontSize = 13.sp)
         Spacer(Modifier.height(18.dp))
         Spacer(Modifier.height(18.dp))
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(CardBg).padding(15.dp)) {
@@ -1971,9 +1971,9 @@ private fun SettingsScreen(
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(CardBg).padding(15.dp)) {
             Text(if (language == "ar") "إجمالي وقت التشغيل" else "Total playback time", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
             Text(formatDuration(listenedSeconds * 1000L), color = Accent, fontSize = 27.sp, fontWeight = FontWeight.Bold)
-            Text(if (language == "ar") "إجمالي الوقت الذي شغّل فيه NOVRA الوسائط على هذا الجهاز." else "Total time NOVRA has spent playing media on this device.", color = Muted, fontSize = 11.sp)
+            Text(if (language == "ar") "إجمالي الوقت الذي شغّل فيه Viora الوسائط على هذا الجهاز." else "Total time Viora has spent playing media on this device.", color = Muted, fontSize = 11.sp)
             Spacer(Modifier.height(10.dp))
-            Text("Video picture-in-picture is enabled when you leave NOVRA while a video is playing. Music playback continues through the media session.", color = Muted, fontSize = 11.sp)
+            Text("Video picture-in-picture is enabled when you leave Viora while a video is playing. Music playback continues through the media session.", color = Muted, fontSize = 11.sp)
         }
         Spacer(Modifier.height(20.dp))
     }
