@@ -1127,7 +1127,9 @@ private fun SettingsScreen(
     modifier: Modifier, wallpaperUri: Uri?, compactCards: Boolean, cardStyle: String, listenedSeconds: Long, themeMode: String, accentName: String,
     onThemeChange: (String) -> Unit, onAccentChange: (String) -> Unit, onChooseWallpaper: () -> Unit, onClearWallpaper: () -> Unit,
     onCompactChange: (Boolean) -> Unit, onCardStyleChange: (String) -> Unit,
-    onOpenPremium: () -> Unit
+    onOpenPremium: () -> Unit,
+    language: String, onLanguageChange: (String) -> Unit,
+    wallpaperDim: Float, onWallpaperDimChange: (Float) -> Unit
 ) {
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
         Spacer(Modifier.height(20.dp))
@@ -1152,7 +1154,17 @@ private fun SettingsScreen(
             Text("50 EGP / 1 month", color = Color(0xFFE8D49A), fontWeight = FontWeight.Bold, fontSize = 14.sp)
         }
         Spacer(Modifier.height(24.dp))
-        Text("APPEARANCE", color = Accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+        Text(if (language == "ar") "اللغة" else "LANGUAGE", color = Accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+        Spacer(Modifier.height(10.dp))
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(CardBg).padding(15.dp)) {
+            Text(if (language == "ar") "لغة التطبيق" else "App language", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(selected = language == "en", onClick = { onLanguageChange("en") }, label = { Text("English") })
+                FilterChip(selected = language == "ar", onClick = { onLanguageChange("ar") }, label = { Text("العربية") })
+            }
+        }
+        Spacer(Modifier.height(18.dp))
+        Text(if (language == "ar") "المظهر" else "APPEARANCE", color = Accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
         Spacer(Modifier.height(10.dp))
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(CardBg).padding(15.dp)) {
             Text("Color theme", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
@@ -1173,16 +1185,22 @@ private fun SettingsScreen(
         }
         Spacer(Modifier.height(12.dp))
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(CardBg).padding(15.dp)) {
-            Text("App background", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-            Text("Choose a picture from your gallery as your personal background.", color = Muted, fontSize = 11.sp)
+            Text(if (language == "ar") "خلفية التطبيق" else "App background", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Text(if (language == "ar") "اختر صورة من المعرض واضبط وضوحها." else "Choose a picture from your gallery and adjust its visibility.", color = Muted, fontSize = 11.sp)
             if (wallpaperUri != null) {
                 Spacer(Modifier.height(12.dp))
                 AsyncImage(model = wallpaperUri, contentDescription = "Selected background", modifier = Modifier.fillMaxWidth().height(130.dp).clip(RoundedCornerShape(12.dp)), contentScale = ContentScale.Crop)
             }
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                Button(onClick = onChooseWallpaper) { Text("Choose from gallery") }
-                if (wallpaperUri != null) OutlinedButton(onClick = onClearWallpaper) { Text("Remove") }
+                Button(onClick = onChooseWallpaper) { Text(if (language == "ar") "اختيار من المعرض" else "Choose from gallery") }
+                if (wallpaperUri != null) OutlinedButton(onClick = onClearWallpaper) { Text(if (language == "ar") "إزالة" else "Remove") }
+            }
+            if (wallpaperUri != null) {
+                Spacer(Modifier.height(10.dp))
+                Text(if (language == "ar") "تعتيم الخلفية" else "Background dim", color = TextPrimary, fontSize = 12.sp)
+                Slider(value = wallpaperDim, onValueChange = onWallpaperDimChange, valueRange = 0f..0.75f, colors = SliderDefaults.colors(thumbColor = Accent, activeTrackColor = Accent))
+                Text("${(wallpaperDim * 100).toInt()}%", color = Muted, fontSize = 10.sp)
             }
         }
         Spacer(Modifier.height(12.dp))
