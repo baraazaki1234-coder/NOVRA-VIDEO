@@ -884,6 +884,13 @@ private fun NovraApp() {
                                         else playlist
                                     })
                                 },
+                                onRemove = { playlistName, item ->
+                                    savePlaylists(playlists.map { playlist ->
+                                        if (playlist.name == playlistName)
+                                            playlist.copy(mediaKeys = playlist.mediaKeys.filterNot { it == mediaKey(item) })
+                                        else playlist
+                                    })
+                                },
                                 onDelete = { playlistName -> savePlaylists(playlists.filterNot { it.name == playlistName }) },
                                 onPlay = { items -> if (items.isNotEmpty()) startMedia(items.first(), items) }, language = language
                             )
@@ -2237,6 +2244,7 @@ private fun PlaylistsScreen(
     media: List<LocalMedia>,
     onCreate: (String) -> Unit,
     onAdd: (String, LocalMedia) -> Unit,
+    onRemove: (String, LocalMedia) -> Unit,
     onDelete: (String) -> Unit,
     onPlay: (List<LocalMedia>) -> Unit, language: String = "en"
 ) {
@@ -2291,11 +2299,25 @@ private fun PlaylistsScreen(
                         Text("Add media")
                     }
                 }
-                items.take(3).forEach { item ->
-                    Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        MediaArtwork(item, Modifier.size(34.dp).clip(RoundedCornerShape(7.dp)))
-                        Spacer(Modifier.width(9.dp))
-                        Text(item.title, color = Muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (items.isNotEmpty()) {
+                    Spacer(Modifier.height(9.dp))
+                    items.forEach { item ->
+                        Row(
+                            Modifier.fillMaxWidth().clip(RoundedCornerShape(11.dp))
+                                .background(CardAlt.copy(alpha = 0.42f)).padding(horizontal = 8.dp, vertical = 7.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            MediaArtwork(item, Modifier.size(38.dp).clip(RoundedCornerShape(8.dp)))
+                            Spacer(Modifier.width(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(item.title, color = TextPrimary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(if (language == "ar") if (item.isVideo) "فيديو" else "صوت" else if (item.isVideo) "Video" else "Audio", color = Muted, fontSize = 9.sp)
+                            }
+                            IconButton(onClick = { onRemove(playlist.name, item) }, modifier = Modifier.size(34.dp)) {
+                                Icon(Icons.Rounded.Close, if (language == "ar") "إزالة من القائمة" else "Remove from playlist", tint = Muted, modifier = Modifier.size(17.dp))
+                            }
+                        }
+                        Spacer(Modifier.height(5.dp))
                     }
                 }
             }
@@ -2326,15 +2348,22 @@ private fun PlaylistsScreen(
             text = {
                 if (media.isEmpty()) Text("No device media found yet. Grant media access and scan your library first.")
                 else Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
+                    val existingKeys = playlists.firstOrNull { it.name == playlistName }?.mediaKeys.orEmpty().toSet()
                     media.forEach { item ->
-                        Row(Modifier.fillMaxWidth().clickable { onAdd(playlistName, item) }.padding(vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+                        val alreadyAdded = mediaKey(item) in existingKeys
+                        Row(
+                            Modifier.fillMaxWidth()
+                                .clickable(enabled = !alreadyAdded) { onAdd(playlistName, item) }
+                                .padding(vertical = 7.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             MediaArtwork(item, Modifier.size(38.dp).clip(RoundedCornerShape(8.dp)))
                             Spacer(Modifier.width(10.dp))
                             Column(Modifier.weight(1f)) {
-                                Text(item.title, color = TextPrimary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text(if (item.isVideo) "Video" else "Audio", color = Muted, fontSize = 10.sp)
+                                Text(item.title, color = if (alreadyAdded) Muted else TextPrimary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(if (language == "ar") if (item.isVideo) "فيديو" else "صوت" else if (item.isVideo) "Video" else "Audio", color = Muted, fontSize = 10.sp)
                             }
-                            Icon(Icons.Rounded.AddCircleOutline, null, tint = Accent)
+                            Icon(if (alreadyAdded) Icons.Rounded.CheckCircle else Icons.Rounded.AddCircleOutline, null, tint = if (alreadyAdded) Muted else Accent)
                         }
                     }
                 }
