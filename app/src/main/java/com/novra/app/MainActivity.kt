@@ -112,6 +112,9 @@ private fun NovraApp() {
             }
         }
     }
+    var playQueue by remember { mutableStateOf<List<LocalMedia>>(emptyList()) }
+    var showNowPlaying by remember { mutableStateOf(false) }
+    var controller by remember { mutableStateOf<MediaController?>(null) }
     var isPlaying by remember { mutableStateOf(false) }
     DisposableEffect(controller) {
         val listener = object : Player.Listener {
@@ -136,9 +139,6 @@ private fun NovraApp() {
         prefs.edit().putInt(key, count).apply()
         playCounts[key] = count
     }
-    var playQueue by remember { mutableStateOf<List<LocalMedia>>(emptyList()) }
-    var showNowPlaying by remember { mutableStateOf(false) }
-    var controller by remember { mutableStateOf<MediaController?>(null) }
     val controllerFuture = remember(context) {
         MediaController.Builder(context, SessionToken(context, ComponentName(context, NovraPlaybackService::class.java))).buildAsync()
     }
