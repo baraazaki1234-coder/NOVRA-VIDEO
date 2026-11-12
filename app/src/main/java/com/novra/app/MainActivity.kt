@@ -17,6 +17,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.webkit.WebChromeClient
 import android.media.MediaMetadataRetriever
+import android.media.audiofx.Equalizer
 import android.util.Size
 import android.util.LruCache
 import android.os.Build
@@ -922,6 +923,70 @@ private fun OnlineSearchScreen(language: String) {
     }
 }
 
+
+@Composable
+private fun EqualizerPanel(controller: MediaController?, language: String) {
+    val sessionId = controller?.audioSessionId ?: 0
+    val equalizer = remember(sessionId) {
+        if (sessionId > 0) runCatching { Equalizer(0, sessionId).apply { enabled = true } }.getOrNull() else null
+    }
+    DisposableEffect(equalizer) {
+        onDispose { runCatching { equalizer?.release() } }
+    }
+    var expanded by remember { mutableStateOf(false) }
+    var levels by remember(sessionId) { mutableStateOf(List(5) { 0f }) }
+    val range = remember(equalizer) {
+        equalizer?.bandLevelRange?.let { it[0].toFloat() / 100f..it[1].toFloat() / 100f } ?: (-12f..12f)
+    }
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(CardBg).padding(12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(if (language == "ar") "معادل الصوت" else "AUDIO EQUALIZER", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    if (equalizer == null) {
+                        if (language == "ar") "غير متاح في جلسة الصوت الحالية" else "Unavailable for this audio session"
+                    } else {
+                        if (language == "ar") "تحكم في ترددات الصوت مباشرة" else "Tune playback frequencies"
+                    },
+                    color = Muted, fontSize = 10.sp
+                )
+            }
+            TextButton(onClick = { expanded = !expanded }, enabled = equalizer != null) {
+                Text(if (expanded) (if (language == "ar") "إخفاء" else "Hide") else (if (language == "ar") "فتح" else "Open"))
+            }
+        }
+        if (expanded && equalizer != null) {
+            val bandCount = equalizer.numberOfBands.toInt().coerceAtMost(5)
+            LaunchedEffect(equalizer, bandCount) {
+                levels = List(bandCount) { index ->
+                    runCatching { equalizer.getBandLevel(index.toShort()).toFloat() / 100f }.getOrDefault(0f)
+                }
+            }
+            repeat(bandCount) { index ->
+                val frequency = runCatching { equalizer.getCenterFreq(index.toShort()) / 1000 }.getOrDefault(0)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(if (frequency >= 1000) "${frequency / 1000}k" else "${frequency}Hz", color = Muted, fontSize = 10.sp, modifier = Modifier.width(42.dp))
+                    Slider(
+                        value = levels.getOrElse(index) { 0f }.coerceIn(range.start, range.endInclusive),
+                        onValueChange = { value ->
+                            runCatching { equalizer.setBandLevel(index.toShort(), (value * 100).toInt().toShort()) }
+                            levels = levels.toMutableList().also { it[index] = value }
+                        },
+                        valueRange = range,
+                        modifier = Modifier.weight(1f),
+                        colors = SliderDefaults.colors(thumbColor = Accent, activeTrackColor = Accent)
+                    )
+                    Text("${levels.getOrElse(index) { 0f }.toInt()} dB", color = Muted, fontSize = 9.sp, modifier = Modifier.width(42.dp))
+                }
+            }
+            TextButton(onClick = {
+                runCatching { equalizer.usePreset(0.toShort()) }
+                levels = List(bandCount) { 0f }
+            }) { Text(if (language == "ar") "إعادة ضبط" else "Reset") }
+        }
+    }
+}
+
 @Composable
 private fun VideoNowPlayingScreen(
     modifier: Modifier,
@@ -932,6 +997,38 @@ private fun VideoNowPlayingScreen(
     onBack: () -> Unit,
     language: String
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var subtitleUri by remember(media.id) { mutableStateOf<Uri?>(null) }
+    val subtitlePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+            subtitleUri = uri
+            val subtitle = MediaItem.SubtitleConfiguration.Builder(uri)
+                .setMimeType("application/x-subrip")
+                .setLanguage("und")
+                .setLabel("NOVRA subtitle")
+                .build()
+            val item = MediaItem.Builder().setUri(media.uri)
+                .setSubtitleConfigurations(listOf(subtitle)).build()
+            controller?.let { player ->
+                val wasPlaying = player.isPlaying
+                player.setMediaItem(item, position.toLong())
+                player.prepare()
+                if (wasPlaying) player.play()
+            }
+        }
+    }
+    var loopStart by remember(media.id) { mutableLongStateOf(-1L) }
+    var loopEnd by remember(media.id) { mutableLongStateOf(-1L) }
+    LaunchedEffect(controller, loopStart, loopEnd) {
+        while (loopStart >= 0L && loopEnd > loopStart) {
+            val player = controller
+            if (player != null && player.isPlaying && player.currentPosition >= loopEnd) {
+                player.seekTo(loopStart)
+            }
+            delay(180)
+        }
+    }
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 8.dp)) {
         Spacer(Modifier.height(6.dp))
         AndroidView(
@@ -966,6 +1063,51 @@ private fun VideoNowPlayingScreen(
                     selected = videoSpeed == speed,
                     onClick = { videoSpeed = speed; controller?.setPlaybackSpeed(speed) },
                     label = { Text("${speed}×", fontSize = 10.sp) }
+                )
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(15.dp)).background(CardBg).padding(12.dp)) {
+            Text(if (language == "ar") "الترجمة الخارجية" else "EXTERNAL SUBTITLES", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(6.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    if (subtitleUri == null) {
+                        if (language == "ar") "لم يتم اختيار ملف ترجمة" else "No subtitle file selected"
+                    } else {
+                        if (language == "ar") "تم تحميل ملف الترجمة" else "Subtitle file loaded"
+                    },
+                    color = Muted, fontSize = 11.sp, modifier = Modifier.weight(1f)
+                )
+                OutlinedButton(onClick = { subtitlePicker.launch(arrayOf("application/x-subrip", "text/plain", "*/*")) }) {
+                    Icon(Icons.Rounded.Subtitles, null)
+                    Spacer(Modifier.width(5.dp))
+                    Text(if (language == "ar") "اختيار SRT" else "Load SRT")
+                }
+            }
+            HorizontalDivider(color = CardAlt)
+            Spacer(Modifier.height(8.dp))
+            Text(if (language == "ar") "تكرار مقطع A-B" else "A-B REPEAT", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                OutlinedButton(onClick = {
+                    loopStart = controller?.currentPosition ?: 0L
+                    loopEnd = -1L
+                }, modifier = Modifier.weight(1f)) { Text("Set A") }
+                OutlinedButton(
+                    enabled = loopStart >= 0L,
+                    onClick = {
+                        val end = controller?.currentPosition ?: 0L
+                        if (end > loopStart) loopEnd = end
+                    },
+                    modifier = Modifier.weight(1f)
+                ) { Text("Set B") }
+                TextButton(onClick = { loopStart = -1L; loopEnd = -1L }) { Text(if (language == "ar") "إيقاف" else "Off") }
+            }
+            if (loopStart >= 0L) {
+                Text(
+                    if (loopEnd > loopStart) "A ${formatDuration(loopStart)}  •  B ${formatDuration(loopEnd)}"
+                    else "A ${formatDuration(loopStart)}  •  Set point B",
+                    color = Muted, fontSize = 10.sp
                 )
             }
         }
@@ -1449,6 +1591,9 @@ private fun NowPlayingScreen(
                     FilterChip(selected = false, onClick = { onSleepTimerChange(0) }, label = { Text("Off", fontSize = 10.sp) })
                 }
             }
+        }
+        if (controller != null) {
+            EqualizerPanel(controller = controller, language = language)
         }
         if (queue.isNotEmpty()) {
             Spacer(Modifier.height(12.dp))
