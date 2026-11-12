@@ -13,7 +13,7 @@ fun parseLrc(source: String): List<LyricLine> {
         if (lyricText.isEmpty()) return@lineLoop
         matches.forEach timestampLoop@ { match ->
             val minutes = match.groupValues[1].toLongOrNull() ?: return@timestampLoop
-            val seconds = match.groupValues[2].toLongOrNull() ?: return@forEach
+            val seconds = match.groupValues[2].toLongOrNull() ?: return@timestampLoop
             val fractionText = match.groupValues[3]
             val millis = when (fractionText.length) {
                 1 -> (fractionText.toLongOrNull() ?: 0L) * 100L
