@@ -448,7 +448,7 @@ private fun NovraApp() {
         }
     }
 
-    BackHandler(enabled = true) { navigateBack() }
+    BackHandler(enabled = true) { if (showExitDialog) showExitDialog = false else navigateBack() }
     CompositionLocalProvider(LocalNovraPalette provides palette, LocalLayoutDirection provides if (language == "ar") LayoutDirection.Rtl else LayoutDirection.Ltr) {
         MaterialTheme(colorScheme = if (themeMode == "light") lightColorScheme(
             background = AppBg, surface = CardBg, surfaceVariant = CardAlt,
@@ -1106,6 +1106,7 @@ private fun NowPlayingScreen(
         }
         Spacer(Modifier.height(22.dp))
         Text(media.title, color = TextPrimary, fontSize = 21.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        if (!media.isVideo && media.artist.isNotBlank()) Text(media.artist, color = Muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(if (language == "ar") { if (media.isVideo) "فيديو" else "صوت" } else if (media.isVideo) "Video" else "Audio", color = Muted, fontSize = 12.sp)
         Spacer(Modifier.height(12.dp))
         Slider(
@@ -1181,9 +1182,9 @@ private fun NowPlayingScreen(
         if (queue.isNotEmpty()) {
             Spacer(Modifier.height(12.dp))
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("UP NEXT", color = Accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp)
+                Text(if (language == "ar") "التالي في قائمة التشغيل" else "UP NEXT", color = Accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp)
                 Spacer(Modifier.weight(1f))
-                Text("${queue.size} items", color = Muted, fontSize = 10.sp)
+                Text(if (language == "ar") "${queue.size} عناصر" else "${queue.size} items", color = Muted, fontSize = 10.sp)
             }
             Spacer(Modifier.height(8.dp))
             queue.forEachIndexed { index, item ->
