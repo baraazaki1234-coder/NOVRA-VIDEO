@@ -12,7 +12,8 @@ data class LocalMedia(
     val artist: String = "",
     val durationMs: Long,
     val sizeBytes: Long,
-    val isVideo: Boolean
+    val isVideo: Boolean,
+    val dateAddedSeconds: Long = 0L
 )
 
 object MediaLibrary {
@@ -27,10 +28,10 @@ object MediaLibrary {
     private fun query(context: Context, collection: Uri, video: Boolean): List<LocalMedia> {
         val projection = if (video) arrayOf(
             MediaStore.Video.Media._ID, MediaStore.Video.Media.TITLE,
-            MediaStore.Video.Media.DURATION, MediaStore.Video.Media.SIZE
+            MediaStore.Video.Media.DURATION, MediaStore.Video.Media.SIZE, MediaStore.Video.Media.DATE_ADDED
         ) else arrayOf(
             MediaStore.Audio.Media._ID, MediaStore.Audio.Media.TITLE, MediaStore.Audio.Media.ARTIST,
-            MediaStore.Audio.Media.DURATION, MediaStore.Audio.Media.SIZE
+            MediaStore.Audio.Media.DURATION, MediaStore.Audio.Media.SIZE, MediaStore.Audio.Media.DATE_ADDED
         )
         val result = mutableListOf<LocalMedia>()
         context.contentResolver.query(
@@ -43,6 +44,7 @@ object MediaLibrary {
             val durationCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DURATION)
             val artistCol = if (!video) cursor.getColumnIndex(MediaStore.Audio.Media.ARTIST) else -1
             val sizeCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.SIZE)
+            val dateAddedCol = cursor.getColumnIndex(MediaStore.MediaColumns.DATE_ADDED)
             while (cursor.moveToNext()) {
                 val id = cursor.getLong(idCol)
                 result += LocalMedia(
@@ -52,7 +54,8 @@ object MediaLibrary {
                     artist = if (artistCol >= 0) cursor.getString(artistCol)?.takeUnless { it == "<unknown>" }.orEmpty() else "",
                     durationMs = cursor.getLong(durationCol),
                     sizeBytes = cursor.getLong(sizeCol),
-                    isVideo = video
+                    isVideo = video,
+                    dateAddedSeconds = if (dateAddedCol >= 0) cursor.getLong(dateAddedCol) else 0L
                 )
             }
         }
