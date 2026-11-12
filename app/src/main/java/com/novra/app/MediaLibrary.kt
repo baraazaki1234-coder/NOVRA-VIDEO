@@ -34,8 +34,9 @@ object MediaLibrary {
             MediaStore.Audio.Media.DURATION, MediaStore.Audio.Media.SIZE, MediaStore.Audio.Media.DATE_ADDED
         )
         val result = mutableListOf<LocalMedia>()
+        val selection = if (video) null else "${MediaStore.Audio.Media.IS_MUSIC} != 0"
         context.contentResolver.query(
-            collection, projection, null, null,
+            collection, projection, selection, null,
             if (video) MediaStore.Video.Media.DATE_ADDED + " DESC"
             else MediaStore.Audio.Media.TITLE + " COLLATE NOCASE ASC"
         )?.use { cursor ->
