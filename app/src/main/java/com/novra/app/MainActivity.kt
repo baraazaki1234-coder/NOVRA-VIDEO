@@ -676,7 +676,7 @@ private fun NowPlayingScreen(modifier: Modifier, media: LocalMedia, controller: 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("SLEEP TIMER", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
                 Spacer(Modifier.weight(1f))
-                if (sleepTimerMinutes > 0) Text("Stops in ${sleepTimerMinutes} min", color = Accent, fontSize = 10.sp)
+                if (sleepTimerMinutes > 0) Text("Timer set: ${sleepTimerMinutes} min", color = Accent, fontSize = 10.sp)
             }
             Spacer(Modifier.height(6.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
