@@ -163,8 +163,17 @@ private fun NovraApp() {
         background = AppBg, surface = CardBg, primary = Accent,
         onBackground = Color.White, onSurface = Color.White
     )) {
-        Scaffold(
-            containerColor = AppBg,
+        Box(Modifier.fillMaxSize()) {
+            if (wallpaperUri != null) {
+                AsyncImage(
+                    model = wallpaperUri,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            }
+            Scaffold(
+            containerColor = if (wallpaperUri != null) Color.Transparent else AppBg,
             bottomBar = {
                 Column {
                     if (selectedMedia != null && !showNowPlaying) {
@@ -229,6 +238,7 @@ private fun NovraApp() {
                     onCompactChange = { compactCards = it; prefs.edit().putBoolean("compact_cards", it).apply() },
                     onCardStyleChange = { cardStyle = it; prefs.edit().putString("card_style", it).apply() }
                 )
+            }
             }
         }
     }
