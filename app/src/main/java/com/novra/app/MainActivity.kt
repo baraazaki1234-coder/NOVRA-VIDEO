@@ -400,9 +400,13 @@ private fun NovraApp() {
         }
     }
     var isPlaying by remember { mutableStateOf(false) }
-    DisposableEffect(controller) {
+    DisposableEffect(controller, playQueue) {
         val listener = object : Player.Listener {
             override fun onIsPlayingChanged(playing: Boolean) { isPlaying = playing }
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                val activeIndex = controller?.currentMediaItemIndex ?: -1
+                playQueue.getOrNull(activeIndex)?.let { selectedMedia = it }
+            }
         }
         controller?.addListener(listener)
         onDispose { controller?.removeListener(listener) }
@@ -505,6 +509,7 @@ private fun NovraApp() {
         val media = selectedMedia
         val player = controller
         if (media != null && player != null) {
+            if (player.currentMediaItem?.localConfiguration?.uri == media.uri) return@LaunchedEffect
             val queue = playQueue.ifEmpty { listOf(media) }
             val startIndex = queue.indexOfFirst { it.id == media.id && it.isVideo == media.isVideo }.coerceAtLeast(0)
             val items = queue.map { entry ->
