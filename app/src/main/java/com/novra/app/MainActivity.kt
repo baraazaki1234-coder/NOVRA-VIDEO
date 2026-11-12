@@ -38,7 +38,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.ui.layout.layoutId
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -885,13 +884,13 @@ private fun VideoNowPlayingScreen(
         }
         Spacer(Modifier.height(8.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { controller?.seekTo((controller.currentPosition - 10_000L).coerceAtLeast(0L)) }) {
+            IconButton(onClick = { controller?.let { it.seekTo((it.currentPosition - 10_000L).coerceAtLeast(0L)) } }) {
                 Icon(Icons.Rounded.Replay10, null, tint = TextPrimary, modifier = Modifier.size(32.dp))
             }
             IconButton(onClick = { controller?.let { if (it.isPlaying) it.pause() else it.play() } }) {
                 Icon(if (controller?.isPlaying == true) Icons.Rounded.PauseCircleFilled else Icons.Rounded.PlayCircle, null, tint = Accent, modifier = Modifier.size(54.dp))
             }
-            IconButton(onClick = { controller?.seekTo(controller.currentPosition + 10_000L) }) {
+            IconButton(onClick = { controller?.let { it.seekTo(it.currentPosition + 10_000L) } }) {
                 Icon(Icons.Rounded.Forward10, null, tint = TextPrimary, modifier = Modifier.size(32.dp))
             }
         }
@@ -912,7 +911,7 @@ private fun HomeScreen(
                 Text("NOVRA", color = TextPrimary, fontSize = 25.sp, fontWeight = FontWeight.Black, letterSpacing = 3.sp)
                 Text(if (language == "ar") "شغّل عالمك." else "Play your world.", color = Muted, fontSize = 11.sp)
             }
-            IconButton(onClick = { navigate("Videos") }) { Icon(Icons.Rounded.Search, "Search", tint = TextPrimary) }
+            IconButton(onClick = { navigate("Explore") }) { Icon(Icons.Rounded.Search, "Explore online", tint = TextPrimary) }
             IconButton(onClick = { navigate("Playlists") }) { Icon(Icons.Rounded.MoreHoriz, "More", tint = TextPrimary) }
         }
         Spacer(Modifier.height(25.dp))
@@ -1232,7 +1231,7 @@ private fun NowPlayingScreen(
                 update = { view -> view.player = controller }
             )
         } else {
-            MediaArtwork(media, Modifier.fillMaxWidth().aspectRatio(1f).padding(horizontal = 18.dp).clip(RoundedCornerShape(24.dp)))
+            MediaArtwork(media, Modifier.fillMaxWidth().padding(horizontal = 18.dp).aspectRatio(1f).clip(RoundedCornerShape(24.dp)))
         }
         Spacer(Modifier.height(22.dp))
         Text(media.title, color = TextPrimary, fontSize = 21.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
