@@ -17,6 +17,9 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.webkit.WebChromeClient
 import android.media.MediaMetadataRetriever
+import android.media.AudioManager
+import android.media.AudioDeviceCallback
+import android.media.AudioDeviceInfo
 import android.media.audiofx.Equalizer
 import android.util.Size
 import android.util.LruCache
@@ -231,6 +234,36 @@ private fun hasVideoPermission(context: android.content.Context): Boolean {
 private fun hasMediaPermissions(context: android.content.Context): Boolean =
     hasAudioPermission(context) || hasVideoPermission(context)
 
+private fun audioOutputDescription(device: AudioDeviceInfo, language: String): String {
+    val typeLabel = when (device.type) {
+        AudioDeviceInfo.TYPE_BUILTIN_SPEAKER -> if (language == "ar") "سماعة الهاتف" else "Phone speaker"
+        AudioDeviceInfo.TYPE_BUILTIN_EARPIECE -> if (language == "ar") "سماعة المكالمات" else "Earpiece"
+        AudioDeviceInfo.TYPE_WIRED_HEADSET -> if (language == "ar") "سماعة سلكية بميكروفون" else "Wired headset"
+        AudioDeviceInfo.TYPE_WIRED_HEADPHONES -> if (language == "ar") "سماعة سلكية" else "Wired headphones"
+        AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
+        AudioDeviceInfo.TYPE_BLUETOOTH_SCO -> "Bluetooth"
+        AudioDeviceInfo.TYPE_USB_DEVICE,
+        AudioDeviceInfo.TYPE_USB_HEADSET -> if (language == "ar") "سماعة USB" else "USB audio"
+        AudioDeviceInfo.TYPE_HDMI,
+        AudioDeviceInfo.TYPE_HDMI_ARC,
+        AudioDeviceInfo.TYPE_HDMI_EARC -> "HDMI"
+        AudioDeviceInfo.TYPE_DOCK -> if (language == "ar") "قاعدة صوت" else "Audio dock"
+        else -> if (language == "ar") "مخرج صوت" else "Audio output"
+    }
+    val deviceName = device.productName?.toString()?.trim().orEmpty()
+    return if (deviceName.isNotBlank() && !deviceName.equals(typeLabel, ignoreCase = true)) {
+        "$deviceName · $typeLabel"
+    } else typeLabel
+}
+
+private fun readAudioOutputs(context: android.content.Context, language: String): List<String> {
+    val manager = context.getSystemService(android.content.Context.AUDIO_SERVICE) as AudioManager
+    return manager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+        .filter { it.isSink }
+        .map { audioOutputDescription(it, language) }
+        .distinct()
+}
+
 @Composable
 private fun NovraApp() {
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -302,6 +335,24 @@ private fun NovraApp() {
             json.put(entry)
         }
         prefs.edit().putString("playlists_json", json.toString()).apply()
+    }
+    var audioOutputs by remember { mutableStateOf(readAudioOutputs(context, language)) }
+    DisposableEffect(context, language) {
+        val audioManager = context.getSystemService(android.content.Context.AUDIO_SERVICE) as AudioManager
+        fun refreshOutputs() {
+            audioOutputs = readAudioOutputs(context, language)
+        }
+        val callback = object : AudioDeviceCallback() {
+            override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>) {
+                refreshOutputs()
+            }
+            override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>) {
+                refreshOutputs()
+            }
+        }
+        audioManager.registerAudioDeviceCallback(callback, Handler(Looper.getMainLooper()))
+        refreshOutputs()
+        onDispose { audioManager.unregisterAudioDeviceCallback(callback) }
     }
     var listenedSeconds by remember { mutableLongStateOf(prefs.getLong("listened_seconds", 0L)) }
     var favorites by remember {
@@ -856,7 +907,8 @@ private fun NovraApp() {
                                  language = language,
                                  onLanguageChange = { language = it; prefs.edit().putString("language", it).apply() },
                                  wallpaperDim = wallpaperDim,
-                                 onWallpaperDimChange = { wallpaperDim = it; prefs.edit().putFloat("wallpaper_dim", it).apply() }
+                                 onWallpaperDimChange = { wallpaperDim = it; prefs.edit().putFloat("wallpaper_dim", it).apply() },
+                                 audioOutputs = audioOutputs
                             )
                         }
                     }
@@ -2011,7 +2063,8 @@ private fun SettingsScreen(
     onCompactChange: (Boolean) -> Unit, onCardStyleChange: (String) -> Unit,
     pinEnabled: Boolean, onEnablePin: () -> Unit, onChangePin: () -> Unit, onDisablePin: () -> Unit,
     language: String, onLanguageChange: (String) -> Unit,
-    wallpaperDim: Float, onWallpaperDimChange: (Float) -> Unit
+    wallpaperDim: Float, onWallpaperDimChange: (Float) -> Unit,
+    audioOutputs: List<String>
 ) {
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
         Spacer(Modifier.height(20.dp))
@@ -2046,6 +2099,39 @@ private fun SettingsScreen(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(selected = language == "en", onClick = { onLanguageChange("en") }, label = { Text("English") })
                 FilterChip(selected = language == "ar", onClick = { onLanguageChange("ar") }, label = { Text("العربية") })
+            }
+        }
+        Spacer(Modifier.height(18.dp))
+        Text(if (language == "ar") "الصوت والأجهزة" else "AUDIO & DEVICES", color = Accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+        Spacer(Modifier.height(10.dp))
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(CardBg).padding(15.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.Headphones, null, tint = Accent, modifier = Modifier.size(22.dp))
+                Spacer(Modifier.width(9.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(if (language == "ar") "مخارج الصوت المتاحة" else "Available audio outputs", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        if (language == "ar") "تتحدث القائمة تلقائيًا عند توصيل أو فصل سماعة." else "Updates automatically when a headset connects or disconnects.",
+                        color = Muted, fontSize = 10.sp
+                    )
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            if (audioOutputs.isEmpty()) {
+                Text(if (language == "ar") "لا توجد مخارج صوت متاحة حاليًا." else "No audio outputs are currently available.", color = Muted, fontSize = 11.sp)
+            } else {
+                audioOutputs.forEach { output ->
+                    val isBluetooth = output.contains("Bluetooth", ignoreCase = true) || output.contains("بلوتوث")
+                    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            if (isBluetooth) Icons.Rounded.Bluetooth else Icons.Rounded.VolumeUp,
+                            null, tint = if (isBluetooth) Accent else Muted,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text(output, color = TextPrimary, fontSize = 12.sp)
+                    }
+                }
             }
         }
         Spacer(Modifier.height(18.dp))
