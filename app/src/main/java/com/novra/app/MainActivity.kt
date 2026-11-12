@@ -1201,7 +1201,6 @@ private fun VideoNowPlayingScreen(
             delay(180)
         }
     }
-    val accentGlow = Accent.copy(alpha = 0.16f)
     Column(modifier.fillMaxSize().background(AppBg).verticalScroll(rememberScrollState())) {
         Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).background(Color.Black)) {
             AndroidView(
@@ -1311,12 +1310,6 @@ private fun VideoNowPlayingScreen(
                         Text(formatDuration(duration.toLong()), color = Color.White.copy(alpha = 0.78f), fontSize = 10.sp)
                     }
                 }
-            } else {
-                Text(
-                    if (isPlaying) " " else "Ⅱ",
-                    color = Color.White.copy(alpha = 0.7f),
-                    modifier = Modifier.align(Alignment.Center)
-                )
             }
         }
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 15.dp)) {
