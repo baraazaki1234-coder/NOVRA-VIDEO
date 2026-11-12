@@ -485,7 +485,12 @@ private fun NovraApp() {
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_RESUME -> mediaRefresh += 1
+                Lifecycle.Event.ON_RESUME -> {
+                    hasAudioAccess = hasAudioPermission(context)
+                    hasVideoAccess = hasVideoPermission(context)
+                    hasPermission = hasAudioAccess || hasVideoAccess
+                    mediaRefresh += 1
+                }
                 Lifecycle.Event.ON_STOP -> if (AppPinVault.isEnabled(context)) pinLocked = true
                 else -> Unit
             }
