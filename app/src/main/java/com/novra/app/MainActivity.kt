@@ -895,7 +895,7 @@ private fun MediaScreen(
     var mediaFilter by remember(type) { mutableStateOf(if (type == "Favorites") "Favorites" else "All") }
     val ranked = media.mapNotNull { item ->
         mediaSearchScore(item, query)?.let { item to it }
-    }.filter { (mediaFilter != "Favorites" && mediaFilter != "المفضلة") || mediaKey(it.first) in favorites }
+    }.filter { mediaFilter != "Favorites" || mediaKey(it.first) in favorites }
     val sortedMedia = when (sortBy) {
         "Name" -> ranked.sortedBy { it.first.title.lowercase() }.map { it.first }
         "Duration" -> ranked.sortedByDescending { it.first.durationMs }.map { it.first }
@@ -948,15 +948,15 @@ private fun MediaScreen(
         )
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf(if (language == "ar") "الكل" else "All", if (language == "ar") "المفضلة" else "Favorites").forEach { label ->
+            listOf("All" to if (language == "ar") "الكل" else "All", "Favorites" to if (language == "ar") "المفضلة" else "Favorites").forEach { (key, label) ->
                 Surface(
-                    color = if (mediaFilter == label) Accent else CardBg,
+                    color = if (mediaFilter == key) Accent else CardBg,
                     shape = CircleShape,
-                    modifier = Modifier.clickable { mediaFilter = label }
+                    modifier = Modifier.clickable { mediaFilter = key }
                 ) {
                     Text(
                         label,
-                        color = if (mediaFilter == label) AppBg else TextPrimary,
+                        color = if (mediaFilter == key) AppBg else TextPrimary,
                         fontSize = 11.sp,
                         modifier = Modifier.padding(horizontal = 15.dp, vertical = 9.dp)
                     )
