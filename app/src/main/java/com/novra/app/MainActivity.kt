@@ -44,6 +44,9 @@ import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import androidx.media3.ui.PlayerView
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -93,7 +96,13 @@ private fun NovraApp() {
     }
     var selectedMedia by remember { mutableStateOf<LocalMedia?>(null) }
     var listenedSeconds by remember { mutableLongStateOf(prefs.getLong("listened_seconds", 0L)) }
-    val playCounts = remember { mutableStateMapOf<String, Int>() }
+    val playCounts = remember {
+        mutableStateMapOf<String, Int>().apply {
+            prefs.all.forEach { (key, value) ->
+                if (key.startsWith("play_count_") && value is Int) put(key, value)
+            }
+        }
+    }
     var isPlaying by remember { mutableStateOf(false) }
     DisposableEffect(controller) {
         val listener = object : Player.Listener {
@@ -167,6 +176,15 @@ private fun NovraApp() {
         })
     }
     var loading by remember { mutableStateOf(false) }
+    var mediaRefresh by remember { mutableIntStateOf(0) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) mediaRefresh += 1
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { result ->
@@ -175,7 +193,7 @@ private fun NovraApp() {
         }
     }
 
-    LaunchedEffect(hasPermission) {
+    LaunchedEffect(hasPermission, mediaRefresh) {
         if (hasPermission) {
             loading = true
             val result = withContext(Dispatchers.IO) {
