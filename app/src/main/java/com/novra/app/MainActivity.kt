@@ -885,12 +885,17 @@ private fun MediaArtwork(media: LocalMedia, modifier: Modifier = Modifier) {
         value = withContext(Dispatchers.IO) {
             runCatching {
                 if (media.isVideo && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    context.contentResolver.loadThumbnail(media.uri, Size(512, 512), null)
+                    context.contentResolver.loadThumbnail(media.uri, Size(256, 256), null)
                 } else if (!media.isVideo) {
                     val retriever = MediaMetadataRetriever()
                     try {
                         retriever.setDataSource(context, media.uri)
-                        retriever.embeddedPicture?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
+                        retriever.embeddedPicture?.let { imageBytes ->
+                            BitmapFactory.decodeByteArray(
+                                imageBytes, 0, imageBytes.size,
+                                BitmapFactory.Options().apply { inSampleSize = 4 }
+                            )
+                        }
                     } finally {
                         retriever.release()
                     }
