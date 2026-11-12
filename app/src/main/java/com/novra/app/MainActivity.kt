@@ -1545,11 +1545,13 @@ private fun MediaArtwork(media: LocalMedia, modifier: Modifier = Modifier) {
                     if (media.isVideo) {
                         // Prefer Android's generated thumbnail, then fall back to
                         // decoding an actual frame for providers that omit it.
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                            runCatching {
-                                context.contentResolver.loadThumbnail(media.uri, Size(256, 256), null)
-                            }.getOrNull()
-                        } ?: retriever.getFrameAtTime(
+                        val generatedThumbnail: Bitmap? =
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                runCatching {
+                                    context.contentResolver.loadThumbnail(media.uri, Size(256, 256), null)
+                                }.getOrNull()
+                            } else null
+                        generatedThumbnail ?: retriever.getFrameAtTime(
                             0L,
                             MediaMetadataRetriever.OPTION_CLOSEST_SYNC
                         )?.let { frame ->
