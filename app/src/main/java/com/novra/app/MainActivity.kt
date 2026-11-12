@@ -267,7 +267,15 @@ private fun NovraApp() {
             if (showNowPlaying && selectedMedia != null) {
                 NowPlayingScreen(Modifier.padding(padding), selectedMedia!!, controller, onBack = { showNowPlaying = false })
             } else when (selected) {
-                "Home" -> HomeScreen(Modifier.padding(padding), videos.size, tracks.size) { selected = it }
+                "Home" -> HomeScreen(
+                    Modifier.padding(padding), videos.size, tracks.size,
+                    tracks.map { track ->
+                        val key = "play_count_audio_${track.id}"
+                        track to (playCounts[key] ?: 0)
+                    }.filter { it.second > 0 }.sortedByDescending { it.second }.take(5),
+                    navigate = { selected = it },
+                    onPlay = { startMedia(it, tracks) }
+                )
                 "Videos" -> MediaScreen(
                     Modifier.padding(padding), "Videos", videos, loading, hasPermission,
                     onGrant = { permissionLauncher.launch(mediaPermissions()) },
@@ -295,7 +303,11 @@ private fun NovraApp() {
 }
 
 @Composable
-private fun HomeScreen(modifier: Modifier, videoCount: Int, musicCount: Int, navigate: (String) -> Unit) {
+private fun HomeScreen(
+    modifier: Modifier, videoCount: Int, musicCount: Int,
+    topTracks: List<Pair<LocalMedia, Int>>,
+    navigate: (String) -> Unit, onPlay: (LocalMedia) -> Unit
+) {
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
         Spacer(Modifier.height(22.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -321,6 +333,28 @@ private fun HomeScreen(modifier: Modifier, videoCount: Int, musicCount: Int, nav
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             CountCard("VIDEOS", videoCount.toString(), Icons.Rounded.Movie, Modifier.weight(1f)) { navigate("Videos") }
             CountCard("SONGS", musicCount.toString(), Icons.Rounded.MusicNote, Modifier.weight(1f)) { navigate("Music") }
+        }
+        if (topTracks.isNotEmpty()) {
+            Spacer(Modifier.height(24.dp))
+            Text("MOST PLAYED", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+            Spacer(Modifier.height(10.dp))
+            topTracks.forEachIndexed { index, entry ->
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(CardBg)
+                        .clickable { onPlay(entry.first) }.padding(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("${index + 1}", color = Muted, fontSize = 12.sp, modifier = Modifier.width(22.dp))
+                    MediaArtwork(entry.first, Modifier.size(42.dp).clip(RoundedCornerShape(9.dp)))
+                    Spacer(Modifier.width(11.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(entry.first.title, color = Color.White, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text("${entry.second} plays", color = Muted, fontSize = 10.sp)
+                    }
+                    Icon(Icons.Rounded.PlayArrow, null, tint = Accent)
+                }
+                Spacer(Modifier.height(7.dp))
+            }
         }
         Spacer(Modifier.height(24.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
