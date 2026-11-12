@@ -62,11 +62,25 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
-private val AppBg = Color(0xFF101310)
-private val CardBg = Color(0xFF1D241F)
-private val CardAlt = Color(0xFF2A332D)
-private val Muted = Color(0xFFA7B0A8)
-private val Accent = Color(0xFFC7E8D1)
+private data class NovraPalette(
+    val background: Color, val surface: Color, val surfaceVariant: Color,
+    val muted: Color, val accent: Color, val text: Color
+)
+private val DarkPalette = NovraPalette(
+    Color(0xFF101310), Color(0xFF1D241F), Color(0xFF2A332D),
+    Color(0xFFA7B0A8), Color(0xFFC7E8D1), Color(0xFFFFFFFF)
+)
+private val LightPalette = NovraPalette(
+    Color(0xFFF3F6F3), Color(0xFFFFFFFF), Color(0xFFE5ECE7),
+    Color(0xFF66736A), Color(0xFF286B47), Color(0xFF17221A)
+)
+private val LocalNovraPalette = staticCompositionLocalOf { DarkPalette }
+private val AppBg: Color @Composable get() = LocalNovraPalette.current.background
+private val CardBg: Color @Composable get() = LocalNovraPalette.current.surface
+private val CardAlt: Color @Composable get() = LocalNovraPalette.current.surfaceVariant
+private val Muted: Color @Composable get() = LocalNovraPalette.current.muted
+private val Accent: Color @Composable get() = LocalNovraPalette.current.accent
+private val TextPrimary: Color @Composable get() = LocalNovraPalette.current.text
 
 data class UserPlaylist(val name: String, val mediaKeys: List<String>)
 
@@ -102,6 +116,8 @@ private fun NovraApp() {
     var wallpaperUri by remember { mutableStateOf(prefs.getString("wallpaper_uri", null)?.let(Uri::parse)) }
     var compactCards by remember { mutableStateOf(prefs.getBoolean("compact_cards", false)) }
     var cardStyle by remember { mutableStateOf(prefs.getString("card_style", "rounded") ?: "rounded") }
+    var themeMode by remember { mutableStateOf(prefs.getString("theme_mode", "dark") ?: "dark") }
+    val palette = if (themeMode == "light") LightPalette else DarkPalette
     val wallpaperPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             runCatching { context.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION) }
@@ -253,10 +269,14 @@ private fun NovraApp() {
         }
     }
 
-    MaterialTheme(colorScheme = darkColorScheme(
-        background = AppBg, surface = CardBg, primary = Accent,
-        onBackground = Color.White, onSurface = Color.White
-    )) {
+    CompositionLocalProvider(LocalNovraPalette provides palette) {
+        MaterialTheme(colorScheme = if (themeMode == "light") lightColorScheme(
+            background = AppBg, surface = CardBg, surfaceVariant = CardAlt,
+            primary = Accent, onBackground = TextPrimary, onSurface = TextPrimary
+        ) else darkColorScheme(
+            background = AppBg, surface = CardBg, surfaceVariant = CardAlt,
+            primary = Accent, onBackground = TextPrimary, onSurface = TextPrimary
+        )) {
         Box(Modifier.fillMaxSize()) {
             if (wallpaperUri != null) {
                 AsyncImage(
@@ -275,11 +295,11 @@ private fun NovraApp() {
                             Icon(if (selectedMedia?.isVideo == true) Icons.Rounded.PlayCircle else Icons.Rounded.GraphicEq, null, tint = Accent)
                             Spacer(Modifier.width(10.dp))
                             Column(Modifier.weight(1f)) {
-                                Text(selectedMedia?.title.orEmpty(), color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 12.sp)
+                                Text(selectedMedia?.title.orEmpty(), color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 12.sp)
                                 Text("NOW PLAYING", color = Muted, fontSize = 9.sp)
                             }
                             IconButton(onClick = { controller?.let { if (it.isPlaying) it.pause() else it.play() } }) {
-                                Icon(if (controller?.isPlaying == true) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, null, tint = Color.White)
+                                Icon(if (controller?.isPlaying == true) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, null, tint = TextPrimary)
                             }
                             IconButton(onClick = { controller?.stop(); selectedMedia = null }) { Icon(Icons.Rounded.Close, null, tint = Muted) }
                         }
@@ -346,7 +366,8 @@ private fun NovraApp() {
                     onPlay = { items -> if (items.isNotEmpty()) startMedia(items.first(), items) }
                 )
                 else -> SettingsScreen(
-                    Modifier.padding(padding), wallpaperUri, compactCards, cardStyle, listenedSeconds,
+                    Modifier.padding(padding), wallpaperUri, compactCards, cardStyle, listenedSeconds, themeMode,
+                    onThemeChange = { themeMode = it; prefs.edit().putString("theme_mode", it).apply() },
                     onChooseWallpaper = { wallpaperPicker.launch(arrayOf("image/*")) },
                     onClearWallpaper = { wallpaperUri = null; prefs.edit().remove("wallpaper_uri").apply() },
                     onCompactChange = { compactCards = it; prefs.edit().putBoolean("compact_cards", it).apply() },
@@ -354,6 +375,7 @@ private fun NovraApp() {
                 )
             }
             }
+        }
         }
     }
 }
@@ -368,16 +390,16 @@ private fun HomeScreen(
         Spacer(Modifier.height(22.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("NOVRA", color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Black, letterSpacing = 3.sp)
+                Text("NOVRA", color = TextPrimary, fontSize = 25.sp, fontWeight = FontWeight.Black, letterSpacing = 3.sp)
                 Text("Play your world.", color = Muted, fontSize = 11.sp)
             }
-            IconButton(onClick = { navigate("Videos") }) { Icon(Icons.Rounded.Search, "Search", tint = Color.White) }
-            IconButton(onClick = { navigate("Playlists") }) { Icon(Icons.Rounded.MoreHoriz, "More", tint = Color.White) }
+            IconButton(onClick = { navigate("Videos") }) { Icon(Icons.Rounded.Search, "Search", tint = TextPrimary) }
+            IconButton(onClick = { navigate("Playlists") }) { Icon(Icons.Rounded.MoreHoriz, "More", tint = TextPrimary) }
         }
         Spacer(Modifier.height(25.dp))
         Text("YOUR ENTERTAINMENT", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
         Spacer(Modifier.height(7.dp))
-        Text("What feels like\nplaying today?", color = Color.White, fontSize = 33.sp, lineHeight = 38.sp, fontWeight = FontWeight.Bold)
+        Text("What feels like\nplaying today?", color = TextPrimary, fontSize = 33.sp, lineHeight = 38.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(21.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             HomeTile("VIDEO PLAYER", "Watch your videos", Icons.Rounded.PlayCircle, Brush.linearGradient(listOf(Color(0xFF536E61), Color(0xFF293C35))), Modifier.weight(1f)) { navigate("Videos") }
@@ -404,7 +426,7 @@ private fun HomeScreen(
                     MediaArtwork(entry.first, Modifier.size(42.dp).clip(RoundedCornerShape(9.dp)))
                     Spacer(Modifier.width(11.dp))
                     Column(Modifier.weight(1f)) {
-                        Text(entry.first.title, color = Color.White, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(entry.first.title, color = TextPrimary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text("${entry.second} plays", color = Muted, fontSize = 10.sp)
                     }
                     Icon(Icons.Rounded.PlayArrow, null, tint = Accent)
@@ -414,7 +436,7 @@ private fun HomeScreen(
         }
         Spacer(Modifier.height(24.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("Quick access", color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            Text("Quick access", color = TextPrimary, fontSize = 19.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
             Text("SEE ALL", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
         }
         Spacer(Modifier.height(10.dp))
@@ -426,7 +448,7 @@ private fun HomeScreen(
                     else -> Icons.Rounded.History
                 }, null, tint = Accent)
                 Spacer(Modifier.width(13.dp))
-                Text(label, color = Color.White, modifier = Modifier.weight(1f), fontSize = 13.sp)
+                Text(label, color = TextPrimary, modifier = Modifier.weight(1f), fontSize = 13.sp)
                 Icon(Icons.Rounded.ChevronRight, null, tint = Muted)
             }
             Spacer(Modifier.height(8.dp))
@@ -438,11 +460,11 @@ private fun HomeScreen(
 @Composable
 private fun HomeTile(tag: String, title: String, icon: androidx.compose.ui.graphics.vector.ImageVector, brush: Brush, modifier: Modifier, onClick: () -> Unit) {
     Column(modifier.clip(RoundedCornerShape(22.dp)).background(brush).clickable(onClick = onClick).padding(15.dp)) {
-        Icon(icon, null, tint = Color.White, modifier = Modifier.size(30.dp))
+        Icon(icon, null, tint = TextPrimary, modifier = Modifier.size(30.dp))
         Spacer(Modifier.height(26.dp))
-        Text(tag, color = Color.White.copy(alpha = 0.7f), fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+        Text(tag, color = TextPrimary.copy(alpha = 0.7f), fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
         Spacer(Modifier.height(4.dp))
-        Text(title, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        Text(title, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -451,7 +473,7 @@ private fun CountCard(label: String, count: String, icon: androidx.compose.ui.gr
     Column(modifier.clip(RoundedCornerShape(18.dp)).background(CardBg).clickable(onClick = onClick).padding(15.dp)) {
         Icon(icon, null, tint = Accent)
         Spacer(Modifier.height(12.dp))
-        Text(count, color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Text(count, color = TextPrimary, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Text(label, color = Muted, fontSize = 9.sp, letterSpacing = 1.sp)
     }
 }
@@ -467,8 +489,8 @@ private fun MediaScreen(
     Column(modifier.fillMaxSize().padding(horizontal = 18.dp)) {
         Spacer(Modifier.height(22.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(type, color = Color.White, fontSize = 29.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-            IconButton(onClick = { sortNewest = !sortNewest }) { Icon(Icons.Rounded.Sort, "Sort", tint = Color.White) }
+            Text(type, color = TextPrimary, fontSize = 29.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            IconButton(onClick = { sortNewest = !sortNewest }) { Icon(Icons.Rounded.Sort, "Sort", tint = TextPrimary) }
         }
         Text(if (type == "Videos") "Your video collection" else "Your music collection", color = Muted, fontSize = 12.sp)
         Spacer(Modifier.height(17.dp))
@@ -481,7 +503,7 @@ private fun MediaScreen(
             shape = RoundedCornerShape(16.dp),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = Accent, unfocusedBorderColor = CardAlt,
-                focusedTextColor = Color.White, unfocusedTextColor = Color.White,
+                focusedTextColor = TextPrimary, unfocusedTextColor = TextPrimary,
                 cursorColor = Accent
             )
         )
@@ -489,7 +511,7 @@ private fun MediaScreen(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf("All", "Folders", "Favorites").forEachIndexed { index, label ->
                 Surface(color = if (index == 0) Accent else CardBg, shape = CircleShape) {
-                    Text(label, color = if (index == 0) AppBg else Color.White, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 15.dp, vertical = 9.dp))
+                    Text(label, color = if (index == 0) AppBg else TextPrimary, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 15.dp, vertical = 9.dp))
                 }
             }
         }
@@ -498,7 +520,7 @@ private fun MediaScreen(
             !hasPermission -> Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                 Icon(Icons.Rounded.FolderOpen, null, tint = Accent, modifier = Modifier.size(45.dp))
                 Spacer(Modifier.height(14.dp))
-                Text("Allow media access", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                Text("Allow media access", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
                 Text("NOVRA needs permission to show your $type.", color = Muted, fontSize = 12.sp)
                 Spacer(Modifier.height(14.dp))
                 Button(onClick = onGrant) { Text("Grant access") }
@@ -507,7 +529,7 @@ private fun MediaScreen(
             filtered.isEmpty() -> Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                 Icon(if (type == "Videos") Icons.Rounded.OndemandVideo else Icons.Rounded.MusicNote, null, tint = Accent, modifier = Modifier.size(42.dp))
                 Spacer(Modifier.height(12.dp))
-                Text(if (query.isBlank()) "Nothing here yet" else "No results found", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                Text(if (query.isBlank()) "Nothing here yet" else "No results found", color = TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
                 Text(if (query.isBlank()) "Media on your device will appear here." else "Try another search.", color = Muted, fontSize = 11.sp)
             }
             else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(9.dp)) {
@@ -517,7 +539,7 @@ private fun MediaScreen(
                         MediaArtwork(item, Modifier.size(if (compactCards) 42.dp else 54.dp).clip(if (cardStyle == "square") RoundedCornerShape(5.dp) else RoundedCornerShape(13.dp)))
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
-                            Text(item.title, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(item.title, color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Spacer(Modifier.height(4.dp))
                             val countKey = "play_count_${if (item.isVideo) "video" else "audio"}_${item.id}"
                             Text("${formatDuration(item.durationMs)}  •  ${playCounts[countKey] ?: 0} plays", color = Muted, fontSize = 10.sp)
@@ -605,8 +627,8 @@ private fun NowPlayingScreen(modifier: Modifier, media: LocalMedia, controller: 
     }
     Column(modifier.fillMaxSize().padding(18.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.Rounded.KeyboardArrowDown, "Back", tint = Color.White) }
-            Text("Now Playing", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            IconButton(onClick = onBack) { Icon(Icons.Rounded.KeyboardArrowDown, "Back", tint = TextPrimary) }
+            Text("Now Playing", color = TextPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
         }
         Spacer(Modifier.height(18.dp))
         if (media.isVideo) {
@@ -619,7 +641,7 @@ private fun NowPlayingScreen(modifier: Modifier, media: LocalMedia, controller: 
             MediaArtwork(media, Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(24.dp)))
         }
         Spacer(Modifier.height(22.dp))
-        Text(media.title, color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text(media.title, color = TextPrimary, fontSize = 21.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
         Text(if (media.isVideo) "Video" else "Audio", color = Muted, fontSize = 12.sp)
         Spacer(Modifier.height(12.dp))
         Slider(
@@ -643,11 +665,11 @@ private fun NowPlayingScreen(modifier: Modifier, media: LocalMedia, controller: 
                 IconButton(onClick = { shuffle = !shuffle; controller?.shuffleModeEnabled = shuffle }) {
                     Icon(Icons.Rounded.Shuffle, "Shuffle", tint = if (shuffle) Accent else Muted)
                 }
-                IconButton(onClick = { controller?.seekToPreviousMediaItem() }) { Icon(Icons.Rounded.SkipPrevious, null, tint = Color.White, modifier = Modifier.size(34.dp)) }
+                IconButton(onClick = { controller?.seekToPreviousMediaItem() }) { Icon(Icons.Rounded.SkipPrevious, null, tint = TextPrimary, modifier = Modifier.size(34.dp)) }
                 IconButton(onClick = { controller?.let { if (it.isPlaying) it.pause() else it.play() } }) {
                     Icon(if (controller?.isPlaying == true) Icons.Rounded.PauseCircleFilled else Icons.Rounded.PlayCircle, null, tint = Accent, modifier = Modifier.size(58.dp))
                 }
-                IconButton(onClick = { controller?.seekToNextMediaItem() }) { Icon(Icons.Rounded.SkipNext, null, tint = Color.White, modifier = Modifier.size(34.dp)) }
+                IconButton(onClick = { controller?.seekToNextMediaItem() }) { Icon(Icons.Rounded.SkipNext, null, tint = TextPrimary, modifier = Modifier.size(34.dp)) }
                 IconButton(onClick = {
                     repeatMode = when (repeatMode) {
                         Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ONE
@@ -712,7 +734,7 @@ private fun NowPlayingScreen(modifier: Modifier, media: LocalMedia, controller: 
                     MediaArtwork(item, Modifier.size(42.dp).clip(RoundedCornerShape(8.dp)))
                     Spacer(Modifier.width(10.dp))
                     Column(Modifier.weight(1f)) {
-                        Text(item.title, color = if (isCurrent) Accent else Color.White, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(item.title, color = if (isCurrent) Accent else TextPrimary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(if (isCurrent) "Now playing" else formatDuration(item.durationMs), color = Muted, fontSize = 10.sp)
                     }
                     if (isCurrent) Icon(Icons.Rounded.VolumeUp, null, tint = Accent, modifier = Modifier.size(17.dp))
@@ -725,19 +747,29 @@ private fun NowPlayingScreen(modifier: Modifier, media: LocalMedia, controller: 
 
 @Composable
 private fun SettingsScreen(
-    modifier: Modifier, wallpaperUri: Uri?, compactCards: Boolean, cardStyle: String, listenedSeconds: Long,
-    onChooseWallpaper: () -> Unit, onClearWallpaper: () -> Unit,
+    modifier: Modifier, wallpaperUri: Uri?, compactCards: Boolean, cardStyle: String, listenedSeconds: Long, themeMode: String,
+    onThemeChange: (String) -> Unit, onChooseWallpaper: () -> Unit, onClearWallpaper: () -> Unit,
     onCompactChange: (Boolean) -> Unit, onCardStyleChange: (String) -> Unit
 ) {
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
         Spacer(Modifier.height(20.dp))
-        Text("Settings", color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+        Text("Settings", color = TextPrimary, fontSize = 30.sp, fontWeight = FontWeight.Bold)
         Text("Make NOVRA feel like yours.", color = Muted, fontSize = 13.sp)
         Spacer(Modifier.height(24.dp))
         Text("APPEARANCE", color = Accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
         Spacer(Modifier.height(10.dp))
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(CardBg).padding(15.dp)) {
-            Text("App background", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Text("Color theme", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Text("Choose the look that feels right.", color = Muted, fontSize = 11.sp)
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(selected = themeMode == "dark", onClick = { onThemeChange("dark") }, label = { Text("Dark") }, leadingIcon = { Icon(Icons.Rounded.DarkMode, null) })
+                FilterChip(selected = themeMode == "light", onClick = { onThemeChange("light") }, label = { Text("Light") }, leadingIcon = { Icon(Icons.Rounded.LightMode, null) })
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(CardBg).padding(15.dp)) {
+            Text("App background", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
             Text("Choose a picture from your gallery as your personal background.", color = Muted, fontSize = 11.sp)
             if (wallpaperUri != null) {
                 Spacer(Modifier.height(12.dp))
@@ -751,16 +783,16 @@ private fun SettingsScreen(
         }
         Spacer(Modifier.height(12.dp))
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(CardBg).padding(15.dp)) {
-            Text("Media cards", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Text("Media cards", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text("Compact cards", color = Color.White, fontSize = 13.sp)
+                    Text("Compact cards", color = TextPrimary, fontSize = 13.sp)
                     Text("Show more songs and videos on screen.", color = Muted, fontSize = 10.sp)
                 }
                 Switch(checked = compactCards, onCheckedChange = onCompactChange)
             }
             HorizontalDivider(color = CardAlt)
-            Text("Card corners", color = Color.White, fontSize = 13.sp)
+            Text("Card corners", color = TextPrimary, fontSize = 13.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(selected = cardStyle == "rounded", onClick = { onCardStyleChange("rounded") }, label = { Text("Rounded") })
                 FilterChip(selected = cardStyle == "square", onClick = { onCardStyleChange("square") }, label = { Text("Square") })
@@ -768,7 +800,7 @@ private fun SettingsScreen(
         }
         Spacer(Modifier.height(12.dp))
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(CardBg).padding(15.dp)) {
-            Text("Total playback time", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Text("Total playback time", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
             Text(formatDuration(listenedSeconds * 1000L), color = Accent, fontSize = 27.sp, fontWeight = FontWeight.Bold)
             Text("Total time NOVRA has spent playing media on this device.", color = Muted, fontSize = 11.sp)
             Spacer(Modifier.height(10.dp))
@@ -798,7 +830,7 @@ private fun PlaylistsScreen(
         Spacer(Modifier.height(20.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Playlists", color = Color.White, fontSize = 29.sp, fontWeight = FontWeight.Bold)
+                Text("Playlists", color = TextPrimary, fontSize = 29.sp, fontWeight = FontWeight.Bold)
                 Text("${playlists.size} personal playlists", color = Muted, fontSize = 12.sp)
             }
             Button(onClick = { newName = ""; showCreate = true }) {
@@ -812,7 +844,7 @@ private fun PlaylistsScreen(
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(CardBg).padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Icon(Icons.Rounded.QueueMusic, null, tint = Accent, modifier = Modifier.size(38.dp))
                 Spacer(Modifier.height(10.dp))
-                Text("Your playlists start here", color = Color.White, fontWeight = FontWeight.SemiBold)
+                Text("Your playlists start here", color = TextPrimary, fontWeight = FontWeight.SemiBold)
                 Text("Create a playlist, then add songs or videos from your device.", color = Muted, fontSize = 12.sp)
             }
         }
@@ -823,7 +855,7 @@ private fun PlaylistsScreen(
                     Icon(Icons.Rounded.QueueMusic, null, tint = Accent, modifier = Modifier.size(26.dp))
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
-                        Text(playlist.name, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                        Text(playlist.name, color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                         Text("${items.size} items", color = Muted, fontSize = 11.sp)
                     }
                     IconButton(onClick = { addToPlaylist = playlist.name }) { Icon(Icons.Rounded.Add, "Add media", tint = Accent) }
@@ -879,7 +911,7 @@ private fun PlaylistsScreen(
                             MediaArtwork(item, Modifier.size(38.dp).clip(RoundedCornerShape(8.dp)))
                             Spacer(Modifier.width(10.dp))
                             Column(Modifier.weight(1f)) {
-                                Text(item.title, color = Color.White, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(item.title, color = TextPrimary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 Text(if (item.isVideo) "Video" else "Audio", color = Muted, fontSize = 10.sp)
                             }
                             Icon(Icons.Rounded.AddCircleOutline, null, tint = Accent)
