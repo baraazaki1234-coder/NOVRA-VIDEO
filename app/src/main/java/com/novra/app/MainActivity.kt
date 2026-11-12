@@ -44,6 +44,7 @@ import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import androidx.media3.ui.PlayerView
 import androidx.core.content.ContextCompat
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -91,6 +92,32 @@ private fun NovraApp() {
         }
     }
     var selectedMedia by remember { mutableStateOf<LocalMedia?>(null) }
+    var listenedSeconds by remember { mutableLongStateOf(prefs.getLong("listened_seconds", 0L)) }
+    val playCounts = remember { mutableStateMapOf<String, Int>() }
+    var isPlaying by remember { mutableStateOf(false) }
+    DisposableEffect(controller) {
+        val listener = object : Player.Listener {
+            override fun onIsPlayingChanged(playing: Boolean) { isPlaying = playing }
+        }
+        controller?.addListener(listener)
+        onDispose { controller?.removeListener(listener) }
+    }
+    LaunchedEffect(isPlaying, selectedMedia) {
+        while (isPlaying && selectedMedia != null) {
+            delay(1000)
+            listenedSeconds += 1
+            if (listenedSeconds % 15L == 0L) prefs.edit().putLong("listened_seconds", listenedSeconds).apply()
+        }
+    }
+    fun startMedia(item: LocalMedia, queue: List<LocalMedia>) {
+        selectedMedia = item
+        playQueue = queue
+        showNowPlaying = true
+        val key = "play_count_${if (item.isVideo) "video" else "audio"}_${item.id}"
+        val count = prefs.getInt(key, 0) + 1
+        prefs.edit().putInt(key, count).apply()
+        playCounts[key] = count
+    }
     var playQueue by remember { mutableStateOf<List<LocalMedia>>(emptyList()) }
     var showNowPlaying by remember { mutableStateOf(false) }
     var controller by remember { mutableStateOf<MediaController?>(null) }
@@ -222,17 +249,17 @@ private fun NovraApp() {
                     Modifier.padding(padding), "Videos", videos, loading, hasPermission,
                     onGrant = { permissionLauncher.launch(mediaPermissions()) },
                     compactCards = compactCards, cardStyle = cardStyle,
-                    onPlay = { item -> selectedMedia = item; playQueue = videos; showNowPlaying = true }
+                    playCounts = playCounts, onPlay = { item -> startMedia(item, videos) }
                 )
                 "Music" -> MediaScreen(
                     Modifier.padding(padding), "Music", tracks, loading, hasPermission,
                     onGrant = { permissionLauncher.launch(mediaPermissions()) },
                     compactCards = compactCards, cardStyle = cardStyle,
-                    onPlay = { item -> selectedMedia = item; playQueue = tracks; showNowPlaying = true }
+                    playCounts = playCounts, onPlay = { item -> startMedia(item, tracks) }
                 )
                 "Playlists" -> PlaylistsScreen(Modifier.padding(padding))
                 else -> SettingsScreen(
-                    Modifier.padding(padding), wallpaperUri, compactCards, cardStyle,
+                    Modifier.padding(padding), wallpaperUri, compactCards, cardStyle, listenedSeconds,
                     onChooseWallpaper = { wallpaperPicker.launch(arrayOf("image/*")) },
                     onClearWallpaper = { wallpaperUri = null; prefs.edit().remove("wallpaper_uri").apply() },
                     onCompactChange = { compactCards = it; prefs.edit().putBoolean("compact_cards", it).apply() },
@@ -319,7 +346,7 @@ private fun CountCard(label: String, count: String, icon: androidx.compose.ui.gr
 @Composable
 private fun MediaScreen(
     modifier: Modifier, type: String, media: List<LocalMedia>, loading: Boolean,
-    hasPermission: Boolean, onGrant: () -> Unit, compactCards: Boolean, cardStyle: String, onPlay: (LocalMedia) -> Unit
+    hasPermission: Boolean, onGrant: () -> Unit, compactCards: Boolean, cardStyle: String, playCounts: Map<String, Int>, onPlay: (LocalMedia) -> Unit
 ) {
     var query by remember { mutableStateOf("") }
     var sortNewest by remember { mutableStateOf(true) }
@@ -381,7 +408,8 @@ private fun MediaScreen(
                         Column(Modifier.weight(1f)) {
                             Text(item.title, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Spacer(Modifier.height(4.dp))
-                            Text(formatDuration(item.durationMs), color = Muted, fontSize = 10.sp)
+                            val countKey = "play_count_${if (item.isVideo) "video" else "audio"}_${item.id}"
+                            Text("${formatDuration(item.durationMs)}  •  ${playCounts[countKey] ?: 0} plays", color = Muted, fontSize = 10.sp)
                         }
                         IconButton(onClick = { }) { Icon(Icons.Rounded.MoreVert, "More", tint = Muted) }
                     }
@@ -457,7 +485,7 @@ private fun NowPlayingScreen(modifier: Modifier, media: LocalMedia, controller: 
 
 @Composable
 private fun SettingsScreen(
-    modifier: Modifier, wallpaperUri: Uri?, compactCards: Boolean, cardStyle: String,
+    modifier: Modifier, wallpaperUri: Uri?, compactCards: Boolean, cardStyle: String, listenedSeconds: Long,
     onChooseWallpaper: () -> Unit, onClearWallpaper: () -> Unit,
     onCompactChange: (Boolean) -> Unit, onCardStyleChange: (String) -> Unit
 ) {
@@ -500,7 +528,10 @@ private fun SettingsScreen(
         }
         Spacer(Modifier.height(12.dp))
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(CardBg).padding(15.dp)) {
-            Text("Playback", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Text("Your listening time", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Text(formatDuration(listenedSeconds * 1000L), color = Accent, fontSize = 27.sp, fontWeight = FontWeight.Bold)
+            Text("Total time NOVRA has spent playing media on this device.", color = Muted, fontSize = 11.sp)
+            Spacer(Modifier.height(10.dp))
             Text("Video picture-in-picture is enabled when you leave NOVRA while a video is playing. Music playback continues through the media session.", color = Muted, fontSize = 11.sp)
         }
         Spacer(Modifier.height(20.dp))
