@@ -13,6 +13,9 @@ import android.database.ContentObserver
 import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import android.webkit.WebChromeClient
 import android.media.MediaMetadataRetriever
 import android.util.Size
 import android.util.LruCache
@@ -32,6 +35,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
@@ -375,6 +379,13 @@ private fun NovraApp() {
         (context as? MainActivity)?.apply {
             pipController = controller
             pipVideoActive = selectedMedia?.isVideo == true
+            window.statusBarColor = android.graphics.Color.TRANSPARENT
+            window.navigationBarColor = android.graphics.Color.TRANSPARENT
+            androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
+            androidx.core.view.WindowInsetsControllerCompat(window, window.decorView).apply {
+                isAppearanceLightStatusBars = isLightTheme
+                isAppearanceLightNavigationBars = isLightTheme
+            }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 setPictureInPictureParams(PictureInPictureParams.Builder()
                     .setAspectRatio(Rational(16, 9))
@@ -570,7 +581,7 @@ private fun NovraApp() {
                     }
                 }
             ) {
-                Box(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
+                Box(Modifier.fillMaxSize().background(AppBg).statusBarsPadding().navigationBarsPadding()) {
                     if (wallpaperUri != null) {
                         AsyncImage(
                             model = wallpaperUri,
@@ -796,55 +807,118 @@ private fun OnlineSearchScreen(language: String) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var query by remember { mutableStateOf("") }
     var provider by remember { mutableStateOf("web") }
-    fun openSearch(term: String) {
-        val clean = term.trim()
-        if (clean.isBlank()) return
-        val target = when (provider) {
-            "youtube" -> "https://www.youtube.com/results?search_query=${Uri.encode(clean)}"
-            "spotify" -> "https://open.spotify.com/search/${Uri.encode(clean)}"
-            else -> "https://www.google.com/search?q=${Uri.encode(clean)}"
+    var submittedUrl by remember { mutableStateOf<String?>(null) }
+    var canGoBack by remember { mutableStateOf(false) }
+    var canGoForward by remember { mutableStateOf(false) }
+    val webView = remember(context) {
+        WebView(context).apply {
+            settings.javaScriptEnabled = true
+            settings.domStorageEnabled = true
+            settings.loadsImagesAutomatically = true
+            settings.javaScriptCanOpenWindowsAutomatically = false
+            settings.setSupportMultipleWindows(false)
+            settings.builtInZoomControls = false
+            settings.displayZoomControls = false
+            webViewClient = object : WebViewClient() {
+                override fun onPageFinished(view: WebView, url: String?) {
+                    canGoBack = view.canGoBack()
+                    canGoForward = view.canGoForward()
+                }
+            }
+            webChromeClient = WebChromeClient()
+            setBackgroundColor(android.graphics.Color.rgb(16, 19, 16))
         }
-        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(target))) }
     }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
-        Spacer(Modifier.height(18.dp))
-        Text(if (language == "ar") "استكشف على الإنترنت" else "Explore online", color = TextPrimary, fontSize = 28.sp, fontWeight = FontWeight.Bold)
-        Text(
-            if (language == "ar") "ابحث خارج مكتبتك المحلية عن فنانين وأغانٍ وفيديوهات." else "Search beyond your device library for artists, songs and videos.",
-            color = Muted, fontSize = 13.sp
-        )
-        Spacer(Modifier.height(22.dp))
+    DisposableEffect(webView) {
+        onDispose { webView.stopLoading(); webView.destroy() }
+    }
+    fun submitSearch() {
+        val clean = query.trim()
+        if (clean.isBlank()) return
+        val encoded = Uri.encode(clean)
+        submittedUrl = when (provider) {
+            "youtube" -> "https://m.youtube.com/results?search_query=$encoded"
+            "spotify" -> "https://open.spotify.com/search/$encoded"
+            else -> "https://www.google.com/search?q=$encoded"
+        }
+    }
+    LaunchedEffect(submittedUrl) {
+        submittedUrl?.let { url -> if (webView.url != url) webView.loadUrl(url) }
+    }
+    BackHandler(enabled = canGoBack) { webView.goBack() }
+
+    Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(if (language == "ar") "استكشف" else "Explore", color = TextPrimary, fontSize = 27.sp, fontWeight = FontWeight.Bold)
+                Text(if (language == "ar") "ابحث واكتشف من داخل NOVRA" else "Discover without leaving NOVRA", color = Muted, fontSize = 12.sp)
+            }
+            if (submittedUrl != null) {
+                IconButton(onClick = { webView.reload() }) { Icon(Icons.Rounded.Refresh, if (language == "ar") "تحديث" else "Refresh", tint = Muted) }
+            }
+        }
+        Spacer(Modifier.height(13.dp))
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
             shape = RoundedCornerShape(17.dp),
-            placeholder = { Text(if (language == "ar") "اسم فنان أو أغنية أو فيديو" else "Artist, song or video", color = Muted) },
-            leadingIcon = { Icon(Icons.Rounded.Public, null, tint = Accent) },
+            placeholder = { Text(if (language == "ar") "فنان، أغنية، ألبوم أو فيديو..." else "Artist, song, album or video...", color = Muted) },
+            leadingIcon = { Icon(Icons.Rounded.Search, null, tint = Accent) },
+            trailingIcon = {
+                if (query.isNotBlank()) IconButton(onClick = { query = ""; submittedUrl = null }) {
+                    Icon(Icons.Rounded.Close, if (language == "ar") "مسح" else "Clear", tint = Muted)
+                }
+            },
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = Accent, unfocusedBorderColor = CardAlt,
                 focusedTextColor = TextPrimary, unfocusedTextColor = TextPrimary, cursorColor = Accent
             )
         )
-        Spacer(Modifier.height(12.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(selected = provider == "web", onClick = { provider = "web" }, label = { Text(if (language == "ar") "الويب" else "Web") })
-            FilterChip(selected = provider == "youtube", onClick = { provider = "youtube" }, label = { Text("YouTube") })
-            FilterChip(selected = provider == "spotify", onClick = { provider = "spotify" }, label = { Text("Spotify") })
+        Spacer(Modifier.height(9.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(7.dp), verticalAlignment = Alignment.CenterVertically) {
+            listOf("web" to (if (language == "ar") "الويب" else "Web"), "youtube" to "YouTube", "spotify" to "Spotify").forEach { (key, label) ->
+                FilterChip(
+                    selected = provider == key,
+                    onClick = { provider = key },
+                    label = { Text(label, fontSize = 11.sp) },
+                    leadingIcon = if (provider == key) ({ Icon(Icons.Rounded.Check, null, modifier = Modifier.size(15.dp)) }) else null
+                )
+            }
+            Spacer(Modifier.weight(1f))
+            Button(onClick = ::submitSearch, enabled = query.isNotBlank(), contentPadding = PaddingValues(horizontal = 15.dp, vertical = 9.dp)) {
+                Icon(Icons.Rounded.Search, null, modifier = Modifier.size(17.dp))
+                Spacer(Modifier.width(5.dp))
+                Text(if (language == "ar") "بحث" else "Search")
+            }
         }
-        Spacer(Modifier.height(14.dp))
-        Button(onClick = { openSearch(query) }, enabled = query.isNotBlank(), modifier = Modifier.fillMaxWidth()) {
-            Icon(Icons.Rounded.Search, null)
-            Spacer(Modifier.width(8.dp))
-            Text(if (language == "ar") "ابحث الآن" else "Search online")
+        Spacer(Modifier.height(10.dp))
+        if (submittedUrl == null) {
+            Box(Modifier.fillMaxSize().clip(RoundedCornerShape(22.dp)).background(CardBg), contentAlignment = Alignment.Center) {
+                Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(Modifier.size(64.dp).clip(RoundedCornerShape(22.dp)).background(CardAlt), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Rounded.Explore, null, tint = Accent, modifier = Modifier.size(32.dp))
+                    }
+                    Spacer(Modifier.height(16.dp))
+                    Text(if (language == "ar") "اكتشف حاجات جديدة" else "Find something new", color = TextPrimary, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(7.dp))
+                    Text(
+                        if (language == "ar") "اكتب اسم الفنان أو الأغنية، واختر المكان اللي تحب تبحث فيه. النتائج هتظهر هنا داخل التطبيق." else "Search for an artist or a track. Results will appear here inside the app.",
+                        color = Muted, fontSize = 12.sp, lineHeight = 19.sp
+                    )
+                }
+            }
+        } else {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = { if (canGoBack) webView.goBack() }, enabled = canGoBack) { Icon(Icons.Rounded.ArrowBack, null); Text(if (language == "ar") "رجوع" else "Back") }
+                TextButton(onClick = { if (canGoForward) webView.goForward() }, enabled = canGoForward) { Icon(Icons.Rounded.ArrowForward, null); Text(if (language == "ar") "التالي" else "Forward") }
+            }
+            AndroidView(
+                factory = { webView },
+                modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(16.dp))
+            )
         }
-        Spacer(Modifier.height(22.dp))
-        Text(if (language == "ar") "بحث منفصل عن مكتبتك" else "Separate from your library", color = Accent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-        Text(
-            if (language == "ar") "نتائج الإنترنت تُفتح في التطبيق أو المتصفح المناسب. البحث داخل الهاتف يظل في تبويب الأغاني أو الفيديوهات." else "Online results open in the selected service or browser. Searches inside your phone stay in the Music and Videos tabs.",
-            color = Muted, fontSize = 12.sp, lineHeight = 19.sp
-        )
     }
 }
 
@@ -883,6 +957,17 @@ private fun VideoNowPlayingScreen(
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(formatDuration(position.toLong()), color = Muted, fontSize = 11.sp)
             Text(formatDuration(duration.toLong()), color = Muted, fontSize = 11.sp)
+        }
+        Spacer(Modifier.height(10.dp))
+        var videoSpeed by remember(controller) { mutableFloatStateOf(1f) }
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            listOf(0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f, 3f, 4f).forEach { speed ->
+                FilterChip(
+                    selected = videoSpeed == speed,
+                    onClick = { videoSpeed = speed; controller?.setPlaybackSpeed(speed) },
+                    label = { Text("${speed}×", fontSize = 10.sp) }
+                )
+            }
         }
         Spacer(Modifier.height(8.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
