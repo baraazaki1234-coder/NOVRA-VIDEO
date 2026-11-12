@@ -536,7 +536,7 @@ private fun NovraApp() {
                             "Home" -> HomeScreen(
                                 Modifier.padding(padding), videos.size, tracks.size,
                                 tracks.map { track ->
-                                    val key = "play_count_audio_\${track.id}"
+                                    val key = "play_count_audio_${track.id}"
                                     track to (playCounts[key] ?: 0)
                                 }.filter { it.second > 0 }.sortedByDescending { it.second }.take(5),
                                 navigate = { selected = it },
