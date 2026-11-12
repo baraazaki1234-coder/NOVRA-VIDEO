@@ -1973,8 +1973,19 @@ private fun SettingsScreen(
             Text(formatDuration(listenedSeconds * 1000L), color = Accent, fontSize = 27.sp, fontWeight = FontWeight.Bold)
             Text(if (language == "ar") "إجمالي الوقت الذي شغّل فيه Viora الوسائط على هذا الجهاز." else "Total time Viora has spent playing media on this device.", color = Muted, fontSize = 11.sp)
             Spacer(Modifier.height(10.dp))
-            Text("Video picture-in-picture is enabled when you leave Viora while a video is playing. Music playback continues through the media session.", color = Muted, fontSize = 11.sp)
+            Text(
+                if (language == "ar") "يستمر تشغيل الموسيقى في الخلفية، ويمكنك استخدام صورة داخل صورة للفيديو."
+                else "Video picture-in-picture is available while music continues in the background.",
+                color = Muted, fontSize = 11.sp
+            )
         }
+        Spacer(Modifier.height(18.dp))
+        Text(
+            if (language == "ar") "تم التصميم والتطوير بواسطة فريق Novra" else "Designed and developed by the Novra team",
+            color = Muted.copy(alpha = 0.72f), fontSize = 10.sp,
+            modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+        )
         Spacer(Modifier.height(20.dp))
     }
 }
