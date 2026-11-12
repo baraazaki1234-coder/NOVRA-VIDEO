@@ -629,14 +629,14 @@ private fun NovraApp() {
                                                 "Premium" -> "NOVRA Premium"
                                                 else -> selected
                                             } else selected,
-                                            color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold
+                                            color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis
                                         )
                                         Text(
                                             if (showNowPlaying) {
                                                 if (selectedMedia?.isVideo == true) (if (language == "ar") "شاهد الفيديو وتحكم في التشغيل" else "Watch and control your video")
                                                 else (if (language == "ar") "الوسائط الحالية" else "Your current media")
                                             } else if (language == "ar") "مساحتك للوسائط" else "Your personal media space",
-                                            color = Muted, fontSize = 10.sp
+                                            color = Muted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis
                                         )
                                     }
                                     if (!showNowPlaying) {
@@ -1004,7 +1004,7 @@ private fun HomeScreen(
         Spacer(Modifier.height(25.dp))
         Text(if (language == "ar") "ترفيهك كله" else "YOUR ENTERTAINMENT", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
         Spacer(Modifier.height(7.dp))
-        Text(if (language == "ar") "إيه حابب تسمع أو\nتشاهد النهارده؟" else "What feels like\nplaying today?", color = TextPrimary, fontSize = 33.sp, lineHeight = 38.sp, fontWeight = FontWeight.Bold)
+        Text(if (language == "ar") "إيه حابب تسمع أو\nتشاهد النهارده؟" else "What feels like\nplaying today?", color = TextPrimary, fontSize = 32.sp, lineHeight = 46.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(21.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             HomeTile(if (language == "ar") "مشغل الفيديو" else "VIDEO PLAYER", if (language == "ar") "شاهد فيديوهاتك" else "Watch your videos", Icons.Rounded.PlayCircle, Brush.linearGradient(listOf(Color(0xFF536E61), Color(0xFF293C35))), Modifier.weight(1f)) { navigate("Videos") }
