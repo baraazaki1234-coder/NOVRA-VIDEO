@@ -817,6 +817,11 @@ private fun NovraApp() {
                     },
                     confirmLabel = if (isSetup) "Confirm PIN" else "",
                     errorLabel = if (language == "ar") "الرمز غير صحيح أو حدث خطأ. حاول مرة أخرى." else "Incorrect PIN or a security error. Try again.",
+                    pinLabel = if (language == "ar") if (isSetup) "رمز جديد" else "الرقم السري" else if (isSetup) "New PIN" else "PIN",
+                    confirmationFieldLabel = if (language == "ar") "تأكيد الرمز" else "Confirm PIN",
+                    submitLabel = if (language == "ar") when { isSetup -> "حفظ الرمز"; pinLocked -> "فتح NOVRA"; else -> "تأكيد" } else if (isSetup) "Save PIN" else if (pinLocked) "Unlock" else "Confirm",
+                    cancelLabel = if (language == "ar") "إلغاء" else "Cancel",
+                    lockoutMessage = { seconds -> if (language == "ar") "محاولات كثيرة. حاول بعد ${seconds} ثانية." else "Too many attempts. Try again in ${seconds}s." },
                     onSubmit = { entered ->
                         when {
                             pinLocked -> AppPinVault.verify(context, entered).also { if (it) pinLocked = false }
