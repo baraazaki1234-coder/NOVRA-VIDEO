@@ -1250,7 +1250,7 @@ private fun VideoNowPlayingScreen(
                     Box {
                         IconButton(onClick = { settingsExpanded = true }) { Icon(Icons.Rounded.Settings, if (language == "ar") "إعدادات الفيديو" else "Video settings", tint = Color.White) }
                         DropdownMenu(expanded = settingsExpanded, onDismissRequest = { settingsExpanded = false }) {
-                            DropdownMenuItem(text = { Text(if (language == "ar") "سرعة التشغيل" else "Playback speed", fontWeight = FontWeight.Bold) }, onClick = { })
+                            DropdownMenuItem(text = { Text(if (language == "ar") "سرعة التشغيل" else "Playback speed", fontWeight = FontWeight.Bold) }, enabled = false, onClick = {})
                             listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f).forEach { speed ->
                                 DropdownMenuItem(
                                     text = { Text(if (speed == 1f) "Normal  ·  1×" else "${speed}×", color = if (videoSpeed == speed) Accent else TextPrimary) },
@@ -1264,7 +1264,7 @@ private fun VideoNowPlayingScreen(
                                 onClick = { settingsExpanded = false; subtitlePicker.launch(arrayOf("application/x-subrip", "text/plain", "*/*")) }
                             )
                             DropdownMenuItem(
-                                text = { Text(if (language == "ar") "تكرار المقطع A-B" else "A-B loop controls") },
+                                text = { Text(if (language == "ar") "تحديد بداية المقطع A" else "Set loop point A") },
                                 leadingIcon = { Icon(Icons.Rounded.Repeat, null) },
                                 onClick = { settingsExpanded = false; loopStart = controller?.currentPosition ?: 0L; loopEnd = -1L }
                             )
