@@ -201,6 +201,9 @@ private fun NovraApp() {
     var navigationStack by remember { mutableStateOf<List<String>>(emptyList()) }
     var showExitDialog by remember { mutableStateOf(false) }
     val prefs = remember { context.getSharedPreferences("novra_preferences", android.content.Context.MODE_PRIVATE) }
+    var pinEnabled by remember { mutableStateOf(AppPinVault.isEnabled(context)) }
+    var pinLocked by remember { mutableStateOf(AppPinVault.isEnabled(context)) }
+    var pinFlowMode by remember { mutableStateOf("none") }
     var language by remember { mutableStateOf(prefs.getString("language", "en") ?: "en") }
     var wallpaperUri by remember { mutableStateOf(prefs.getString("wallpaper_uri", null)?.let(Uri::parse)) }
     var compactCards by remember { mutableStateOf(prefs.getBoolean("compact_cards", false)) }
@@ -435,7 +438,11 @@ private fun NovraApp() {
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) mediaRefresh += 1
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> mediaRefresh += 1
+                Lifecycle.Event.ON_STOP -> if (AppPinVault.isEnabled(context)) pinLocked = true
+                else -> Unit
+            }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
@@ -476,7 +483,8 @@ private fun NovraApp() {
             onSurface = TextPrimary, onSurfaceVariant = Muted, outline = Muted,
             secondary = Accent, tertiary = Accent
         )) {
-            if (showExitDialog) AlertDialog(
+            Box(Modifier.fillMaxSize()) {
+            if (!pinLocked && pinFlowMode == "none" && showExitDialog) AlertDialog(
                 onDismissRequest = { showExitDialog = false },
                 title = { Text(if (language == "ar") "الخروج من NOVRA؟" else "Exit NOVRA?") },
                 text = { Text(if (language == "ar") "هل أنت متأكد أنك تريد إغلاق التطبيق؟" else "Are you sure you want to close the app?") },
@@ -786,6 +794,10 @@ private fun NovraApp() {
                             else -> SettingsScreen(
                                 Modifier.padding(padding), wallpaperUri, compactCards, cardStyle, listenedSeconds, themeMode, accentName,
                                 onOpenPremium = { navigateTo("Premium") },
+                                pinEnabled = pinEnabled,
+                                onEnablePin = { pinFlowMode = "setup" },
+                                onChangePin = { pinFlowMode = "verify_change" },
+                                onDisablePin = { pinFlowMode = "verify_disable" },
                                 onThemeChange = { themeMode = it; prefs.edit().putString("theme_mode", it).apply() },
                                 onAccentChange = { accentName = it; prefs.edit().putString("accent_name", it).apply() },
                                 onChooseWallpaper = { wallpaperPicker.launch(arrayOf("image/*")) },
@@ -800,6 +812,47 @@ private fun NovraApp() {
                         }
                     }
                 }
+            }
+            if (pinLocked || pinFlowMode != "none") {
+                val isSetup = pinFlowMode == "setup"
+                val isVerification = pinFlowMode == "verify_change" || pinFlowMode == "verify_disable"
+                AppPinGate(
+                    title = when {
+                        pinLocked -> if (language == "ar") "افتح NOVRA" else "Unlock NOVRA"
+                        isSetup -> if (language == "ar") "إنشاء رمز القفل" else "Create app PIN"
+                        pinFlowMode == "verify_change" -> if (language == "ar") "تأكيد هويتك" else "Verify your PIN"
+                        else -> if (language == "ar") "تعطيل القفل" else "Disable app lock"
+                    },
+                    subtitle = when {
+                        pinLocked -> if (language == "ar") "أدخل الرمز للمتابعة. يستمر تشغيل الوسائط بالخلفية." else "Enter your PIN to continue. Media can keep playing in the background."
+                        isSetup -> if (language == "ar") "اختر رقمًا من 4 إلى 8 أرقام." else "Choose a PIN between 4 and 8 digits."
+                        else -> if (language == "ar") "أدخل رمزك الحالي أولًا." else "Enter your current PIN first."
+                    },
+                    confirmLabel = if (isSetup) "Confirm PIN" else "",
+                    errorLabel = if (language == "ar") "الرمز غير صحيح أو حدث خطأ. حاول مرة أخرى." else "Incorrect PIN or a security error. Try again.",
+                    onSubmit = { entered ->
+                        when {
+                            pinLocked -> AppPinVault.verify(context, entered).also { if (it) pinLocked = false }
+                            isSetup -> runCatching {
+                                AppPinVault.setPin(context, entered)
+                                pinEnabled = true
+                                pinFlowMode = "none"
+                            }.isSuccess
+                            isVerification && AppPinVault.verify(context, entered) -> {
+                                if (pinFlowMode == "verify_change") pinFlowMode = "setup"
+                                else {
+                                    AppPinVault.disable(context)
+                                    pinEnabled = false
+                                    pinFlowMode = "none"
+                                }
+                                true
+                            }
+                            else -> false
+                        }
+                    },
+                    onCancel = if (pinLocked) null else ({ pinFlowMode = "none" })
+                )
+            }
             }
         }
     }
@@ -1728,6 +1781,7 @@ private fun SettingsScreen(
     onThemeChange: (String) -> Unit, onAccentChange: (String) -> Unit, onChooseWallpaper: () -> Unit, onClearWallpaper: () -> Unit,
     onCompactChange: (Boolean) -> Unit, onCardStyleChange: (String) -> Unit,
     onOpenPremium: () -> Unit,
+    pinEnabled: Boolean, onEnablePin: () -> Unit, onChangePin: () -> Unit, onDisablePin: () -> Unit,
     language: String, onLanguageChange: (String) -> Unit,
     wallpaperDim: Float, onWallpaperDimChange: (Float) -> Unit
 ) {
@@ -1752,6 +1806,26 @@ private fun SettingsScreen(
             }
             Spacer(Modifier.height(12.dp))
             Text("50 EGP / 1 month", color = Color(0xFFE8D49A), fontWeight = FontWeight.Bold, fontSize = 14.sp)
+        }
+        Spacer(Modifier.height(18.dp))
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(CardBg).padding(15.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.Lock, null, tint = Accent, modifier = Modifier.size(22.dp))
+                Spacer(Modifier.width(9.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(if (language == "ar") "قفل التطبيق" else "App lock", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        if (pinEnabled) (if (language == "ar") "القفل مفعّل — سيُطلب الرمز عند العودة للتطبيق." else "Enabled — PIN is required when you return to the app.")
+                        else (if (language == "ar") "احمِ التطبيق برمز من 4 إلى 8 أرقام." else "Protect the app with a 4–8 digit PIN."),
+                        color = Muted, fontSize = 11.sp
+                    )
+                }
+                if (pinEnabled) Switch(checked = true, onCheckedChange = { onDisablePin() })
+                else Switch(checked = false, onCheckedChange = { onEnablePin() })
+            }
+            if (pinEnabled) {
+                TextButton(onClick = onChangePin) { Text(if (language == "ar") "تغيير الرمز" else "Change PIN") }
+            }
         }
         Spacer(Modifier.height(24.dp))
         Text(if (language == "ar") "اللغة" else "LANGUAGE", color = Accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
