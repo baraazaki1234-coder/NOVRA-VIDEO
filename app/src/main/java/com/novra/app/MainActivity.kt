@@ -1266,20 +1266,26 @@ private fun VideoNowPlayingScreen(
                             DropdownMenuItem(
                                 text = { Text(if (language == "ar") "تحديد بداية المقطع A" else "Set loop point A") },
                                 leadingIcon = { Icon(Icons.Rounded.Repeat, null) },
-                                onClick = { settingsExpanded = false; loopStart = controller?.currentPosition ?: 0L; loopEnd = -1L }
+                                onClick = { loopStart = controller?.currentPosition ?: 0L; loopEnd = -1L; settingsExpanded = false; seekFeedback = if (language == "ar") "تم تحديد بداية المقطع A" else "Loop point A set"; showControls = true }
                             )
                             DropdownMenuItem(
                                 text = { Text(if (language == "ar") "تحديد نهاية المقطع B" else "Set loop point B") },
                                 enabled = loopStart >= 0L,
                                 onClick = {
                                     val endPoint = controller?.currentPosition ?: 0L
-                                    if (endPoint > loopStart) loopEnd = endPoint
+                                    if (endPoint > loopStart) {
+                                        loopEnd = endPoint
+                                        seekFeedback = if (language == "ar") "تم تفعيل التكرار A–B" else "A–B repeat enabled"
+                                    } else {
+                                        seekFeedback = if (language == "ar") "نقطة B يجب أن تأتي بعد A" else "Point B must be after A"
+                                    }
                                     settingsExpanded = false
+                                    showControls = true
                                 }
                             )
                             DropdownMenuItem(
                                 text = { Text(if (language == "ar") "إلغاء تكرار المقطع" else "Clear A-B loop") },
-                                onClick = { loopStart = -1L; loopEnd = -1L; settingsExpanded = false }
+                                onClick = { loopStart = -1L; loopEnd = -1L; settingsExpanded = false; seekFeedback = if (language == "ar") "تم إلغاء التكرار" else "A–B repeat cleared"; showControls = true }
                             )
                         }
                     }
