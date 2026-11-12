@@ -209,6 +209,7 @@ private fun NovraApp() {
     var compactCards by remember { mutableStateOf(prefs.getBoolean("compact_cards", false)) }
     var cardStyle by remember { mutableStateOf(prefs.getString("card_style", "rounded") ?: "rounded") }
     var themeMode by remember { mutableStateOf(prefs.getString("theme_mode", "dark") ?: "dark") }
+    var pureBlack by remember { mutableStateOf(prefs.getBoolean("pure_black", false)) }
     var wallpaperDim by remember { mutableFloatStateOf(prefs.getFloat("wallpaper_dim", 0.22f)) }
     var accentName by remember { mutableStateOf(prefs.getString("accent_name", "mint") ?: "mint") }
     val isLightTheme = themeMode == "light"
@@ -222,7 +223,15 @@ private fun NovraApp() {
         "orange" -> if (isLightTheme) Color(0xFFC2410C) else Color(0xFFFDBA74)
         else -> if (isLightTheme) Color(0xFF286B47) else Color(0xFFC7E8D1)
     }
-    val palette = (if (isLightTheme) LightPalette else DarkPalette).copy(accent = chosenAccent)
+    val basePalette = if (isLightTheme) LightPalette else DarkPalette
+    val palette = if (!isLightTheme && pureBlack) {
+        basePalette.copy(
+            background = Color.Black,
+            surface = Color(0xFF080808),
+            surfaceVariant = Color(0xFF151515),
+            accent = chosenAccent
+        )
+    } else basePalette.copy(accent = chosenAccent)
     val wallpaperPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             runCatching { context.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION) }
@@ -780,12 +789,13 @@ private fun NovraApp() {
                                 onPlay = { items -> if (items.isNotEmpty()) startMedia(items.first(), items) }, language = language
                             )
                             else -> SettingsScreen(
-                                Modifier.padding(padding), wallpaperUri, compactCards, cardStyle, listenedSeconds, themeMode, accentName,
+                                Modifier.padding(padding), wallpaperUri, compactCards, cardStyle, listenedSeconds, themeMode, accentName, pureBlack,
                                 pinEnabled = pinEnabled,
                                 onEnablePin = { pinFlowMode = "setup" },
                                 onChangePin = { pinFlowMode = "verify_change" },
                                 onDisablePin = { pinFlowMode = "verify_disable" },
                                 onThemeChange = { themeMode = it; prefs.edit().putString("theme_mode", it).apply() },
+                                onPureBlackChange = { pureBlack = it; prefs.edit().putBoolean("pure_black", it).apply() },
                                 onAccentChange = { accentName = it; prefs.edit().putString("accent_name", it).apply() },
                                 onChooseWallpaper = { wallpaperPicker.launch(arrayOf("image/*")) },
                                 onClearWallpaper = { wallpaperUri = null; prefs.edit().remove("wallpaper_uri").apply() },
@@ -1769,8 +1779,8 @@ private fun NowPlayingScreen(
 
 @Composable
 private fun SettingsScreen(
-    modifier: Modifier, wallpaperUri: Uri?, compactCards: Boolean, cardStyle: String, listenedSeconds: Long, themeMode: String, accentName: String,
-    onThemeChange: (String) -> Unit, onAccentChange: (String) -> Unit, onChooseWallpaper: () -> Unit, onClearWallpaper: () -> Unit,
+    modifier: Modifier, wallpaperUri: Uri?, compactCards: Boolean, cardStyle: String, listenedSeconds: Long, themeMode: String, accentName: String, pureBlack: Boolean,
+    onThemeChange: (String) -> Unit, onPureBlackChange: (Boolean) -> Unit, onAccentChange: (String) -> Unit, onChooseWallpaper: () -> Unit, onClearWallpaper: () -> Unit,
     onCompactChange: (Boolean) -> Unit, onCardStyleChange: (String) -> Unit,
     pinEnabled: Boolean, onEnablePin: () -> Unit, onChangePin: () -> Unit, onDisablePin: () -> Unit,
     language: String, onLanguageChange: (String) -> Unit,
@@ -1821,6 +1831,13 @@ private fun SettingsScreen(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(selected = themeMode == "dark", onClick = { onThemeChange("dark") }, label = { Text(if (language == "ar") "داكن" else "Dark") }, leadingIcon = { Icon(Icons.Rounded.DarkMode, null) })
                 FilterChip(selected = themeMode == "light", onClick = { onThemeChange("light") }, label = { Text(if (language == "ar") "فاتح" else "Light") }, leadingIcon = { Icon(Icons.Rounded.LightMode, null) })
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(if (language == "ar") "أسود AMOLED الحقيقي" else "True AMOLED black", color = TextPrimary, fontSize = 13.sp)
+                    Text(if (language == "ar") "خلفية سوداء خالصة مع أسطح داكنة — متاح في الوضع الداكن." else "Pure black background with deep surfaces. Available in Dark mode.", color = Muted, fontSize = 10.sp)
+                }
+                Switch(checked = pureBlack, onCheckedChange = onPureBlackChange, enabled = themeMode == "dark")
             }
             HorizontalDivider(color = CardAlt)
             Text(if (language == "ar") "اللون الأساسي" else "Accent color", color = TextPrimary, fontSize = 13.sp)
