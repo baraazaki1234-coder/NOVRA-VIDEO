@@ -5,9 +5,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -25,11 +24,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-private val Ink = Color(0xFF10131A)
-private val Panel = Color(0xFF1B202A)
-private val Muted = Color(0xFF929BAA)
-private val Accent = Color(0xFFB8E3D2)
-private val Canvas = Color(0xFF0C0F14)
+private val Background = Color(0xFF101310)
+private val SurfaceOne = Color(0xFF1B211D)
+private val SurfaceTwo = Color(0xFF252D27)
+private val TextMuted = Color(0xFFA5AEA6)
+private val Mint = Color(0xFFC7E8D1)
+private val Warm = Color(0xFFE6C7A5)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -40,155 +40,216 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun NovraApp() {
-    var selected by remember { mutableStateOf("Home") }
-    MaterialTheme(
-        colorScheme = darkColorScheme(
-            background = Canvas, surface = Panel, primary = Accent,
-            onBackground = Color.White, onSurface = Color.White
-        )
-    ) {
+    var tab by remember { mutableStateOf("Home") }
+    var dark by remember { mutableStateOf(true) }
+    val bg = if (dark) Background else Color(0xFFF3F4EF)
+    val panel = if (dark) SurfaceOne else Color.White
+    val primaryText = if (dark) Color.White else Color(0xFF202720)
+    MaterialTheme(colorScheme = if (dark) darkColorScheme(
+        background = bg, surface = panel, primary = Mint, onBackground = primaryText, onSurface = primaryText
+    ) else lightColorScheme(
+        background = bg, surface = panel, primary = Color(0xFF426B50), onBackground = primaryText, onSurface = primaryText
+    )) {
         Scaffold(
-            containerColor = Canvas,
+            containerColor = bg,
             bottomBar = {
-                NavigationBar(containerColor = Color(0xFF141922), tonalElevation = 0.dp) {
-                    val tabs = listOf(
-                        "Home" to Icons.Rounded.Home,
-                        "Videos" to Icons.Rounded.OndemandVideo,
-                        "Music" to Icons.Rounded.MusicNote,
-                        "Library" to Icons.Rounded.CollectionsBookmark
-                    )
-                    tabs.forEach { (label, icon) ->
+                NavigationBar(containerColor = panel, tonalElevation = 0.dp) {
+                    listOf(
+                        Triple("Home", Icons.Rounded.Home, "Home"),
+                        Triple("Videos", Icons.Rounded.OndemandVideo, "Videos"),
+                        Triple("Music", Icons.Rounded.MusicNote, "Music"),
+                        Triple("Library", Icons.Rounded.LibraryMusic, "Library")
+                    ).forEach { item ->
                         NavigationBarItem(
-                            selected = selected == label,
-                            onClick = { selected = label },
-                            icon = { Icon(icon, contentDescription = label) },
-                            label = { Text(label, fontSize = 11.sp) },
+                            selected = tab == item.first,
+                            onClick = { tab = item.first },
+                            icon = { Icon(item.second, contentDescription = item.third) },
+                            label = { Text(item.third, fontSize = 10.sp) },
                             colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = Accent,
-                                selectedTextColor = Accent,
-                                indicatorColor = Color(0xFF293A37),
-                                unselectedIconColor = Muted,
-                                unselectedTextColor = Muted
+                                selectedIconColor = Mint, selectedTextColor = Mint,
+                                indicatorColor = Color(0xFF35463A),
+                                unselectedIconColor = TextMuted, unselectedTextColor = TextMuted
                             )
                         )
                     }
                 }
             }
         ) { padding ->
-            when (selected) {
-                "Home" -> HomeScreen(Modifier.padding(padding))
-                "Videos" -> EmptySection("Your videos", "Videos on this device will appear here.", Icons.Rounded.OndemandVideo, Modifier.padding(padding))
-                "Music" -> EmptySection("Your music", "Your audio collection will live here.", Icons.Rounded.MusicNote, Modifier.padding(padding))
-                else -> EmptySection("Your library", "Favorites, playlists and recent activity.", Icons.Rounded.CollectionsBookmark, Modifier.padding(padding))
+            when (tab) {
+                "Home" -> HomeScreen(Modifier.padding(padding), panel, primaryText) { tab = it }
+                "Videos" -> CollectionScreen("Your videos", "A personal cinema, ready when you are.", Icons.Rounded.Movie, panel, primaryText)
+                "Music" -> CollectionScreen("Your music", "Albums, artists and playlists in one place.", Icons.Rounded.GraphicEq, panel, primaryText)
+                else -> LibraryScreen(panel, primaryText) { dark = !dark }
             }
         }
     }
 }
 
 @Composable
-private fun HomeScreen(modifier: Modifier = Modifier) {
-    Column(
-        modifier.fillMaxSize().verticalScroll(rememberScrollState())
-            .padding(horizontal = 22.dp)
-    ) {
-        Spacer(Modifier.height(24.dp))
+private fun HomeScreen(modifier: Modifier, panel: Color, textColor: Color, navigate: (String) -> Unit) {
+    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
+        Spacer(Modifier.height(22.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("NOVRA", color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Black, letterSpacing = 3.sp)
-                Text("Your media, in its own rhythm.", color = Muted, fontSize = 12.sp)
+                Text("NOVRA", color = textColor, fontSize = 25.sp, fontWeight = FontWeight.Black, letterSpacing = 3.sp)
+                Text("Everything you love to play.", color = TextMuted, fontSize = 11.sp)
             }
-            IconButton(onClick = { }) {
-                Icon(Icons.Rounded.Search, "Search", tint = Color.White, modifier = Modifier.size(25.dp))
-            }
-            IconButton(onClick = { }) {
-                Icon(Icons.Rounded.Settings, "Settings", tint = Color.White, modifier = Modifier.size(23.dp))
+            IconButton(onClick = { }) { Icon(Icons.Rounded.Search, "Search", tint = textColor) }
+            IconButton(onClick = { navigate("Library") }) { Icon(Icons.Rounded.Tune, "Personalize", tint = textColor) }
+        }
+        Spacer(Modifier.height(26.dp))
+        Text("MADE FOR YOUR MOMENT", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+        Spacer(Modifier.height(7.dp))
+        Text("Your world.\nYour soundtrack.", color = textColor, fontSize = 34.sp, lineHeight = 39.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(20.dp))
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("For you", "Videos", "Music", "Albums", "Playlists", "Recently added").forEachIndexed { index, label ->
+                Surface(
+                    color = if (index == 0) Mint else panel,
+                    shape = CircleShape,
+                    modifier = Modifier.clickable { if (label == "Videos") navigate("Videos") else if (label == "Music") navigate("Music") }
+                ) {
+                    Text(label, color = if (index == 0) Color(0xFF172019) else textColor, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp))
+                }
             }
         }
-        Spacer(Modifier.height(30.dp))
-        Text("GOOD TO SEE YOU", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
-        Spacer(Modifier.height(7.dp))
-        Text("Make room for
-what moves you.", color = Color.White, fontSize = 34.sp, lineHeight = 39.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(22.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            FeatureCard("VIDEO", "Watch something", Icons.Rounded.PlayCircle, Modifier.weight(1f))
-            FeatureCard("MUSIC", "Find your sound", Icons.Rounded.GraphicEq, Modifier.weight(1f))
+            EditorialCard("WATCH", "A little escape", "Your videos,\nbeautifully arranged", Icons.Rounded.PlayCircle, Brush.linearGradient(listOf(Color(0xFF536E61), Color(0xFF293C35))), Modifier.weight(1f)) { navigate("Videos") }
+            EditorialCard("LISTEN", "Find your flow", "Every track has\na place", Icons.Rounded.GraphicEq, Brush.linearGradient(listOf(Color(0xFF79634D), Color(0xFF3C3028))), Modifier.weight(1f)) { navigate("Music") }
         }
-        Spacer(Modifier.height(28.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Pick up where you left off", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-            Text("VIEW ALL", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-        }
-        Spacer(Modifier.height(13.dp))
-        Box(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp))
-                .background(Brush.linearGradient(listOf(Color(0xFF31423F), Color(0xFF202B35), Color(0xFF29263A))))
-                .padding(18.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(58.dp).clip(RoundedCornerShape(17.dp)).background(Color(0xFF465B55)), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Rounded.PlayArrow, null, tint = Color.White, modifier = Modifier.size(34.dp))
-                }
-                Spacer(Modifier.width(14.dp))
-                Column(Modifier.weight(1f)) {
-                    Text("Nothing playing yet", color = Color.White, fontWeight = FontWeight.SemiBold)
-                    Spacer(Modifier.height(4.dp))
-                    Text("Your recent media will show up here", color = Color(0xFFBAC5C2), fontSize = 11.sp)
-                }
-            }
-        }
-        Spacer(Modifier.height(28.dp))
-        Text("YOUR SPACE", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+        Spacer(Modifier.height(27.dp))
+        SectionHeading("Continue listening", "YOUR RECENT", textColor)
+        Spacer(Modifier.height(12.dp))
+        WideFeature(panel, textColor, "Your listening history", "Recently played tracks will appear here", Icons.Rounded.History)
+        Spacer(Modifier.height(25.dp))
+        SectionHeading("Made for your library", "EXPLORE", textColor)
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            QuickStat("VIDEOS", "—", Icons.Rounded.Movie, Modifier.weight(1f))
-            QuickStat("TRACKS", "—", Icons.Rounded.MusicNote, Modifier.weight(1f))
-            QuickStat("PLAYLISTS", "—", Icons.Rounded.QueueMusic, Modifier.weight(1f))
+            MiniTile("Albums", Icons.Rounded.Album, panel, textColor, Modifier.weight(1f)) { navigate("Music") }
+            MiniTile("Playlists", Icons.Rounded.QueueMusic, panel, textColor, Modifier.weight(1f)) { navigate("Library") }
+            MiniTile("Favorites", Icons.Rounded.FavoriteBorder, panel, textColor, Modifier.weight(1f)) { navigate("Library") }
         }
         Spacer(Modifier.height(28.dp))
     }
 }
 
 @Composable
-private fun FeatureCard(tag: String, title: String, icon: androidx.compose.ui.graphics.vector.ImageVector, modifier: Modifier = Modifier) {
-    Column(
-        modifier.clip(RoundedCornerShape(22.dp))
-            .background(Panel).clickable { }
-            .padding(16.dp)
-    ) {
-        Box(Modifier.size(42.dp).clip(CircleShape).background(Color(0xFF293A37)), contentAlignment = Alignment.Center) {
-            Icon(icon, null, tint = Accent, modifier = Modifier.size(23.dp))
+private fun EditorialCard(tag: String, title: String, subtitle: String, icon: androidx.compose.ui.graphics.vector.ImageVector, brush: Brush, modifier: Modifier, onClick: () -> Unit) {
+    Column(modifier.clip(RoundedCornerShape(23.dp)).background(brush).clickable(onClick = onClick).padding(15.dp)) {
+        Box(Modifier.size(42.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.16f)), contentAlignment = Alignment.Center) {
+            Icon(icon, null, tint = Color.White, modifier = Modifier.size(23.dp))
         }
-        Spacer(Modifier.height(25.dp))
-        Text(tag, color = Accent, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+        Spacer(Modifier.height(24.dp))
+        Text(tag, color = Color.White.copy(alpha = 0.75f), fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+        Text(title, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(5.dp))
-        Text(title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        Text(subtitle, color = Color.White.copy(alpha = 0.78f), fontSize = 10.sp, lineHeight = 14.sp)
     }
 }
 
 @Composable
-private fun QuickStat(label: String, value: String, icon: androidx.compose.ui.graphics.vector.ImageVector, modifier: Modifier = Modifier) {
-    Column(modifier.clip(RoundedCornerShape(17.dp)).background(Panel).padding(13.dp)) {
-        Icon(icon, null, tint = Accent, modifier = Modifier.size(19.dp))
-        Spacer(Modifier.height(12.dp))
-        Text(value, color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.Bold)
-        Text(label, color = Muted, fontSize = 8.sp, letterSpacing = 1.sp)
+private fun SectionHeading(title: String, overline: String, color: Color) {
+    Column {
+        Text(overline, color = TextMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+        Spacer(Modifier.height(3.dp))
+        Text(title, color = color, fontSize = 19.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
 @Composable
-private fun EmptySection(title: String, subtitle: String, icon: androidx.compose.ui.graphics.vector.ImageVector, modifier: Modifier = Modifier) {
-    Column(
-        modifier.fillMaxSize().padding(28.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Box(Modifier.size(76.dp).clip(RoundedCornerShape(25.dp)).background(Panel), contentAlignment = Alignment.Center) {
-            Icon(icon, null, tint = Accent, modifier = Modifier.size(34.dp))
+private fun WideFeature(panel: Color, textColor: Color, title: String, subtitle: String, icon: androidx.compose.ui.graphics.vector.ImageVector) {
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(panel).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(54.dp).clip(RoundedCornerShape(15.dp)).background(SurfaceTwo), contentAlignment = Alignment.Center) {
+            Icon(icon, null, tint = Mint, modifier = Modifier.size(25.dp))
         }
+        Spacer(Modifier.width(13.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, color = textColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(4.dp))
+            Text(subtitle, color = TextMuted, fontSize = 10.sp)
+        }
+        Icon(Icons.Rounded.ChevronRight, null, tint = TextMuted)
+    }
+}
+
+@Composable
+private fun MiniTile(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector, panel: Color, textColor: Color, modifier: Modifier, onClick: () -> Unit) {
+    Column(modifier.clip(RoundedCornerShape(17.dp)).background(panel).clickable(onClick = onClick).padding(13.dp)) {
+        Icon(icon, null, tint = Mint, modifier = Modifier.size(22.dp))
+        Spacer(Modifier.height(13.dp))
+        Text(title, color = textColor, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+@Composable
+private fun CollectionScreen(title: String, subtitle: String, icon: androidx.compose.ui.graphics.vector.ImageVector, panel: Color, textColor: Color) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(22.dp)) {
         Spacer(Modifier.height(20.dp))
-        Text(title, color = Color.White, fontSize = 23.sp, fontWeight = FontWeight.SemiBold)
-        Spacer(Modifier.height(8.dp))
-        Text(subtitle, color = Muted, fontSize = 13.sp)
+        Text(title, color = textColor, fontSize = 29.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(6.dp))
+        Text(subtitle, color = TextMuted, fontSize = 12.sp)
+        Spacer(Modifier.height(24.dp))
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(panel).padding(15.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.Search, null, tint = TextMuted)
+            Spacer(Modifier.width(10.dp))
+            Text("Search your collection", color = TextMuted, fontSize = 13.sp)
+        }
+        Spacer(Modifier.height(24.dp))
+        Box(Modifier.fillMaxWidth().height(220.dp).clip(RoundedCornerShape(24.dp)).background(Brush.linearGradient(listOf(Color(0xFF35463A), Color(0xFF252E29)))), contentAlignment = Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(icon, null, tint = Mint, modifier = Modifier.size(42.dp))
+                Spacer(Modifier.height(13.dp))
+                Text("Your collection starts here", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(5.dp))
+                Text("NOVRA will organize media from your device", color = Color.White.copy(alpha = 0.7f), fontSize = 11.sp)
+            }
+        }
+        Spacer(Modifier.height(22.dp))
+        Text("BROWSE", color = TextMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+        Spacer(Modifier.height(12.dp))
+        listOf("Recently added", "Folders", "Favorites", "Playlists").forEach { label ->
+            Row(Modifier.fillMaxWidth().clickable { }.padding(vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.FolderOpen, null, tint = Mint)
+                Spacer(Modifier.width(13.dp))
+                Text(label, color = textColor, modifier = Modifier.weight(1f), fontSize = 14.sp)
+                Icon(Icons.Rounded.ChevronRight, null, tint = TextMuted)
+            }
+            HorizontalDivider(color = panel)
+        }
+    }
+}
+
+@Composable
+private fun LibraryScreen(panel: Color, textColor: Color, toggleTheme: () -> Unit) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(22.dp)) {
+        Spacer(Modifier.height(20.dp))
+        Text("Your library", color = textColor, fontSize = 29.sp, fontWeight = FontWeight.Bold)
+        Text("Everything, just the way you like it.", color = TextMuted, fontSize = 12.sp)
+        Spacer(Modifier.height(25.dp))
+        listOf(
+            "Favorites" to Icons.Rounded.FavoriteBorder,
+            "Playlists & queues" to Icons.Rounded.QueueMusic,
+            "Recently played" to Icons.Rounded.History,
+            "Downloads" to Icons.Rounded.Download,
+            "Folders" to Icons.Rounded.FolderOpen,
+            "Equalizer" to Icons.Rounded.Equalizer,
+            "Sleep timer" to Icons.Rounded.Bedtime,
+            "Playback settings" to Icons.Rounded.Tune
+        ).forEach { (label, icon) ->
+            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(15.dp)).background(panel).clickable { }.padding(15.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(icon, null, tint = Mint)
+                Spacer(Modifier.width(14.dp))
+                Text(label, color = textColor, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                Icon(Icons.Rounded.ChevronRight, null, tint = TextMuted)
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+        Spacer(Modifier.height(16.dp))
+        OutlinedButton(onClick = toggleTheme, modifier = Modifier.fillMaxWidth()) {
+            Icon(Icons.Rounded.Contrast, null)
+            Spacer(Modifier.width(9.dp))
+            Text("Switch appearance")
+        }
     }
 }
