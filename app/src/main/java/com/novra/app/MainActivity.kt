@@ -1235,8 +1235,8 @@ private fun SettingsScreen(
 ) {
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
         Spacer(Modifier.height(20.dp))
-        Text("Settings", color = TextPrimary, fontSize = 30.sp, fontWeight = FontWeight.Bold)
-        Text("Make NOVRA feel like yours.", color = Muted, fontSize = 13.sp)
+        Text(if (language == "ar") "الإعدادات" else "Settings", color = TextPrimary, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+        Text(if (language == "ar") "خصص NOVRA بالشكل اللي يناسبك." else "Make NOVRA feel like yours.", color = Muted, fontSize = 13.sp)
         Spacer(Modifier.height(18.dp))
         Column(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
@@ -1248,7 +1248,7 @@ private fun SettingsScreen(
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
                     Text("NOVRA Premium", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                    Text("Unlock the enhanced NOVRA experience", color = Color(0xFFD4DED6), fontSize = 11.sp)
+                    Text(if (language == "ar") "افتح تجربة NOVRA المطوّرة" else "Unlock the enhanced NOVRA experience", color = Color(0xFFD4DED6), fontSize = 11.sp)
                 }
                 Icon(Icons.Rounded.ChevronRight, null, tint = Color.White)
             }
@@ -1269,15 +1269,15 @@ private fun SettingsScreen(
         Text(if (language == "ar") "المظهر" else "APPEARANCE", color = Accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
         Spacer(Modifier.height(10.dp))
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(CardBg).padding(15.dp)) {
-            Text("Color theme", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-            Text("Choose the look that feels right.", color = Muted, fontSize = 11.sp)
+            Text(if (language == "ar") "نمط الألوان" else "Color theme", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Text(if (language == "ar") "اختر المظهر المناسب لك." else "Choose the look that feels right.", color = Muted, fontSize = 11.sp)
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(selected = themeMode == "dark", onClick = { onThemeChange("dark") }, label = { Text("Dark") }, leadingIcon = { Icon(Icons.Rounded.DarkMode, null) })
-                FilterChip(selected = themeMode == "light", onClick = { onThemeChange("light") }, label = { Text("Light") }, leadingIcon = { Icon(Icons.Rounded.LightMode, null) })
+                FilterChip(selected = themeMode == "dark", onClick = { onThemeChange("dark") }, label = { Text(if (language == "ar") "داكن" else "Dark") }, leadingIcon = { Icon(Icons.Rounded.DarkMode, null) })
+                FilterChip(selected = themeMode == "light", onClick = { onThemeChange("light") }, label = { Text(if (language == "ar") "فاتح" else "Light") }, leadingIcon = { Icon(Icons.Rounded.LightMode, null) })
             }
             HorizontalDivider(color = CardAlt)
-            Text("Accent color", color = TextPrimary, fontSize = 13.sp)
+            Text(if (language == "ar") "اللون الأساسي" else "Accent color", color = TextPrimary, fontSize = 13.sp)
             Spacer(Modifier.height(6.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 listOf("mint" to "Mint", "ocean" to "Ocean", "violet" to "Violet", "rose" to "Rose", "amber" to "Amber", "cyan" to "Cyan", "indigo" to "Indigo", "orange" to "Orange").forEach { (key, label) ->
@@ -1307,26 +1307,26 @@ private fun SettingsScreen(
         }
         Spacer(Modifier.height(12.dp))
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(CardBg).padding(15.dp)) {
-            Text("Media cards", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Text(if (language == "ar") "بطاقات الوسائط" else "Media cards", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text("Compact cards", color = TextPrimary, fontSize = 13.sp)
-                    Text("Show more songs and videos on screen.", color = Muted, fontSize = 10.sp)
+                    Text(if (language == "ar") "بطاقات مضغوطة" else "Compact cards", color = TextPrimary, fontSize = 13.sp)
+                    Text(if (language == "ar") "اعرض عددًا أكبر من الأغاني والفيديوهات." else "Show more songs and videos on screen.", color = Muted, fontSize = 10.sp)
                 }
                 Switch(checked = compactCards, onCheckedChange = onCompactChange)
             }
             HorizontalDivider(color = CardAlt)
-            Text("Card corners", color = TextPrimary, fontSize = 13.sp)
+            Text(if (language == "ar") "شكل زوايا البطاقات" else "Card corners", color = TextPrimary, fontSize = 13.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(selected = cardStyle == "rounded", onClick = { onCardStyleChange("rounded") }, label = { Text("Rounded") })
-                FilterChip(selected = cardStyle == "square", onClick = { onCardStyleChange("square") }, label = { Text("Square") })
+                FilterChip(selected = cardStyle == "rounded", onClick = { onCardStyleChange("rounded") }, label = { Text(if (language == "ar") "دائري" else "Rounded") })
+                FilterChip(selected = cardStyle == "square", onClick = { onCardStyleChange("square") }, label = { Text(if (language == "ar") "مربع" else "Square") })
             }
         }
         Spacer(Modifier.height(12.dp))
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(CardBg).padding(15.dp)) {
-            Text("Total playback time", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Text(if (language == "ar") "إجمالي وقت التشغيل" else "Total playback time", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
             Text(formatDuration(listenedSeconds * 1000L), color = Accent, fontSize = 27.sp, fontWeight = FontWeight.Bold)
-            Text("Total time NOVRA has spent playing media on this device.", color = Muted, fontSize = 11.sp)
+            Text(if (language == "ar") "إجمالي الوقت الذي شغّل فيه NOVRA الوسائط على هذا الجهاز." else "Total time NOVRA has spent playing media on this device.", color = Muted, fontSize = 11.sp)
             Spacer(Modifier.height(10.dp))
             Text("Video picture-in-picture is enabled when you leave NOVRA while a video is playing. Music playback continues through the media session.", color = Muted, fontSize = 11.sp)
         }
