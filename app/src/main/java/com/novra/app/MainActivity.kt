@@ -331,7 +331,7 @@ private fun NovraApp() {
 
         val mediaItems = updated.map { entry ->
             MediaItem.Builder().setUri(entry.uri)
-                .setMediaMetadata(MediaMetadata.Builder().setTitle(entry.title).build())
+                .setMediaMetadata(MediaMetadata.Builder().setTitle(entry.title).setArtist(entry.artist).build())
                 .build()
         }
         player?.setMediaItems(mediaItems, targetIndex, if (keepPosition) currentPosition else 0L)
@@ -388,7 +388,7 @@ private fun NovraApp() {
             val items = queue.map { entry ->
                 MediaItem.Builder()
                     .setUri(entry.uri)
-                    .setMediaMetadata(MediaMetadata.Builder().setTitle(entry.title).build())
+                    .setMediaMetadata(MediaMetadata.Builder().setTitle(entry.title).setArtist(entry.artist).build())
                     .build()
             }
             player.setMediaItems(items, startIndex, 0L)
