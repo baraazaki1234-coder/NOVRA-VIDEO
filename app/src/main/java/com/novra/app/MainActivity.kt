@@ -2275,7 +2275,7 @@ private fun PlaylistsScreen(
             Button(onClick = { newName = ""; showCreate = true }) {
                 Icon(Icons.Rounded.Add, null)
                 Spacer(Modifier.width(5.dp))
-                Text("Create")
+                Text(if (language == "ar") "إنشاء" else "Create")
             }
         }
         Spacer(Modifier.height(20.dp))
@@ -2283,8 +2283,8 @@ private fun PlaylistsScreen(
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(CardBg).padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Icon(Icons.Rounded.QueueMusic, null, tint = Accent, modifier = Modifier.size(38.dp))
                 Spacer(Modifier.height(10.dp))
-                Text("Your playlists start here", color = TextPrimary, fontWeight = FontWeight.SemiBold)
-                Text("Create a playlist, then add songs or videos from your device.", color = Muted, fontSize = 12.sp)
+                Text(if (language == "ar") "ابدأ بإنشاء أول قائمة" else "Your playlists start here", color = TextPrimary, fontWeight = FontWeight.SemiBold)
+                Text(if (language == "ar") "أنشئ قائمة ثم أضف إليها الأغاني أو الفيديوهات من جهازك." else "Create a playlist, then add songs or videos from your device.", color = Muted, fontSize = 12.sp)
             }
         }
         playlists.forEach { playlist ->
@@ -2295,7 +2295,7 @@ private fun PlaylistsScreen(
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Text(playlist.name, color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                        Text("${items.size} items", color = Muted, fontSize = 11.sp)
+                        Text(if (language == "ar") "${items.size} عناصر" else "${items.size} items", color = Muted, fontSize = 11.sp)
                     }
                     IconButton(onClick = { addToPlaylist = playlist.name }) { Icon(Icons.Rounded.Add, "Add media", tint = Accent) }
                     IconButton(onClick = { onDelete(playlist.name) }) { Icon(Icons.Rounded.DeleteOutline, "Delete playlist", tint = Muted) }
@@ -2303,11 +2303,11 @@ private fun PlaylistsScreen(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = { onPlay(items) }, enabled = items.isNotEmpty(), modifier = Modifier.weight(1f)) {
                         Icon(Icons.Rounded.PlayArrow, null)
-                        Text("Play")
+                        Text(if (language == "ar") "تشغيل" else "Play")
                     }
                     OutlinedButton(onClick = { addToPlaylist = playlist.name }, modifier = Modifier.weight(1f)) {
                         Icon(Icons.Rounded.Add, null)
-                        Text("Add media")
+                        Text(if (language == "ar") "إضافة وسائط" else "Add media")
                     }
                 }
                 if (items.isNotEmpty()) {
@@ -2338,26 +2338,26 @@ private fun PlaylistsScreen(
     if (showCreate) {
         AlertDialog(
             onDismissRequest = { showCreate = false },
-            title = { Text("Create playlist") },
+            title = { Text(if (language == "ar") "إنشاء قائمة تشغيل" else "Create playlist") },
             text = {
-                OutlinedTextField(value = newName, onValueChange = { newName = it }, singleLine = true, label = { Text("Playlist name") })
+                OutlinedTextField(value = newName, onValueChange = { newName = it }, singleLine = true, label = { Text(if (language == "ar") "اسم القائمة" else "Playlist name") })
             },
             confirmButton = {
                 TextButton(onClick = {
                     val name = newName.trim()
                     if (name.isNotEmpty() && playlists.none { it.name.equals(name, ignoreCase = true) }) onCreate(name)
                     showCreate = false
-                }) { Text("Create") }
+                }) { Text(if (language == "ar") "إنشاء" else "Create") }
             },
-            dismissButton = { TextButton(onClick = { showCreate = false }) { Text("Cancel") } }
+            dismissButton = { TextButton(onClick = { showCreate = false }) { Text(if (language == "ar") "إلغاء" else "Cancel") } }
         )
     }
     addToPlaylist?.let { playlistName ->
         AlertDialog(
             onDismissRequest = { addToPlaylist = null },
-            title = { Text("Add to $playlistName") },
+            title = { Text(if (language == "ar") "إضافة إلى $playlistName" else "Add to $playlistName") },
             text = {
-                if (media.isEmpty()) Text("No device media found yet. Grant media access and scan your library first.")
+                if (media.isEmpty()) Text(if (language == "ar") "لا توجد وسائط على الجهاز. امنح التطبيق إذن الوصول إلى الملفات ثم حدّث المكتبة." else "No device media found yet. Grant media access and scan your library first.")
                 else Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
                     val existingKeys = playlists.firstOrNull { it.name == playlistName }?.mediaKeys.orEmpty().toSet()
                     media.forEach { item ->
@@ -2379,7 +2379,7 @@ private fun PlaylistsScreen(
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { addToPlaylist = null }) { Text("Done") } }
+            confirmButton = { TextButton(onClick = { addToPlaylist = null }) { Text(if (language == "ar") "تم" else "Done") } }
         )
     }
 }
