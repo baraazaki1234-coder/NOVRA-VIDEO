@@ -541,6 +541,15 @@ private fun NowPlayingScreen(modifier: Modifier, media: LocalMedia, controller: 
     var currentQueueIndex by remember(controller) { mutableIntStateOf(controller?.currentMediaItemIndex ?: 0) }
     var playbackPosition by remember(controller) { mutableFloatStateOf(0f) }
     var playbackDuration by remember(controller) { mutableFloatStateOf(media.durationMs.coerceAtLeast(1L).toFloat()) }
+    var playbackSpeed by remember(controller) { mutableFloatStateOf(1f) }
+    var sleepTimerMinutes by remember(controller) { mutableIntStateOf(0) }
+    LaunchedEffect(sleepTimerMinutes, controller) {
+        if (sleepTimerMinutes > 0) {
+            delay(sleepTimerMinutes * 60_000L)
+            controller?.pause()
+            sleepTimerMinutes = 0
+        }
+    }
     LaunchedEffect(controller, media.id) {
         while (true) {
             val duration = controller?.duration?.takeIf { it > 0L } ?: media.durationMs
@@ -604,6 +613,38 @@ private fun NowPlayingScreen(modifier: Modifier, media: LocalMedia, controller: 
                     controller?.repeatMode = repeatMode
                 }) {
                     Icon(if (repeatMode == Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat, "Repeat", tint = if (repeatMode == Player.REPEAT_MODE_OFF) Muted else Accent)
+                }
+            }
+        }
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(CardBg).padding(12.dp)) {
+            Text("PLAYBACK SPEED", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+            Spacer(Modifier.height(7.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                listOf(0.75f, 1f, 1.25f, 1.5f, 2f).forEach { speed ->
+                    FilterChip(
+                        selected = playbackSpeed == speed,
+                        onClick = { playbackSpeed = speed; controller?.setPlaybackSpeed(speed) },
+                        label = { Text(if (speed == 1f) "1×" else "${speed}×", fontSize = 10.sp) }
+                    )
+                }
+            }
+            Spacer(Modifier.height(9.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("SLEEP TIMER", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                Spacer(Modifier.weight(1f))
+                if (sleepTimerMinutes > 0) Text("Stops in ${sleepTimerMinutes} min", color = Accent, fontSize = 10.sp)
+            }
+            Spacer(Modifier.height(6.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf(15, 30, 45, 60).forEach { minutes ->
+                    FilterChip(
+                        selected = sleepTimerMinutes == minutes,
+                        onClick = { sleepTimerMinutes = minutes },
+                        label = { Text("${minutes}m", fontSize = 10.sp) }
+                    )
+                }
+                if (sleepTimerMinutes > 0) {
+                    FilterChip(selected = false, onClick = { sleepTimerMinutes = 0 }, label = { Text("Off", fontSize = 10.sp) })
                 }
             }
         }
