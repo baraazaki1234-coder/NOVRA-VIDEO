@@ -209,7 +209,9 @@ private fun NovraApp() {
         val currentPosition = player?.currentPosition ?: 0L
         val wasPlaying = player?.isPlaying == true
         val currentKey = current?.let(::mediaKey)
-        val newCurrentIndex = currentKey?.let { key -> updated.indexOfFirst { mediaKey(it) == key } } ?: -1
+        val preservedIndex = currentKey?.let { key ->
+            updated.indexOfFirst { mediaKey(it) == key }
+        } ?: -1
         playQueue = updated
         if (updated.isEmpty()) {
             player?.pause()
@@ -218,18 +220,26 @@ private fun NovraApp() {
             showNowPlaying = false
             return
         }
-        if (newCurrentIndex >= 0) {
-            val mediaItems = updated.map { entry ->
-                MediaItem.Builder().setUri(entry.uri)
-                    .setMediaMetadata(MediaMetadata.Builder().setTitle(entry.title).build())
-                    .build()
-            }
-            player?.setMediaItems(mediaItems, newCurrentIndex, currentPosition)
-            player?.prepare()
-            if (wasPlaying) player?.play() else player?.pause()
+
+        // If the current item was removed, continue with the item now occupying
+        // its position (or the previous final item when it was at the end).
+        val targetIndex = if (preservedIndex >= 0) {
+            preservedIndex
         } else {
-            selectedMedia = updated[currentIndex.coerceIn(0, updated.lastIndex)]
+            currentIndex.coerceIn(0, updated.lastIndex)
         }
+        val nextCurrent = updated[targetIndex]
+        val keepPosition = preservedIndex >= 0
+        selectedMedia = nextCurrent
+
+        val mediaItems = updated.map { entry ->
+            MediaItem.Builder().setUri(entry.uri)
+                .setMediaMetadata(MediaMetadata.Builder().setTitle(entry.title).build())
+                .build()
+        }
+        player?.setMediaItems(mediaItems, targetIndex, if (keepPosition) currentPosition else 0L)
+        player?.prepare()
+        if (wasPlaying || !keepPosition) player?.play() else player?.pause()
     }
     fun moveQueueItem(from: Int, to: Int) {
         if (from !in playQueue.indices || to !in playQueue.indices || from == to) return
