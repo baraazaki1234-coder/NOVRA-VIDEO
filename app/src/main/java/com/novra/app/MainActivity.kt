@@ -1179,6 +1179,12 @@ private fun VideoNowPlayingScreen(
     LaunchedEffect(seekFeedback) {
         if (seekFeedback.isNotEmpty()) { delay(750); seekFeedback = "" }
     }
+    LaunchedEffect(showControls, settingsExpanded, isPlaying, seekFeedback) {
+        if (showControls && isPlaying && !settingsExpanded && seekFeedback.isEmpty()) {
+            delay(4_000)
+            showControls = false
+        }
+    }
     var subtitleUri by remember(media.id) { mutableStateOf<Uri?>(null) }
     val subtitlePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
