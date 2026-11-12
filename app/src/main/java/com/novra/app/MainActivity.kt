@@ -1585,7 +1585,6 @@ private fun MediaScreen(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     MediaArtwork(item, Modifier.fillMaxSize())
-                                    if (isPlaying) Unit
                                 }
                                 Spacer(Modifier.width(12.dp))
                                 Column(Modifier.weight(1f)) {
