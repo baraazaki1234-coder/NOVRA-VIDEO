@@ -697,7 +697,7 @@ private fun NovraApp() {
                                 Modifier.padding(padding), selectedMedia!!, controller, playQueue,
                                 sleepTimerMinutes, onSleepTimerChange = { sleepTimerMinutes = it },
                                 onMoveQueueItem = ::moveQueueItem, onRemoveQueueItem = ::removeQueueItem,
-                                onBack = { showNowPlaying = false }
+                                onBack = { showNowPlaying = false }, language = language
                             )
                         } else when (selected) {
                             "Home" -> HomeScreen(
@@ -707,7 +707,7 @@ private fun NovraApp() {
                                     track to (playCounts[key] ?: 0)
                                 }.filter { it.second > 0 }.sortedByDescending { it.second }.take(5),
                                 navigate = ::navigateTo,
-                                onPlay = { startMedia(it, tracks) }
+                                onPlay = { startMedia(it, tracks) }, language = language
                             )
                             "Videos" -> MediaScreen(
                                 Modifier.padding(padding), "Videos", videos, loading, hasPermission,
@@ -747,7 +747,7 @@ private fun NovraApp() {
                                     })
                                 },
                                 onDelete = { playlistName -> savePlaylists(playlists.filterNot { it.name == playlistName }) },
-                                onPlay = { items -> if (items.isNotEmpty()) startMedia(items.first(), items) }
+                                onPlay = { items -> if (items.isNotEmpty()) startMedia(items.first(), items) }, language = language
                             )
                             "Premium" -> PremiumScreen(
                                 Modifier.padding(padding),
@@ -785,37 +785,37 @@ private fun NovraApp() {
 private fun HomeScreen(
     modifier: Modifier, videoCount: Int, musicCount: Int,
     topTracks: List<Pair<LocalMedia, Int>>,
-    navigate: (String) -> Unit, onPlay: (LocalMedia) -> Unit
+    navigate: (String) -> Unit, onPlay: (LocalMedia) -> Unit, language: String = "en"
 ) {
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
         Spacer(Modifier.height(22.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("NOVRA", color = TextPrimary, fontSize = 25.sp, fontWeight = FontWeight.Black, letterSpacing = 3.sp)
-                Text("Play your world.", color = Muted, fontSize = 11.sp)
+                Text(if (language == "ar") "شغّل عالمك." else "Play your world.", color = Muted, fontSize = 11.sp)
             }
             IconButton(onClick = { navigate("Videos") }) { Icon(Icons.Rounded.Search, "Search", tint = TextPrimary) }
             IconButton(onClick = { navigate("Playlists") }) { Icon(Icons.Rounded.MoreHoriz, "More", tint = TextPrimary) }
         }
         Spacer(Modifier.height(25.dp))
-        Text("YOUR ENTERTAINMENT", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+        Text(if (language == "ar") "ترفيهك كله" else "YOUR ENTERTAINMENT", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
         Spacer(Modifier.height(7.dp))
-        Text("What feels like\nplaying today?", color = TextPrimary, fontSize = 33.sp, lineHeight = 38.sp, fontWeight = FontWeight.Bold)
+        Text(if (language == "ar") "إيه حابب تسمع أو\nتشاهد النهارده؟" else "What feels like\nplaying today?", color = TextPrimary, fontSize = 33.sp, lineHeight = 38.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(21.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            HomeTile("VIDEO PLAYER", "Watch your videos", Icons.Rounded.PlayCircle, Brush.linearGradient(listOf(Color(0xFF536E61), Color(0xFF293C35))), Modifier.weight(1f)) { navigate("Videos") }
-            HomeTile("MUSIC PLAYER", "Listen to your music", Icons.Rounded.GraphicEq, Brush.linearGradient(listOf(Color(0xFF79634D), Color(0xFF3C3028))), Modifier.weight(1f)) { navigate("Music") }
+            HomeTile(if (language == "ar") "مشغل الفيديو" else "VIDEO PLAYER", if (language == "ar") "شاهد فيديوهاتك" else "Watch your videos", Icons.Rounded.PlayCircle, Brush.linearGradient(listOf(Color(0xFF536E61), Color(0xFF293C35))), Modifier.weight(1f)) { navigate("Videos") }
+            HomeTile(if (language == "ar") "مشغل الموسيقى" else "MUSIC PLAYER", if (language == "ar") "استمع لأغانيك" else "Listen to your music", Icons.Rounded.GraphicEq, Brush.linearGradient(listOf(Color(0xFF79634D), Color(0xFF3C3028))), Modifier.weight(1f)) { navigate("Music") }
         }
         Spacer(Modifier.height(27.dp))
-        Text("YOUR MEDIA", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+        Text(if (language == "ar") "مكتبتك" else "YOUR MEDIA", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            CountCard("VIDEOS", videoCount.toString(), Icons.Rounded.Movie, Modifier.weight(1f)) { navigate("Videos") }
-            CountCard("SONGS", musicCount.toString(), Icons.Rounded.MusicNote, Modifier.weight(1f)) { navigate("Music") }
+            CountCard(if (language == "ar") "فيديوهات" else "VIDEOS", videoCount.toString(), Icons.Rounded.Movie, Modifier.weight(1f)) { navigate("Videos") }
+            CountCard(if (language == "ar") "أغاني" else "SONGS", musicCount.toString(), Icons.Rounded.MusicNote, Modifier.weight(1f)) { navigate("Music") }
         }
         if (topTracks.isNotEmpty()) {
             Spacer(Modifier.height(24.dp))
-            Text("MOST PLAYED", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+            Text(if (language == "ar") "الأكثر تشغيلًا" else "MOST PLAYED", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
             Spacer(Modifier.height(10.dp))
             topTracks.forEachIndexed { index, entry ->
                 Row(
@@ -828,7 +828,7 @@ private fun HomeScreen(
                     Spacer(Modifier.width(11.dp))
                     Column(Modifier.weight(1f)) {
                         Text(entry.first.title, color = TextPrimary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text("${entry.second} plays", color = Muted, fontSize = 10.sp)
+                        Text(if (language == "ar") "تم التشغيل ${entry.second} مرة" else "${entry.second} plays", color = Muted, fontSize = 10.sp)
                     }
                     Icon(Icons.Rounded.PlayArrow, null, tint = Accent)
                 }
@@ -1072,7 +1072,7 @@ private fun NowPlayingScreen(
     modifier: Modifier, media: LocalMedia, controller: MediaController?, queue: List<LocalMedia>,
     sleepTimerMinutes: Int, onSleepTimerChange: (Int) -> Unit,
     onMoveQueueItem: (Int, Int) -> Unit, onRemoveQueueItem: (Int) -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit, language: String = "en"
 ) {
     var shuffle by remember(controller) { mutableStateOf(controller?.shuffleModeEnabled == true) }
     var repeatMode by remember(controller) { mutableIntStateOf(controller?.repeatMode ?: Player.REPEAT_MODE_OFF) }
@@ -1092,7 +1092,7 @@ private fun NowPlayingScreen(
     Column(modifier.fillMaxSize().padding(18.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.Rounded.KeyboardArrowDown, "Back", tint = TextPrimary) }
-            Text("Now Playing", color = TextPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Text(if (language == "ar") "يعمل الآن" else "Now Playing", color = TextPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
         }
         Spacer(Modifier.height(18.dp))
         if (media.isVideo) {
@@ -1106,7 +1106,7 @@ private fun NowPlayingScreen(
         }
         Spacer(Modifier.height(22.dp))
         Text(media.title, color = TextPrimary, fontSize = 21.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        Text(if (media.isVideo) "Video" else "Audio", color = Muted, fontSize = 12.sp)
+        Text(if (language == "ar") { if (media.isVideo) "فيديو" else "صوت" } else if (media.isVideo) "Video" else "Audio", color = Muted, fontSize = 12.sp)
         Spacer(Modifier.height(12.dp))
         Slider(
             value = playbackPosition.coerceIn(0f, playbackDuration),
@@ -1342,7 +1342,7 @@ private fun PlaylistsScreen(
     onCreate: (String) -> Unit,
     onAdd: (String, LocalMedia) -> Unit,
     onDelete: (String) -> Unit,
-    onPlay: (List<LocalMedia>) -> Unit
+    onPlay: (List<LocalMedia>) -> Unit, language: String = "en"
 ) {
     var showCreate by remember { mutableStateOf(false) }
     var newName by remember { mutableStateOf("") }
@@ -1354,8 +1354,8 @@ private fun PlaylistsScreen(
         Spacer(Modifier.height(20.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Playlists", color = TextPrimary, fontSize = 29.sp, fontWeight = FontWeight.Bold)
-                Text("${playlists.size} personal playlists", color = Muted, fontSize = 12.sp)
+                Text(if (language == "ar") "قوائم التشغيل" else "Playlists", color = TextPrimary, fontSize = 29.sp, fontWeight = FontWeight.Bold)
+                Text(if (language == "ar") "${playlists.size} قائمة تشغيل" else "${playlists.size} personal playlists", color = Muted, fontSize = 12.sp)
             }
             Button(onClick = { newName = ""; showCreate = true }) {
                 Icon(Icons.Rounded.Add, null)
