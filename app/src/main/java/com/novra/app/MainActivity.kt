@@ -161,6 +161,14 @@ private fun NovraApp() {
         prefs.edit().putString("playlists_json", json.toString()).apply()
     }
     var listenedSeconds by remember { mutableLongStateOf(prefs.getLong("listened_seconds", 0L)) }
+    var favorites by remember {
+        mutableStateOf(prefs.getStringSet("favorite_media", emptySet())?.toSet() ?: emptySet())
+    }
+    fun toggleFavorite(item: LocalMedia) {
+        val key = mediaKey(item)
+        favorites = if (key in favorites) favorites - key else favorites + key
+        prefs.edit().putStringSet("favorite_media", favorites).apply()
+    }
     val playCounts = remember {
         mutableStateMapOf<String, Int>().apply {
             prefs.all.forEach { (key, value) ->
@@ -360,13 +368,17 @@ private fun NovraApp() {
                     Modifier.padding(padding), "Videos", videos, loading, hasPermission,
                     onGrant = { permissionLauncher.launch(mediaPermissions()) },
                     compactCards = compactCards, cardStyle = cardStyle,
-                    playCounts = playCounts, onPlay = { item -> startMedia(item, videos) }
+                    playCounts = playCounts, favorites = favorites,
+                    onToggleFavorite = ::toggleFavorite,
+                    onPlay = { item -> startMedia(item, videos) }
                 )
                 "Music" -> MediaScreen(
                     Modifier.padding(padding), "Music", tracks, loading, hasPermission,
                     onGrant = { permissionLauncher.launch(mediaPermissions()) },
                     compactCards = compactCards, cardStyle = cardStyle,
-                    playCounts = playCounts, onPlay = { item -> startMedia(item, tracks) }
+                    playCounts = playCounts, favorites = favorites,
+                    onToggleFavorite = ::toggleFavorite,
+                    onPlay = { item -> startMedia(item, tracks) }
                 )
                 "Playlists" -> PlaylistsScreen(
                     Modifier.padding(padding), playlists, (videos + tracks).distinctBy { mediaKey(it) },
@@ -498,16 +510,41 @@ private fun CountCard(label: String, count: String, icon: androidx.compose.ui.gr
 @Composable
 private fun MediaScreen(
     modifier: Modifier, type: String, media: List<LocalMedia>, loading: Boolean,
-    hasPermission: Boolean, onGrant: () -> Unit, compactCards: Boolean, cardStyle: String, playCounts: Map<String, Int>, onPlay: (LocalMedia) -> Unit
+    hasPermission: Boolean, onGrant: () -> Unit, compactCards: Boolean, cardStyle: String,
+    playCounts: Map<String, Int>, favorites: Set<String>,
+    onToggleFavorite: (LocalMedia) -> Unit, onPlay: (LocalMedia) -> Unit
 ) {
     var query by remember { mutableStateOf("") }
-    var sortNewest by remember { mutableStateOf(true) }
-    val filtered = media.filter { it.title.contains(query, ignoreCase = true) }
+    var sortMenuExpanded by remember { mutableStateOf(false) }
+    var sortBy by remember { mutableStateOf("Default") }
+    var mediaFilter by remember { mutableStateOf("All") }
+    val filtered = media
+        .filter { it.title.contains(query, ignoreCase = true) }
+        .filter { mediaFilter != "Favorites" || mediaKey(it) in favorites }
+    val sortedMedia = when (sortBy) {
+        "Name" -> filtered.sortedBy { it.title.lowercase() }
+        "Duration" -> filtered.sortedByDescending { it.durationMs }
+        "Most played" -> filtered.sortedByDescending {
+            playCounts["play_count_${if (it.isVideo) "video" else "audio"}_${it.id}"] ?: 0
+        }
+        else -> filtered
+    }
     Column(modifier.fillMaxSize().padding(horizontal = 18.dp)) {
         Spacer(Modifier.height(22.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(type, color = TextPrimary, fontSize = 29.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-            IconButton(onClick = { sortNewest = !sortNewest }) { Icon(Icons.Rounded.Sort, "Sort", tint = TextPrimary) }
+            Box {
+                IconButton(onClick = { sortMenuExpanded = true }) { Icon(Icons.Rounded.Sort, "Sort", tint = TextPrimary) }
+                DropdownMenu(expanded = sortMenuExpanded, onDismissRequest = { sortMenuExpanded = false }) {
+                    listOf("Default", "Name", "Duration", "Most played").forEach { option ->
+                        DropdownMenuItem(
+                            text = { Text(option) },
+                            onClick = { sortBy = option; sortMenuExpanded = false },
+                            trailingIcon = { if (sortBy == option) Icon(Icons.Rounded.Check, null, tint = Accent) }
+                        )
+                    }
+                }
+            }
         }
         Text(if (type == "Videos") "Your video collection" else "Your music collection", color = Muted, fontSize = 12.sp)
         Spacer(Modifier.height(17.dp))
@@ -526,11 +563,21 @@ private fun MediaScreen(
         )
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("All", "Folders", "Favorites").forEachIndexed { index, label ->
-                Surface(color = if (index == 0) Accent else CardBg, shape = CircleShape) {
-                    Text(label, color = if (index == 0) AppBg else TextPrimary, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 15.dp, vertical = 9.dp))
+            listOf("All", "Favorites").forEach { label ->
+                Surface(
+                    color = if (mediaFilter == label) Accent else CardBg,
+                    shape = CircleShape,
+                    modifier = Modifier.clickable { mediaFilter = label }
+                ) {
+                    Text(
+                        label,
+                        color = if (mediaFilter == label) AppBg else TextPrimary,
+                        fontSize = 11.sp,
+                        modifier = Modifier.padding(horizontal = 15.dp, vertical = 9.dp)
+                    )
                 }
             }
+            Text("Sort: $sortBy", color = Muted, fontSize = 10.sp, modifier = Modifier.align(Alignment.CenterVertically))
         }
         Spacer(Modifier.height(14.dp))
         when {
@@ -543,15 +590,15 @@ private fun MediaScreen(
                 Button(onClick = onGrant) { Text("Grant access") }
             }
             loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Accent) }
-            filtered.isEmpty() -> Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            sortedMedia.isEmpty() -> Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                 Icon(if (type == "Videos") Icons.Rounded.OndemandVideo else Icons.Rounded.MusicNote, null, tint = Accent, modifier = Modifier.size(42.dp))
                 Spacer(Modifier.height(12.dp))
                 Text(if (query.isBlank()) "Nothing here yet" else "No results found", color = TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
                 Text(if (query.isBlank()) "Media on your device will appear here." else "Try another search.", color = Muted, fontSize = 11.sp)
             }
             else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                item { Text("${filtered.size} items", color = Muted, fontSize = 11.sp) }
-                items(filtered) { item ->
+                item { Text("${sortedMedia.size} items", color = Muted, fontSize = 11.sp) }
+                items(sortedMedia, key = { mediaKey(it) }) { item ->
                     Row(Modifier.fillMaxWidth().clip(if (cardStyle == "square") RoundedCornerShape(7.dp) else RoundedCornerShape(16.dp)).background(CardBg).clickable { onPlay(item) }.padding(if (compactCards) 8.dp else 12.dp), verticalAlignment = Alignment.CenterVertically) {
                         MediaArtwork(item, Modifier.size(if (compactCards) 42.dp else 54.dp).clip(if (cardStyle == "square") RoundedCornerShape(5.dp) else RoundedCornerShape(13.dp)))
                         Spacer(Modifier.width(12.dp))
@@ -561,7 +608,13 @@ private fun MediaScreen(
                             val countKey = "play_count_${if (item.isVideo) "video" else "audio"}_${item.id}"
                             Text("${formatDuration(item.durationMs)}  •  ${playCounts[countKey] ?: 0} plays", color = Muted, fontSize = 10.sp)
                         }
-                        IconButton(onClick = { }) { Icon(Icons.Rounded.MoreVert, "More", tint = Muted) }
+                        IconButton(onClick = { onToggleFavorite(item) }) {
+                            Icon(
+                                if (mediaKey(item) in favorites) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                                if (mediaKey(item) in favorites) "Remove from favorites" else "Add to favorites",
+                                tint = if (mediaKey(item) in favorites) Accent else Muted
+                            )
+                        }
                     }
                 }
             }
