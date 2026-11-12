@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import androidx.media3.ui.PlayerView
@@ -63,6 +64,7 @@ private fun NovraApp() {
     val context = androidx.compose.ui.platform.LocalContext.current
     var selected by remember { mutableStateOf("Home") }
     var selectedMedia by remember { mutableStateOf<LocalMedia?>(null) }
+    var playQueue by remember { mutableStateOf<List<LocalMedia>>(emptyList()) }
     var showNowPlaying by remember { mutableStateOf(false) }
     var controller by remember { mutableStateOf<MediaController?>(null) }
     val controllerFuture = remember(context) {
@@ -78,7 +80,15 @@ private fun NovraApp() {
         val media = selectedMedia
         val player = controller
         if (media != null && player != null) {
-            player.setMediaItem(MediaItem.fromUri(media.uri))
+            val queue = playQueue.ifEmpty { listOf(media) }
+            val startIndex = queue.indexOfFirst { it.id == media.id && it.isVideo == media.isVideo }.coerceAtLeast(0)
+            val items = queue.map { entry ->
+                MediaItem.Builder()
+                    .setUri(entry.uri)
+                    .setMediaMetadata(MediaMetadata.Builder().setTitle(entry.title).build())
+                    .build()
+            }
+            player.setMediaItems(items, startIndex, 0L)
             player.prepare()
             player.play()
         }
@@ -162,12 +172,12 @@ private fun NovraApp() {
                 "Videos" -> MediaScreen(
                     Modifier.padding(padding), "Videos", videos, loading, hasPermission,
                     onGrant = { permissionLauncher.launch(mediaPermissions()) },
-                    onPlay = { selectedMedia = it; showNowPlaying = true }
+                    onPlay = { item -> selectedMedia = item; playQueue = videos; showNowPlaying = true }
                 )
                 "Music" -> MediaScreen(
                     Modifier.padding(padding), "Music", tracks, loading, hasPermission,
                     onGrant = { permissionLauncher.launch(mediaPermissions()) },
-                    onPlay = { selectedMedia = it; showNowPlaying = true }
+                    onPlay = { item -> selectedMedia = item; playQueue = tracks; showNowPlaying = true }
                 )
                 else -> PlaylistsScreen(Modifier.padding(padding))
             }
