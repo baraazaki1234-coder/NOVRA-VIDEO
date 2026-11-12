@@ -391,6 +391,8 @@ private fun NovraApp() {
         else showExitDialog = true
     }
     var controller by remember { mutableStateOf<MediaController?>(null) }
+    var playbackRequestId by remember { mutableIntStateOf(0) }
+    var handledPlaybackRequestId by remember { mutableIntStateOf(0) }
     var sleepTimerMinutes by remember { mutableIntStateOf(0) }
     LaunchedEffect(sleepTimerMinutes, controller) {
         if (sleepTimerMinutes > 0) {
@@ -471,6 +473,7 @@ private fun NovraApp() {
     fun startMedia(item: LocalMedia, queue: List<LocalMedia>) {
         selectedMedia = item
         playQueue = queue
+        playbackRequestId += 1
         showNowPlaying = true
         val key = "play_count_${if (item.isVideo) "video" else "audio"}_${item.id}"
         val count = prefs.getInt(key, 0) + 1
@@ -505,11 +508,14 @@ private fun NovraApp() {
             }
         }
     }
-    LaunchedEffect(selectedMedia, controller) {
+    LaunchedEffect(selectedMedia, controller, playbackRequestId) {
         val media = selectedMedia
         val player = controller
         if (media != null && player != null) {
-            if (player.currentMediaItem?.localConfiguration?.uri == media.uri) return@LaunchedEffect
+            val isNewPlayRequest = playbackRequestId != handledPlaybackRequestId
+            if (!isNewPlayRequest && player.currentMediaItem?.localConfiguration?.uri == media.uri) {
+                return@LaunchedEffect
+            }
             val queue = playQueue.ifEmpty { listOf(media) }
             val startIndex = queue.indexOfFirst { it.id == media.id && it.isVideo == media.isVideo }.coerceAtLeast(0)
             val items = queue.map { entry ->
@@ -521,6 +527,7 @@ private fun NovraApp() {
             player.setMediaItems(items, startIndex, 0L)
             player.prepare()
             player.play()
+            handledPlaybackRequestId = playbackRequestId
         }
     }
     var videos by remember { mutableStateOf<List<LocalMedia>>(emptyList()) }
