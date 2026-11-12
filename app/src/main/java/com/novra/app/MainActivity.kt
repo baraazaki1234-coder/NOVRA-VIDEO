@@ -205,24 +205,31 @@ private fun mediaPermissions(): Array<String> = when {
     else -> arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
 }
 
-private fun hasMediaPermissions(context: android.content.Context): Boolean {
+private fun hasAudioPermission(context: android.content.Context): Boolean =
+    ContextCompat.checkSelfPermission(
+        context,
+        if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_AUDIO
+        else Manifest.permission.READ_EXTERNAL_STORAGE
+    ) == PackageManager.PERMISSION_GRANTED
+
+private fun hasVideoPermission(context: android.content.Context): Boolean {
     if (Build.VERSION.SDK_INT < 33) {
         return ContextCompat.checkSelfPermission(
             context, Manifest.permission.READ_EXTERNAL_STORAGE
         ) == PackageManager.PERMISSION_GRANTED
     }
-    val audioGranted = ContextCompat.checkSelfPermission(
-        context, Manifest.permission.READ_MEDIA_AUDIO
-    ) == PackageManager.PERMISSION_GRANTED
-    val videoGranted = ContextCompat.checkSelfPermission(
+    val fullAccess = ContextCompat.checkSelfPermission(
         context, Manifest.permission.READ_MEDIA_VIDEO
     ) == PackageManager.PERMISSION_GRANTED
-    val selectedVisualMediaGranted = Build.VERSION.SDK_INT >= 34 &&
+    val selectedAccess = Build.VERSION.SDK_INT >= 34 &&
         ContextCompat.checkSelfPermission(
             context, Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED
         ) == PackageManager.PERMISSION_GRANTED
-    return audioGranted && (videoGranted || selectedVisualMediaGranted)
+    return fullAccess || selectedAccess
 }
+
+private fun hasMediaPermissions(context: android.content.Context): Boolean =
+    hasAudioPermission(context) || hasVideoPermission(context)
 
 @Composable
 private fun NovraApp() {
@@ -462,6 +469,8 @@ private fun NovraApp() {
     var hasPermission by remember {
         mutableStateOf(hasMediaPermissions(context))
     }
+    var hasAudioAccess by remember { mutableStateOf(hasAudioPermission(context)) }
+    var hasVideoAccess by remember { mutableStateOf(hasVideoPermission(context)) }
     var loading by remember { mutableStateOf(false) }
     var mediaRefresh by remember { mutableIntStateOf(0) }
     DisposableEffect(context) {
@@ -487,21 +496,33 @@ private fun NovraApp() {
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { _ ->
-        hasPermission = hasMediaPermissions(context)
+        hasAudioAccess = hasAudioPermission(context)
+        hasVideoAccess = hasVideoPermission(context)
+        hasPermission = hasAudioAccess || hasVideoAccess
     }
 
-    LaunchedEffect(hasPermission, mediaRefresh) {
+    LaunchedEffect(hasPermission, hasAudioAccess, hasVideoAccess, mediaRefresh) {
         if (hasPermission) {
             delay(300)
             loading = true
             try {
                 val result = withContext(Dispatchers.IO) {
-                    runCatching { MediaLibrary.videos(context) to MediaLibrary.music(context) }
+                    val videoItems = if (hasVideoAccess) {
+                        runCatching { MediaLibrary.videos(context) }.getOrDefault(emptyList())
+                    } else emptyList()
+                    val audioItems = if (hasAudioAccess) {
+                        runCatching { MediaLibrary.music(context) }.getOrDefault(emptyList())
+                    } else emptyList()
+                    videoItems to audioItems
                 }
-                result.onSuccess { (v, a) -> videos = v; tracks = a }
+                videos = result.first
+                tracks = result.second
             } finally {
                 loading = false
             }
+        } else {
+            videos = emptyList()
+            tracks = emptyList()
         }
     }
 
@@ -774,7 +795,7 @@ private fun NovraApp() {
                                 onPlay = { startMedia(it, tracks) }, language = language
                             )
                             "Videos" -> MediaScreen(
-                                Modifier.padding(padding), "Videos", videos, loading, hasPermission,
+                                Modifier.padding(padding), "Videos", videos, loading, hasVideoAccess,
                                 onGrant = { permissionLauncher.launch(mediaPermissions()) },
                                 compactCards = compactCards, cardStyle = cardStyle,
                                 playCounts = playCounts, favorites = favorites,
@@ -783,7 +804,7 @@ private fun NovraApp() {
                                 language = language
                             )
                             "Music" -> MediaScreen(
-                                Modifier.padding(padding), "Music", tracks, loading, hasPermission,
+                                Modifier.padding(padding), "Music", tracks, loading, hasAudioAccess,
                                 onGrant = { permissionLauncher.launch(mediaPermissions()) },
                                 compactCards = compactCards, cardStyle = cardStyle,
                                 playCounts = playCounts, favorites = favorites,
