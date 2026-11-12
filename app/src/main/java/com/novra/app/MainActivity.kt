@@ -202,6 +202,46 @@ private fun NovraApp() {
             if (listenedSeconds % 15L == 0L) prefs.edit().putLong("listened_seconds", listenedSeconds).apply()
         }
     }
+    fun updatePlaybackQueue(updated: List<LocalMedia>) {
+        val player = controller
+        val currentIndex = player?.currentMediaItemIndex ?: 0
+        val current = playQueue.getOrNull(currentIndex) ?: selectedMedia
+        val currentPosition = player?.currentPosition ?: 0L
+        val wasPlaying = player?.isPlaying == true
+        val currentKey = current?.let(::mediaKey)
+        val newCurrentIndex = currentKey?.let { key -> updated.indexOfFirst { mediaKey(it) == key } } ?: -1
+        playQueue = updated
+        if (updated.isEmpty()) {
+            player?.pause()
+            player?.clearMediaItems()
+            selectedMedia = null
+            showNowPlaying = false
+            return
+        }
+        if (newCurrentIndex >= 0) {
+            val mediaItems = updated.map { entry ->
+                MediaItem.Builder().setUri(entry.uri)
+                    .setMediaMetadata(MediaMetadata.Builder().setTitle(entry.title).build())
+                    .build()
+            }
+            player?.setMediaItems(mediaItems, newCurrentIndex, currentPosition)
+            player?.prepare()
+            if (wasPlaying) player?.play() else player?.pause()
+        } else {
+            selectedMedia = updated[currentIndex.coerceIn(0, updated.lastIndex)]
+        }
+    }
+    fun moveQueueItem(from: Int, to: Int) {
+        if (from !in playQueue.indices || to !in playQueue.indices || from == to) return
+        val updated = playQueue.toMutableList()
+        val item = updated.removeAt(from)
+        updated.add(to, item)
+        updatePlaybackQueue(updated)
+    }
+    fun removeQueueItem(index: Int) {
+        if (index !in playQueue.indices) return
+        updatePlaybackQueue(playQueue.toMutableList().also { it.removeAt(index) })
+    }
     fun startMedia(item: LocalMedia, queue: List<LocalMedia>) {
         selectedMedia = item
         playQueue = queue
@@ -353,7 +393,12 @@ private fun NovraApp() {
             }
         ) { padding ->
             if (showNowPlaying && selectedMedia != null) {
-                NowPlayingScreen(Modifier.padding(padding), selectedMedia!!, controller, playQueue, sleepTimerMinutes, onSleepTimerChange = { sleepTimerMinutes = it }, onBack = { showNowPlaying = false })
+                NowPlayingScreen(
+                    Modifier.padding(padding), selectedMedia!!, controller, playQueue,
+                    sleepTimerMinutes, onSleepTimerChange = { sleepTimerMinutes = it },
+                    onMoveQueueItem = ::moveQueueItem, onRemoveQueueItem = ::removeQueueItem,
+                    onBack = { showNowPlaying = false }
+                )
             } else when (selected) {
                 "Home" -> HomeScreen(
                     Modifier.padding(padding), videos.size, tracks.size,
@@ -690,7 +735,9 @@ private fun MediaArtwork(media: LocalMedia, modifier: Modifier = Modifier) {
 @Composable
 private fun NowPlayingScreen(
     modifier: Modifier, media: LocalMedia, controller: MediaController?, queue: List<LocalMedia>,
-    sleepTimerMinutes: Int, onSleepTimerChange: (Int) -> Unit, onBack: () -> Unit
+    sleepTimerMinutes: Int, onSleepTimerChange: (Int) -> Unit,
+    onMoveQueueItem: (Int, Int) -> Unit, onRemoveQueueItem: (Int) -> Unit,
+    onBack: () -> Unit
 ) {
     var shuffle by remember(controller) { mutableStateOf(controller?.shuffleModeEnabled == true) }
     var repeatMode by remember(controller) { mutableIntStateOf(controller?.repeatMode ?: Player.REPEAT_MODE_OFF) }
@@ -804,7 +851,7 @@ private fun NowPlayingScreen(
                 Text("${queue.size} items", color = Muted, fontSize = 10.sp)
             }
             Spacer(Modifier.height(8.dp))
-            queue.take(8).forEachIndexed { index, item ->
+            queue.forEachIndexed { index, item ->
                 val isCurrent = index == currentQueueIndex
                 Row(
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(13.dp))
@@ -820,6 +867,21 @@ private fun NowPlayingScreen(
                         Text(if (isCurrent) "Now playing" else formatDuration(item.durationMs), color = Muted, fontSize = 10.sp)
                     }
                     if (isCurrent) Icon(Icons.Rounded.VolumeUp, null, tint = Accent, modifier = Modifier.size(17.dp))
+                    IconButton(
+                        enabled = index > 0,
+                        onClick = { onMoveQueueItem(index, index - 1) },
+                        modifier = Modifier.size(32.dp)
+                    ) { Icon(Icons.Rounded.KeyboardArrowUp, "Move up", tint = if (index > 0) TextPrimary else Muted) }
+                    IconButton(
+                        enabled = index < queue.lastIndex,
+                        onClick = { onMoveQueueItem(index, index + 1) },
+                        modifier = Modifier.size(32.dp)
+                    ) { Icon(Icons.Rounded.KeyboardArrowDown, "Move down", tint = if (index < queue.lastIndex) TextPrimary else Muted) }
+                    IconButton(
+                        enabled = queue.size > 1,
+                        onClick = { onRemoveQueueItem(index) },
+                        modifier = Modifier.size(32.dp)
+                    ) { Icon(Icons.Rounded.Close, "Remove from queue", tint = Muted) }
                 }
             }
         }
