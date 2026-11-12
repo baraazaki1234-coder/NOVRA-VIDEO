@@ -5,11 +5,18 @@ import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 
 class NovraPlaybackService : MediaSessionService() {
+    companion object {
+        @Volatile
+        var currentAudioSessionId: Int = 0
+            private set
+    }
+
     private var mediaSession: MediaSession? = null
 
     override fun onCreate() {
         super.onCreate()
         val player = ExoPlayer.Builder(this).build()
+        currentAudioSessionId = player.audioSessionId
         mediaSession = MediaSession.Builder(this, player).build()
     }
 
@@ -21,6 +28,7 @@ class NovraPlaybackService : MediaSessionService() {
             release()
         }
         mediaSession = null
+        currentAudioSessionId = 0
         super.onDestroy()
     }
 }
