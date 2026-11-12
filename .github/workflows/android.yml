@@ -23,12 +23,12 @@ jobs:
         run: |
           mkdir -p "$HOME/.android"
           if [ ! -f "$HOME/.android/debug.keystore" ]; then
-            keytool -genkeypair -v \\
-              -keystore "$HOME/.android/debug.keystore" \\
-              -storepass android \\
-              -alias androiddebugkey \\
-              -keypass android \\
-              -dname "CN=NOVRA Debug,O=NOVRA,C=EG" \\
+            keytool -genkeypair -v \
+              -keystore "$HOME/.android/debug.keystore" \
+              -storepass android \
+              -alias androiddebugkey \
+              -keypass android \
+              -dname "CN=NOVRA Debug,O=NOVRA,C=EG" \
               -keyalg RSA -keysize 2048 -validity 10000 -noprompt
           fi
       - uses: gradle/actions/setup-gradle@v4
