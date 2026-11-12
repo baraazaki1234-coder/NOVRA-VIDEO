@@ -538,6 +538,16 @@ private fun MediaArtwork(media: LocalMedia, modifier: Modifier = Modifier) {
 private fun NowPlayingScreen(modifier: Modifier, media: LocalMedia, controller: MediaController?, onBack: () -> Unit) {
     var shuffle by remember(controller) { mutableStateOf(controller?.shuffleModeEnabled == true) }
     var repeatMode by remember(controller) { mutableIntStateOf(controller?.repeatMode ?: Player.REPEAT_MODE_OFF) }
+    var playbackPosition by remember(controller) { mutableFloatStateOf(0f) }
+    var playbackDuration by remember(controller) { mutableFloatStateOf(media.durationMs.coerceAtLeast(1L).toFloat()) }
+    LaunchedEffect(controller, media.id) {
+        while (true) {
+            val duration = controller?.duration?.takeIf { it > 0L } ?: media.durationMs
+            playbackDuration = duration.coerceAtLeast(1L).toFloat()
+            playbackPosition = (controller?.currentPosition ?: 0L).coerceIn(0L, duration.coerceAtLeast(1L)).toFloat()
+            delay(500)
+        }
+    }
     Column(modifier.fillMaxSize().padding(18.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.Rounded.KeyboardArrowDown, "Back", tint = Color.White) }
@@ -556,6 +566,22 @@ private fun NowPlayingScreen(modifier: Modifier, media: LocalMedia, controller: 
         Spacer(Modifier.height(22.dp))
         Text(media.title, color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
         Text(if (media.isVideo) "Video" else "Audio", color = Muted, fontSize = 12.sp)
+        Spacer(Modifier.height(12.dp))
+        Slider(
+            value = playbackPosition.coerceIn(0f, playbackDuration),
+            onValueChange = { playbackPosition = it },
+            onValueChangeFinished = { controller?.seekTo(playbackPosition.toLong()) },
+            valueRange = 0f..playbackDuration,
+            colors = SliderDefaults.colors(
+                thumbColor = Accent,
+                activeTrackColor = Accent,
+                inactiveTrackColor = CardAlt
+            )
+        )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(formatDuration(playbackPosition.toLong()), color = Muted, fontSize = 10.sp)
+            Text(formatDuration(playbackDuration.toLong()), color = Muted, fontSize = 10.sp)
+        }
         Spacer(Modifier.height(16.dp))
         if (!media.isVideo) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
