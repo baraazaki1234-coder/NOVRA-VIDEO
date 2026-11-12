@@ -14,6 +14,7 @@ import android.os.Looper
 import android.provider.MediaStore
 import android.media.MediaMetadataRetriever
 import android.util.Size
+import android.util.LruCache
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -62,6 +63,10 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
+
+private val mediaArtworkCache = object : LruCache<String, Bitmap>(12 * 1024 * 1024) {
+    override fun sizeOf(key: String, value: Bitmap): Int = value.allocationByteCount
+}
 
 private data class NovraPalette(
     val background: Color, val surface: Color, val surfaceVariant: Color,
@@ -883,7 +888,8 @@ private fun MediaArtwork(media: LocalMedia, modifier: Modifier = Modifier) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val bitmap by produceState<Bitmap?>(initialValue = null, media.uri) {
         value = withContext(Dispatchers.IO) {
-            runCatching {
+            val cacheKey = media.uri.toString()
+            mediaArtworkCache.get(cacheKey) ?: runCatching {
                 if (media.isVideo && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     context.contentResolver.loadThumbnail(media.uri, Size(256, 256), null)
                 } else if (!media.isVideo) {
@@ -900,7 +906,9 @@ private fun MediaArtwork(media: LocalMedia, modifier: Modifier = Modifier) {
                         retriever.release()
                     }
                 } else null
-            }.getOrNull()
+            }.getOrNull()?.also { bitmap ->
+                mediaArtworkCache.put(cacheKey, bitmap)
+            }
         }
     }
     Box(modifier.background(CardAlt), contentAlignment = Alignment.Center) {
