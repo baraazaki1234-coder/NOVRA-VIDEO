@@ -2,12 +2,6 @@ name: Viora Android build
 run-name: Viora validation and APK build
 
 on:
-  push:
-    branches:
-      - release/novra-android-next
-  pull_request:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
