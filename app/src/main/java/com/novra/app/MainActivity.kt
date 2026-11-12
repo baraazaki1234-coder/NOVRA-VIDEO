@@ -448,10 +448,14 @@ private fun NovraApp() {
     CompositionLocalProvider(LocalNovraPalette provides palette, LocalLayoutDirection provides if (language == "ar") LayoutDirection.Rtl else LayoutDirection.Ltr) {
         MaterialTheme(colorScheme = if (themeMode == "light") lightColorScheme(
             background = AppBg, surface = CardBg, surfaceVariant = CardAlt,
-            primary = Accent, onBackground = TextPrimary, onSurface = TextPrimary
+            primary = Accent, onPrimary = Color.White, onBackground = TextPrimary,
+            onSurface = TextPrimary, onSurfaceVariant = Muted, outline = Muted,
+            secondary = Accent, tertiary = Accent
         ) else darkColorScheme(
             background = AppBg, surface = CardBg, surfaceVariant = CardAlt,
-            primary = Accent, onBackground = TextPrimary, onSurface = TextPrimary
+            primary = Accent, onPrimary = Color(0xFF101310), onBackground = TextPrimary,
+            onSurface = TextPrimary, onSurfaceVariant = Muted, outline = Muted,
+            secondary = Accent, tertiary = Accent
         )) {
             if (showExitDialog) AlertDialog(
                 onDismissRequest = { showExitDialog = false },
@@ -597,7 +601,15 @@ private fun NovraApp() {
                                     }
                                     Column(Modifier.weight(1f).padding(start = 10.dp)) {
                                         Text(
-                                            if (showNowPlaying) (if (language == "ar") "يعمل الآن" else "Now Playing") else if (selected == "Home") "NOVRA" else selected,
+                                            if (showNowPlaying) (if (language == "ar") "يعمل الآن" else "Now Playing") else if (selected == "Home") "NOVRA" else if (language == "ar") when (selected) {
+                                                "Videos" -> "الفيديوهات"
+                                                "Music" -> "الأغاني"
+                                                "Playlists" -> "قوائم التشغيل"
+                                                "Favorites" -> "المفضلة"
+                                                "Settings" -> "الإعدادات"
+                                                "Premium" -> "NOVRA Premium"
+                                                else -> selected
+                                            } else selected,
                                             color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold
                                         )
                                         Text(
@@ -629,7 +641,13 @@ private fun NovraApp() {
                                                 },
                                                 text = {
                                                     Text(
-                                                        destination,
+                                                        if (language == "ar") when (destination) {
+                                                            "Home" -> "الرئيسية"
+                                                            "Videos" -> "الفيديوهات"
+                                                            "Music" -> "الأغاني"
+                                                            "Playlists" -> "قوائمي"
+                                                            else -> "المفضلة"
+                                                        } else destination,
                                                         fontSize = 13.sp,
                                                         fontWeight = if (tabIndex == index) FontWeight.SemiBold else FontWeight.Medium
                                                     )
