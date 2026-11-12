@@ -1163,6 +1163,7 @@ private fun VideoNowPlayingScreen(
     modifier: Modifier,
     media: LocalMedia,
     controller: MediaController?,
+    queue: List<LocalMedia>,
     position: Float,
     duration: Float,
     onBack: () -> Unit,
@@ -1199,10 +1200,19 @@ private fun VideoNowPlayingScreen(
             subtitleUri = uri
             val subtitle = MediaItem.SubtitleConfiguration.Builder(uri)
                 .setMimeType("application/x-subrip").setLanguage("und").setLabel("Viora subtitle").build()
-            val item = MediaItem.Builder().setUri(media.uri).setSubtitleConfigurations(listOf(subtitle)).build()
             controller?.let { player ->
                 val wasPlaying = player.isPlaying
-                player.setMediaItem(item, position.toLong()); player.prepare()
+                val activeQueue = queue.ifEmpty { listOf(media) }
+                val activeIndex = player.currentMediaItemIndex.coerceIn(0, activeQueue.lastIndex)
+                val rebuiltItems = activeQueue.mapIndexed { index, entry ->
+                    val builder = MediaItem.Builder()
+                        .setUri(entry.uri)
+                        .setMediaMetadata(MediaMetadata.Builder().setTitle(entry.title).setArtist(entry.artist).build())
+                    if (index == activeIndex) builder.setSubtitleConfigurations(listOf(subtitle))
+                    builder.build()
+                }
+                player.setMediaItems(rebuiltItems, activeIndex, position.toLong())
+                player.prepare()
                 if (wasPlaying) player.play()
             }
         }
@@ -1856,6 +1866,7 @@ private fun NowPlayingScreen(
             modifier = modifier,
             media = media,
             controller = controller,
+            queue = queue,
             position = playbackPosition,
             duration = playbackDuration,
             onBack = onBack,
