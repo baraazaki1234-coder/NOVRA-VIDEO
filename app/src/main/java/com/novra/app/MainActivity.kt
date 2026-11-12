@@ -277,7 +277,7 @@ private fun NovraApp() {
             }
         ) { padding ->
             if (showNowPlaying && selectedMedia != null) {
-                NowPlayingScreen(Modifier.padding(padding), selectedMedia!!, controller, onBack = { showNowPlaying = false })
+                NowPlayingScreen(Modifier.padding(padding), selectedMedia!!, controller, playQueue, onBack = { showNowPlaying = false })
             } else when (selected) {
                 "Home" -> HomeScreen(
                     Modifier.padding(padding), videos.size, tracks.size,
@@ -535,9 +535,10 @@ private fun MediaArtwork(media: LocalMedia, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun NowPlayingScreen(modifier: Modifier, media: LocalMedia, controller: MediaController?, onBack: () -> Unit) {
+private fun NowPlayingScreen(modifier: Modifier, media: LocalMedia, controller: MediaController?, queue: List<LocalMedia>, onBack: () -> Unit) {
     var shuffle by remember(controller) { mutableStateOf(controller?.shuffleModeEnabled == true) }
     var repeatMode by remember(controller) { mutableIntStateOf(controller?.repeatMode ?: Player.REPEAT_MODE_OFF) }
+    var currentQueueIndex by remember(controller) { mutableIntStateOf(controller?.currentMediaItemIndex ?: 0) }
     var playbackPosition by remember(controller) { mutableFloatStateOf(0f) }
     var playbackDuration by remember(controller) { mutableFloatStateOf(media.durationMs.coerceAtLeast(1L).toFloat()) }
     LaunchedEffect(controller, media.id) {
@@ -545,6 +546,7 @@ private fun NowPlayingScreen(modifier: Modifier, media: LocalMedia, controller: 
             val duration = controller?.duration?.takeIf { it > 0L } ?: media.durationMs
             playbackDuration = duration.coerceAtLeast(1L).toFloat()
             playbackPosition = (controller?.currentPosition ?: 0L).coerceIn(0L, duration.coerceAtLeast(1L)).toFloat()
+            currentQueueIndex = controller?.currentMediaItemIndex ?: 0
             delay(500)
         }
     }
@@ -602,6 +604,33 @@ private fun NowPlayingScreen(modifier: Modifier, media: LocalMedia, controller: 
                     controller?.repeatMode = repeatMode
                 }) {
                     Icon(if (repeatMode == Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat, "Repeat", tint = if (repeatMode == Player.REPEAT_MODE_OFF) Muted else Accent)
+                }
+            }
+        }
+        if (queue.isNotEmpty()) {
+            Spacer(Modifier.height(12.dp))
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("UP NEXT", color = Accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp)
+                Spacer(Modifier.weight(1f))
+                Text("${queue.size} items", color = Muted, fontSize = 10.sp)
+            }
+            Spacer(Modifier.height(8.dp))
+            queue.take(8).forEachIndexed { index, item ->
+                val isCurrent = index == currentQueueIndex
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(13.dp))
+                        .background(if (isCurrent) CardAlt else Color.Transparent)
+                        .clickable { controller?.seekTo(index, 0L) }
+                        .padding(horizontal = 9.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    MediaArtwork(item, Modifier.size(42.dp).clip(RoundedCornerShape(8.dp)))
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(item.title, color = if (isCurrent) Accent else Color.White, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(if (isCurrent) "Now playing" else formatDuration(item.durationMs), color = Muted, fontSize = 10.sp)
+                    }
+                    if (isCurrent) Icon(Icons.Rounded.VolumeUp, null, tint = Accent, modifier = Modifier.size(17.dp))
                 }
             }
         }
