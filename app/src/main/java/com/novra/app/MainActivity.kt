@@ -1493,28 +1493,125 @@ private fun MediaScreen(
                 Text(if (language == "ar") { if (query.isBlank()) "لا توجد وسائط بعد" else "لا توجد نتائج مطابقة" } else if (query.isBlank()) "Nothing here yet" else "No results found", color = TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
                 Text(if (language == "ar") { if (query.isBlank()) "ستظهر وسائط جهازك هنا." else "جرّب كلمات بحث أخرى." } else if (query.isBlank()) "Media on your device will appear here." else "Try another search.", color = Muted, fontSize = 11.sp)
             }
-            else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                item { Text("${sortedMedia.size} items", color = Muted, fontSize = 11.sp) }
-                items(sortedMedia, key = { mediaKey(it) }) { item ->
-                    Row(Modifier.fillMaxWidth().clip(if (cardStyle == "square") RoundedCornerShape(7.dp) else RoundedCornerShape(16.dp)).background(CardBg).clickable { onPlay(item) }.padding(if (compactCards) 8.dp else 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        MediaArtwork(item, Modifier.size(if (compactCards) 42.dp else 54.dp).clip(if (cardStyle == "square") RoundedCornerShape(5.dp) else RoundedCornerShape(13.dp)))
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(item.title, color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Spacer(Modifier.height(4.dp))
-                            val countKey = "play_count_${if (item.isVideo) "video" else "audio"}_${item.id}"
+            else -> {
+                if (type == "Videos") {
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(if (compactCards) 10.dp else 16.dp),
+                        contentPadding = PaddingValues(bottom = 20.dp)
+                    ) {
+                        item {
                             Text(
-                                if (!item.isVideo && item.artist.isNotBlank()) item.artist
-                                else "${formatDuration(item.durationMs)}  •  ${playCounts[countKey] ?: 0} plays",
-                                color = Muted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis
+                                if (language == "ar") "${sortedMedia.size} فيديو" else "${sortedMedia.size} videos",
+                                color = Muted, fontSize = 11.sp
                             )
                         }
-                        IconButton(onClick = { onToggleFavorite(item) }) {
-                            Icon(
-                                if (mediaKey(item) in favorites) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                                if (mediaKey(item) in favorites) "Remove from favorites" else "Add to favorites",
-                                tint = if (mediaKey(item) in favorites) Accent else Muted
+                        items(sortedMedia, key = { mediaKey(it) }) { item ->
+                            val countKey = "play_count_video_${item.id}"
+                            Column(
+                                Modifier.fillMaxWidth()
+                                    .clip(if (cardStyle == "square") RoundedCornerShape(8.dp) else RoundedCornerShape(19.dp))
+                                    .background(CardBg)
+                                    .clickable { onPlay(item) }
+                                    .padding(if (compactCards) 8.dp else 10.dp)
+                            ) {
+                                Box(
+                                    Modifier.fillMaxWidth()
+                                        .aspectRatio(16f / 9f)
+                                        .clip(if (cardStyle == "square") RoundedCornerShape(5.dp) else RoundedCornerShape(13.dp))
+                                        .background(CardAlt)
+                                ) {
+                                    MediaArtwork(item, Modifier.fillMaxSize())
+                                    Box(
+                                        Modifier.align(Alignment.Center).size(48.dp)
+                                            .clip(CircleShape).background(Color.Black.copy(alpha = 0.62f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(Icons.Rounded.PlayArrow, null, tint = Color.White, modifier = Modifier.size(31.dp))
+                                    }
+                                    Surface(
+                                        Modifier.align(Alignment.BottomEnd).padding(8.dp),
+                                        color = Color.Black.copy(alpha = 0.78f),
+                                        shape = RoundedCornerShape(6.dp)
+                                    ) {
+                                        Text(formatDuration(item.durationMs), color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp))
+                                    }
+                                }
+                                Spacer(Modifier.height(10.dp))
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text(item.title, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                        Spacer(Modifier.height(4.dp))
+                                        Text(
+                                            if (language == "ar") "${playCounts[countKey] ?: 0} مشاهدة · من جهازك" else "${playCounts[countKey] ?: 0} plays · On your device",
+                                            color = Muted, fontSize = 10.sp, maxLines = 1
+                                        )
+                                    }
+                                    IconButton(onClick = { onToggleFavorite(item) }) {
+                                        Icon(
+                                            if (mediaKey(item) in favorites) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                                            if (mediaKey(item) in favorites) "Remove from favorites" else "Add to favorites",
+                                            tint = if (mediaKey(item) in favorites) Accent else Muted
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(if (compactCards) 5.dp else 8.dp),
+                        contentPadding = PaddingValues(bottom = 20.dp)
+                    ) {
+                        item {
+                            Text(
+                                if (language == "ar") "${sortedMedia.size} أغنية" else "${sortedMedia.size} songs",
+                                color = Muted, fontSize = 11.sp
                             )
+                        }
+                        items(sortedMedia, key = { mediaKey(it) }) { item ->
+                            val countKey = "play_count_audio_${item.id}"
+                            Row(
+                                Modifier.fillMaxWidth()
+                                    .clip(if (cardStyle == "square") RoundedCornerShape(7.dp) else RoundedCornerShape(15.dp))
+                                    .background(CardBg)
+                                    .clickable { onPlay(item) }
+                                    .padding(if (compactCards) 8.dp else 11.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    Modifier.size(if (compactCards) 46.dp else 56.dp)
+                                        .clip(if (cardStyle == "square") RoundedCornerShape(5.dp) else RoundedCornerShape(11.dp))
+                                        .background(CardAlt),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    MediaArtwork(item, Modifier.fillMaxSize())
+                                    if (isPlaying) Unit
+                                }
+                                Spacer(Modifier.width(12.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(item.title, color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Spacer(Modifier.height(4.dp))
+                                    Text(
+                                        item.artist.ifBlank { if (language == "ar") "فنان غير معروف" else "Unknown artist" },
+                                        color = Muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis
+                                    )
+                                    Spacer(Modifier.height(3.dp))
+                                    Text(
+                                        "${formatDuration(item.durationMs)}  ·  ${playCounts[countKey] ?: 0} plays",
+                                        color = Muted.copy(alpha = 0.8f), fontSize = 9.sp, maxLines = 1
+                                    )
+                                }
+                                IconButton(onClick = { onToggleFavorite(item) }) {
+                                    Icon(
+                                        if (mediaKey(item) in favorites) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                                        if (mediaKey(item) in favorites) "Remove from favorites" else "Add to favorites",
+                                        tint = if (mediaKey(item) in favorites) Accent else Muted
+                                    )
+                                }
+                                IconButton(onClick = { onPlay(item) }) {
+                                    Icon(Icons.Rounded.PlayArrow, if (language == "ar") "تشغيل" else "Play", tint = Accent)
+                                }
+                            }
                         }
                     }
                 }
