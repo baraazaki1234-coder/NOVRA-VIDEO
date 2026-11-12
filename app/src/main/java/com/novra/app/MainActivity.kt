@@ -1284,6 +1284,27 @@ private fun NowPlayingScreen(
     var playbackPosition by remember(controller) { mutableFloatStateOf(0f) }
     var playbackDuration by remember(controller) { mutableFloatStateOf(media.durationMs.coerceAtLeast(1L).toFloat()) }
     var playbackSpeed by remember(controller) { mutableFloatStateOf(1f) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val lyricPrefs = remember(context) { context.getSharedPreferences("novra_lyrics", android.content.Context.MODE_PRIVATE) }
+    var lyricsUri by remember(media.id, media.isVideo) {
+        mutableStateOf(lyricPrefs.getString("${if (media.isVideo) "video" else "audio"}_${media.id}", null)?.let(Uri::parse))
+    }
+    var lyricLines by remember(media.id, media.isVideo) { mutableStateOf<List<LyricLine>>(emptyList()) }
+    val lyricsPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+            lyricsUri = uri
+            lyricPrefs.edit().putString("${if (media.isVideo) "video" else "audio"}_${media.id}", uri.toString()).apply()
+        }
+    }
+    LaunchedEffect(lyricsUri, media.id) {
+        lyricLines = if (lyricsUri == null) emptyList() else withContext(Dispatchers.IO) {
+            runCatching {
+                context.contentResolver.openInputStream(lyricsUri!!)?.bufferedReader()?.use { parseLrc(it.readText()) }
+                    ?: emptyList()
+            }.getOrDefault(emptyList())
+        }
+    }
     LaunchedEffect(controller, media.id) {
         while (true) {
             val duration = controller?.duration?.takeIf { it > 0L } ?: media.durationMs
@@ -1319,6 +1340,44 @@ private fun NowPlayingScreen(
         Spacer(Modifier.height(22.dp))
         Text(media.title, color = TextPrimary, fontSize = 21.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
         if (media.artist.isNotBlank()) Text(media.artist, color = Muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (!media.isVideo) {
+            Spacer(Modifier.height(12.dp))
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(if (language == "ar") "كلمات الأغنية" else "SYNCED LYRICS", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+                    Text(
+                        if (lyricLines.isEmpty()) {
+                            if (language == "ar") "استورد ملف كلمات بصيغة LRC" else "Import an .LRC lyrics file"
+                        } else {
+                            if (language == "ar") "${lyricLines.size} سطر متزامن" else "${lyricLines.size} synced lines"
+                        },
+                        color = Muted, fontSize = 10.sp
+                    )
+                }
+                OutlinedButton(onClick = { lyricsPicker.launch(arrayOf("text/plain", "application/octet-stream", "*/*")) }) {
+                    Icon(Icons.Rounded.Subtitles, null)
+                    Spacer(Modifier.width(5.dp))
+                    Text(if (language == "ar") "استيراد" else "Import LRC")
+                }
+            }
+            if (lyricLines.isNotEmpty()) {
+                val activeLyric = lyricLines.indexOfLast { it.timeMs <= playbackPosition.toLong() }.coerceAtLeast(0)
+                Column(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(CardBg).padding(horizontal = 14.dp, vertical = 10.dp)
+                ) {
+                    lyricLines.slice(maxOf(0, activeLyric - 1)..minOf(lyricLines.lastIndex, activeLyric + 2)).forEachIndexed { visibleIndex, line ->
+                        val actualIndex = maxOf(0, activeLyric - 1) + visibleIndex
+                        Text(
+                            line.text,
+                            color = if (actualIndex == activeLyric) Accent else Muted,
+                            fontSize = if (actualIndex == activeLyric) 16.sp else 13.sp,
+                            fontWeight = if (actualIndex == activeLyric) FontWeight.Bold else FontWeight.Normal,
+                            modifier = Modifier.fillMaxWidth().clickable { controller?.seekTo(line.timeMs) }.padding(vertical = 6.dp)
+                        )
+                    }
+                }
+            }
+        }
         Text(if (language == "ar") { if (media.isVideo) "فيديو" else "صوت" } else if (media.isVideo) "Video" else "Audio", color = Muted, fontSize = 12.sp)
         Spacer(Modifier.height(12.dp))
         Slider(
