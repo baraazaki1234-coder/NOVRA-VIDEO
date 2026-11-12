@@ -18,6 +18,7 @@ import android.util.LruCache
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -35,6 +36,8 @@ import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
@@ -118,11 +121,26 @@ private fun mediaPermissions(): Array<String> = when {
 private fun NovraApp() {
     val context = androidx.compose.ui.platform.LocalContext.current
     var selected by remember { mutableStateOf("Home") }
+    var navigationStack by remember { mutableStateOf<List<String>>(emptyList()) }
+    var showExitDialog by remember { mutableStateOf(false) }
+    var language by remember { mutableStateOf("en") }
+    fun navigateTo(destination: String) {
+        if (destination != selected) { navigationStack = navigationStack + selected; navigateTo(destination) }
+        showNowPlaying = false
+    }
+    fun navigateBack() {
+        if (showNowPlaying) showNowPlaying = false
+        else if (navigationStack.isNotEmpty()) { selected = navigationStack.last(); navigationStack = navigationStack.dropLast(1) }
+        else if (selected != "Home") selected = "Home"
+        else showExitDialog = true
+    }
     val prefs = remember { context.getSharedPreferences("novra_preferences", android.content.Context.MODE_PRIVATE) }
     var wallpaperUri by remember { mutableStateOf(prefs.getString("wallpaper_uri", null)?.let(Uri::parse)) }
     var compactCards by remember { mutableStateOf(prefs.getBoolean("compact_cards", false)) }
     var cardStyle by remember { mutableStateOf(prefs.getString("card_style", "rounded") ?: "rounded") }
     var themeMode by remember { mutableStateOf(prefs.getString("theme_mode", "dark") ?: "dark") }
+    language = prefs.getString("language", "en") ?: "en"
+    var wallpaperDim by remember { mutableFloatStateOf(prefs.getFloat("wallpaper_dim", 0.22f)) }
     var accentName by remember { mutableStateOf(prefs.getString("accent_name", "mint") ?: "mint") }
     val isLightTheme = themeMode == "light"
     val chosenAccent = when (accentName) {
@@ -353,7 +371,8 @@ private fun NovraApp() {
         }
     }
 
-    CompositionLocalProvider(LocalNovraPalette provides palette) {
+    BackHandler(enabled = true) { navigateBack() }
+    CompositionLocalProvider(LocalNovraPalette provides palette, LocalLayoutDirection provides if (language == "ar") LayoutDirection.Rtl else LayoutDirection.Ltr) {
         MaterialTheme(colorScheme = if (themeMode == "light") lightColorScheme(
             background = AppBg, surface = CardBg, surfaceVariant = CardAlt,
             primary = Accent, onBackground = TextPrimary, onSurface = TextPrimary
@@ -361,6 +380,13 @@ private fun NovraApp() {
             background = AppBg, surface = CardBg, surfaceVariant = CardAlt,
             primary = Accent, onBackground = TextPrimary, onSurface = TextPrimary
         )) {
+            if (showExitDialog) AlertDialog(
+                onDismissRequest = { showExitDialog = false },
+                title = { Text(if (language == "ar") "الخروج من NOVRA؟" else "Exit NOVRA?") },
+                text = { Text(if (language == "ar") "هل أنت متأكد أنك تريد إغلاق التطبيق؟" else "Are you sure you want to close the app?") },
+                confirmButton = { TextButton(onClick = { showExitDialog = false; (context as? MainActivity)?.finish() }) { Text(if (language == "ar") "خروج" else "Exit") } },
+                dismissButton = { TextButton(onClick = { showExitDialog = false }) { Text(if (language == "ar") "إلغاء" else "Cancel") } }
+            )
             val drawerState = rememberDrawerState(DrawerValue.Closed)
             val drawerScope = rememberCoroutineScope()
             val topDestinations = listOf("Home", "Videos", "Music", "Playlists", "Favorites")
@@ -471,6 +497,7 @@ private fun NovraApp() {
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop
                         )
+                        if (wallpaperDim > 0f) Box(Modifier.fillMaxSize().background((if (isLightTheme) Color.White else Color.Black).copy(alpha = wallpaperDim)))
                     }
                     Scaffold(
                         containerColor = if (wallpaperUri != null) Color.Transparent else AppBg,
@@ -497,16 +524,16 @@ private fun NovraApp() {
                                     }
                                     Column(Modifier.weight(1f).padding(start = 10.dp)) {
                                         Text(
-                                            if (showNowPlaying) "Now Playing" else if (selected == "Home") "NOVRA" else selected,
+                                            if (showNowPlaying) (if (language == "ar") "يعمل الآن" else "Now Playing") else if (selected == "Home") "NOVRA" else selected,
                                             color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold
                                         )
                                         Text(
-                                            if (showNowPlaying) "Your current media" else "Your personal media space",
+                                            if (showNowPlaying) (if (language == "ar") "الوسائط الحالية" else "Your current media") else if (language == "ar") "مساحتك للوسائط" else "Your personal media space",
                                             color = Muted, fontSize = 10.sp
                                         )
                                     }
                                     if (!showNowPlaying) {
-                                        IconButton(onClick = { selected = "Settings" }) {
+                                        IconButton(onClick = { navigateTo("Settings") }) {
                                             Icon(Icons.Rounded.Tune, contentDescription = "Settings", tint = if (selected == "Settings") Accent else Muted)
                                         }
                                     }
@@ -558,7 +585,7 @@ private fun NovraApp() {
                                     Spacer(Modifier.width(10.dp))
                                     Column(Modifier.weight(1f)) {
                                         Text(selectedMedia?.title.orEmpty(), color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 12.sp)
-                                        Text("NOW PLAYING · TAP TO OPEN", color = Muted, fontSize = 9.sp)
+                                        Text(if (language == "ar") "يعمل الآن · اضغط للفتح" else "NOW PLAYING · TAP TO OPEN", color = Muted, fontSize = 9.sp)
                                     }
                                     IconButton(onClick = { controller?.let { if (it.isPlaying) it.pause() else it.play() } }) {
                                         Icon(if (controller?.isPlaying == true) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, null, tint = TextPrimary)
@@ -584,7 +611,7 @@ private fun NovraApp() {
                                     val key = "play_count_audio_${track.id}"
                                     track to (playCounts[key] ?: 0)
                                 }.filter { it.second > 0 }.sortedByDescending { it.second }.take(5),
-                                navigate = { selected = it },
+                                navigate = ::navigateTo,
                                 onPlay = { startMedia(it, tracks) }
                             )
                             "Videos" -> MediaScreen(
@@ -636,13 +663,17 @@ private fun NovraApp() {
                             )
                             else -> SettingsScreen(
                                 Modifier.padding(padding), wallpaperUri, compactCards, cardStyle, listenedSeconds, themeMode, accentName,
-                                onOpenPremium = { selected = "Premium" },
+                                onOpenPremium = { navigateTo("Premium") },
                                 onThemeChange = { themeMode = it; prefs.edit().putString("theme_mode", it).apply() },
                                 onAccentChange = { accentName = it; prefs.edit().putString("accent_name", it).apply() },
                                 onChooseWallpaper = { wallpaperPicker.launch(arrayOf("image/*")) },
                                 onClearWallpaper = { wallpaperUri = null; prefs.edit().remove("wallpaper_uri").apply() },
                                 onCompactChange = { compactCards = it; prefs.edit().putBoolean("compact_cards", it).apply() },
-                                onCardStyleChange = { cardStyle = it; prefs.edit().putString("card_style", it).apply() }
+                                onCardStyleChange = { cardStyle = it; prefs.edit().putString("card_style", it).apply() },
+                                 language = language,
+                                 onLanguageChange = { language = it; prefs.edit().putString("language", it).apply() },
+                                 wallpaperDim = wallpaperDim,
+                                 onWallpaperDimChange = { wallpaperDim = it; prefs.edit().putFloat("wallpaper_dim", it).apply() }
                             )
                         }
                     }
