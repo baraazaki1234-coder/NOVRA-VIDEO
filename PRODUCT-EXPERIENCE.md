@@ -5,7 +5,7 @@ NOVRA is an original native media home for personal video and music collections.
 ## Product principles
 - One coherent home for video and music, without making either feel secondary.
 - Content-first browsing: strong artwork, readable titles, useful metadata, clear categories and horizontal shelves where they help discovery.
-- Fast access to the personal device library, folders, favorites, history, playlists and queues.
+- Player-first navigation inspired by local media players: Home, Videos, Music and Playlists. Do not create a separate screen branded as “Local Library”; device media appears directly inside Videos and Music.
 - Playback is the center of the experience: persistent mini-player, full now-playing screen, clear queue, reliable background playback and Android media controls.
 - Premium-quality polish should not require a subscription for core local playback.
 - Respect user privacy: local-first library and preferences; request only permissions needed for a feature.
@@ -20,9 +20,9 @@ Learn from the clarity of YouTube's browsing model:
 - Dedicated video details and a focused player.
 - Gesture controls, playback speed, subtitle/audio-track selection, screen lock, PiP and resume position where supported by Android/Media3.
 
-### Music library and playback
+### Music player and playback
 Learn from Spotify's information architecture and Lark Player's local-library practicality:
-- Albums, artists, songs, folders, genres, favorites and custom playlists.
+- Songs, albums, artists, folders, genres, favorites and custom playlists, presented inside the Music experience rather than a separate local-library destination.
 - Artwork-forward album/playlist cards and a full now-playing experience.
 - Queue editing, shuffle, repeat, next/previous, seek and persistent mini-player.
 - Lyrics only when available from a lawful/local source; do not scrape protected services.
@@ -53,4 +53,4 @@ Explore these as native features, not fake subscription claims:
 8. Release signing, APK/AAB build, smoke tests and release notes.
 
 ## Current implementation status
-The first Compose navigation/home foundation and initial Media3 service/data scanner files exist. Collection screens are still presentation scaffolding; media permission UX, live scanning in UI, actual player screens, playback controls and release validation remain to be implemented.
+The Compose navigation now follows a player-first structure: Home, Videos, Music and Playlists, without a separate Local Library tab. Videos and Music request Android media permissions and display MediaStore results with search. The current list rows are not yet wired to actual playback; Media3 player UI, artwork/thumbnails, sorting/filtering, playlist persistence, playback controls and release validation remain to be implemented.
