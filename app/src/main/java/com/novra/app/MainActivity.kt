@@ -895,7 +895,7 @@ private fun OnlineSearchScreen(language: String) {
         }
         Spacer(Modifier.height(10.dp))
         if (submittedUrl == null) {
-            Box(Modifier.fillMaxSize().clip(RoundedCornerShape(22.dp)).background(CardBg), contentAlignment = Alignment.Center) {
+            Box(Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(CardBg), contentAlignment = Alignment.Center) {
                 Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Box(Modifier.size(64.dp).clip(RoundedCornerShape(22.dp)).background(CardAlt), contentAlignment = Alignment.Center) {
                         Icon(Icons.Rounded.Explore, null, tint = Accent, modifier = Modifier.size(32.dp))
@@ -916,7 +916,7 @@ private fun OnlineSearchScreen(language: String) {
             }
             AndroidView(
                 factory = { webView },
-                modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(16.dp))
+                modifier = Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(16.dp))
             )
         }
     }
