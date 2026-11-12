@@ -1162,11 +1162,21 @@ private fun VideoNowPlayingScreen(
     val context = androidx.compose.ui.platform.LocalContext.current
     var seekFeedback by remember(media.id) { mutableStateOf("") }
     var dragSeekDelta by remember(media.id) { mutableFloatStateOf(0f) }
-    LaunchedEffect(seekFeedback) {
-        if (seekFeedback.isNotEmpty()) {
-            delay(700)
-            seekFeedback = ""
+    var showControls by remember(media.id) { mutableStateOf(true) }
+    var settingsExpanded by remember(media.id) { mutableStateOf(false) }
+    var videoSpeed by remember(controller) { mutableFloatStateOf(controller?.playbackParameters?.speed ?: 1f) }
+    var scrubbing by remember(media.id) { mutableStateOf(false) }
+    var seekPosition by remember(media.id) { mutableFloatStateOf(position) }
+    var isPlaying by remember(controller) { mutableStateOf(controller?.isPlaying == true) }
+    LaunchedEffect(position, scrubbing) { if (!scrubbing) seekPosition = position }
+    LaunchedEffect(controller) {
+        while (true) {
+            isPlaying = controller?.isPlaying == true
+            delay(250)
         }
+    }
+    LaunchedEffect(seekFeedback) {
+        if (seekFeedback.isNotEmpty()) { delay(750); seekFeedback = "" }
     }
     var subtitleUri by remember(media.id) { mutableStateOf<Uri?>(null) }
     val subtitlePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -1174,16 +1184,11 @@ private fun VideoNowPlayingScreen(
             runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
             subtitleUri = uri
             val subtitle = MediaItem.SubtitleConfiguration.Builder(uri)
-                .setMimeType("application/x-subrip")
-                .setLanguage("und")
-                .setLabel("Viora subtitle")
-                .build()
-            val item = MediaItem.Builder().setUri(media.uri)
-                .setSubtitleConfigurations(listOf(subtitle)).build()
+                .setMimeType("application/x-subrip").setLanguage("und").setLabel("Viora subtitle").build()
+            val item = MediaItem.Builder().setUri(media.uri).setSubtitleConfigurations(listOf(subtitle)).build()
             controller?.let { player ->
                 val wasPlaying = player.isPlaying
-                player.setMediaItem(item, position.toLong())
-                player.prepare()
+                player.setMediaItem(item, position.toLong()); player.prepare()
                 if (wasPlaying) player.play()
             }
         }
@@ -1193,178 +1198,156 @@ private fun VideoNowPlayingScreen(
     LaunchedEffect(controller, loopStart, loopEnd) {
         while (loopStart >= 0L && loopEnd > loopStart) {
             val player = controller
-            if (player != null && player.isPlaying && player.currentPosition >= loopEnd) {
-                player.seekTo(loopStart)
-            }
+            if (player != null && player.isPlaying && player.currentPosition >= loopEnd) player.seekTo(loopStart)
             delay(180)
         }
     }
-    Box(modifier.fillMaxSize()) {
-        MediaArtwork(media, Modifier.fillMaxSize().blur(34.dp).graphicsLayer(alpha = 0.34f))
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.70f), Color.Black.copy(alpha = 0.88f)))))
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 8.dp)) {
-        Spacer(Modifier.height(6.dp))
-        Box(
-            Modifier.fillMaxWidth().aspectRatio(16f / 9f)
-                .clip(RoundedCornerShape(15.dp))
-                .pointerInput(controller, duration) {
-                    detectTapGestures(
-                        onDoubleTap = { offset ->
-                            val player = controller
-                            if (player != null) {
-                                val forward = offset.x >= size.width / 2f
-                                val delta = if (forward) 10_000L else -10_000L
-                                val target = (player.currentPosition + delta).coerceAtLeast(0L)
-                                    .let { if (duration > 0f) it.coerceAtMost(duration.toLong()) else it }
-                                player.seekTo(target)
-                                seekFeedback = if (forward) "+10s" else "−10s"
-                            }
-                        }
-                    )
-                }
-                .pointerInput(controller, duration) {
-                    detectHorizontalDragGestures(
-                        onHorizontalDrag = { change, dragAmount ->
-                            change.consume()
-                            dragSeekDelta = (dragSeekDelta + dragAmount).coerceIn(-size.width.toFloat(), size.width.toFloat())
-                        },
-                        onDragEnd = {
-                            val player = controller
-                            if (player != null && duration > 0f && size.width > 0) {
-                                val deltaMs = (dragSeekDelta / size.width * 60_000f).toLong()
-                                val target = (player.currentPosition + deltaMs).coerceIn(0L, duration.toLong())
-                                player.seekTo(target)
-                                if (deltaMs != 0L) seekFeedback = if (deltaMs > 0) "+${formatDuration(deltaMs)}" else "−${formatDuration(-deltaMs)}"
-                            }
-                            dragSeekDelta = 0f
-                        },
-                        onDragCancel = { dragSeekDelta = 0f }
-                    )
-                }
-        ) {
+    val accentGlow = Accent.copy(alpha = 0.16f)
+    Column(modifier.fillMaxSize().background(AppBg).verticalScroll(rememberScrollState())) {
+        Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).background(Color.Black)) {
             AndroidView(
                 modifier = Modifier.fillMaxSize(),
                 factory = { ctx -> PlayerView(ctx).apply {
-                    useController = true
-                    controllerAutoShow = true
-                    controllerShowTimeoutMs = 3500
+                    useController = false
                     keepScreenOn = true
+                    resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
                 } },
                 update = { view -> view.player = controller }
             )
+            Box(Modifier.fillMaxSize().pointerInput(controller, duration) {
+                detectTapGestures(
+                    onTap = { showControls = !showControls },
+                    onDoubleTap = { offset ->
+                        val player = controller
+                        if (player != null) {
+                            val forward = offset.x >= size.width / 2f
+                            val target = (player.currentPosition + if (forward) 10_000L else -10_000L)
+                                .coerceIn(0L, duration.toLong().coerceAtLeast(0L))
+                            player.seekTo(target)
+                            seekFeedback = if (forward) "+10s" else "−10s"
+                            showControls = true
+                        }
+                    }
+                )
+            })
+            if (showControls) {
+                Box(Modifier.fillMaxWidth().height(82.dp).align(Alignment.TopCenter).background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.82f), Color.Transparent))))
+                Row(
+                    Modifier.fillMaxWidth().align(Alignment.TopCenter).padding(horizontal = 8.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = onBack) { Icon(Icons.Rounded.ArrowBack, if (language == "ar") "رجوع" else "Back", tint = Color.White) }
+                    Column(Modifier.weight(1f)) {
+                        Text(media.title, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(if (language == "ar") "مشغل الفيديو" else "VIDEO PLAYER", color = Color.White.copy(alpha = 0.65f), fontSize = 9.sp, letterSpacing = 1.2.sp)
+                    }
+                    Box {
+                        IconButton(onClick = { settingsExpanded = true }) { Icon(Icons.Rounded.Settings, if (language == "ar") "إعدادات الفيديو" else "Video settings", tint = Color.White) }
+                        DropdownMenu(expanded = settingsExpanded, onDismissRequest = { settingsExpanded = false }) {
+                            DropdownMenuItem(text = { Text(if (language == "ar") "سرعة التشغيل" else "Playback speed", fontWeight = FontWeight.Bold) }, onClick = { })
+                            listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f).forEach { speed ->
+                                DropdownMenuItem(
+                                    text = { Text(if (speed == 1f) "Normal  ·  1×" else "${speed}×", color = if (videoSpeed == speed) Accent else TextPrimary) },
+                                    onClick = { videoSpeed = speed; controller?.setPlaybackSpeed(speed); settingsExpanded = false }
+                                )
+                            }
+                            HorizontalDivider()
+                            DropdownMenuItem(
+                                text = { Text(if (language == "ar") "تحميل ملف ترجمة SRT" else "Load SRT subtitles") },
+                                leadingIcon = { Icon(Icons.Rounded.Subtitles, null) },
+                                onClick = { settingsExpanded = false; subtitlePicker.launch(arrayOf("application/x-subrip", "text/plain", "*/*")) }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(if (language == "ar") "تكرار المقطع A-B" else "A-B loop controls") },
+                                leadingIcon = { Icon(Icons.Rounded.Repeat, null) },
+                                onClick = { settingsExpanded = false; loopStart = controller?.currentPosition ?: 0L; loopEnd = -1L }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(if (language == "ar") "إلغاء تكرار المقطع" else "Clear A-B loop") },
+                                onClick = { loopStart = -1L; loopEnd = -1L; settingsExpanded = false }
+                            )
+                        }
+                    }
+                }
+                Row(
+                    Modifier.align(Alignment.Center).clip(RoundedCornerShape(30.dp))
+                        .background(Color.Black.copy(alpha = 0.34f)).padding(horizontal = 12.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(20.dp)
+                ) {
+                    IconButton(onClick = { controller?.seekToPreviousMediaItem() }) { Icon(Icons.Rounded.SkipPrevious, null, tint = Color.White, modifier = Modifier.size(30.dp)) }
+                    IconButton(onClick = { controller?.let { it.seekTo((it.currentPosition - 10_000L).coerceAtLeast(0L)) } }) { Icon(Icons.Rounded.Replay10, null, tint = Color.White, modifier = Modifier.size(29.dp)) }
+                    Box(
+                        Modifier.size(58.dp).clip(CircleShape)
+                            .background(Brush.linearGradient(listOf(Accent, Color(0xFF6650C8))))
+                            .clickable { controller?.let { if (it.isPlaying) it.pause() else it.play() } },
+                        contentAlignment = Alignment.Center
+                    ) { Icon(if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, null, tint = Color.White, modifier = Modifier.size(34.dp)) }
+                    IconButton(onClick = { controller?.let { it.seekTo((it.currentPosition + 10_000L).coerceAtMost(duration.toLong().coerceAtLeast(0L))) } }) { Icon(Icons.Rounded.Forward10, null, tint = Color.White, modifier = Modifier.size(29.dp)) }
+                    IconButton(onClick = { controller?.seekToNextMediaItem() }) { Icon(Icons.Rounded.SkipNext, null, tint = Color.White, modifier = Modifier.size(30.dp)) }
+                }
+                Box(Modifier.fillMaxWidth().height(94.dp).align(Alignment.BottomCenter).background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.88f)))))
+                Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 16.dp, vertical = 9.dp)) {
+                    if (seekFeedback.isNotEmpty()) {
+                        Text(seekFeedback, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.CenterHorizontally))
+                    }
+                    Slider(
+                        value = seekPosition.coerceIn(0f, duration.coerceAtLeast(1f)),
+                        onValueChange = { scrubbing = true; seekPosition = it },
+                        onValueChangeFinished = { controller?.seekTo(seekPosition.toLong()); scrubbing = false },
+                        valueRange = 0f..duration.coerceAtLeast(1f),
+                        colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Accent, inactiveTrackColor = Color.White.copy(alpha = 0.35f))
+                    )
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(formatDuration(seekPosition.toLong()), color = Color.White, fontSize = 10.sp)
+                        Text(formatDuration(duration.toLong()), color = Color.White.copy(alpha = 0.78f), fontSize = 10.sp)
+                    }
+                }
+            } else {
+                Text(
+                    if (isPlaying) " " else "Ⅱ",
+                    color = Color.White.copy(alpha = 0.7f),
+                    modifier = Modifier.align(Alignment.Center)
+                )
+            }
             if (dragSeekDelta != 0f && duration > 0f) {
-                val previewPosition = ((controller?.currentPosition ?: 0L) + (dragSeekDelta / 360f * 60_000f).toLong())
-                    .coerceIn(0L, duration.toLong())
                 Text(
-                    formatDuration(previewPosition),
-                    color = Color.White,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.align(Alignment.Center)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color.Black.copy(alpha = 0.78f))
-                        .padding(horizontal = 18.dp, vertical = 10.dp)
-                )
-            } else if (seekFeedback.isNotEmpty()) {
-                Text(
-                    seekFeedback,
-                    color = Color.White,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.align(Alignment.Center)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color.Black.copy(alpha = 0.72f))
-                        .padding(horizontal = 18.dp, vertical = 10.dp)
+                    formatDuration(((controller?.currentPosition ?: 0L) + (dragSeekDelta / 360f * 60_000f).toLong()).coerceIn(0L, duration.toLong())),
+                    color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.align(Alignment.Center).clip(RoundedCornerShape(12.dp))
+                        .background(Color.Black.copy(alpha = 0.78f)).padding(horizontal = 18.dp, vertical = 10.dp)
                 )
             }
         }
-        Spacer(Modifier.height(16.dp))
-        Text(media.title, color = TextPrimary, fontSize = 19.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        Text(if (language == "ar") "فيديو من مكتبتك" else "Video from your library", color = Muted, fontSize = 12.sp)
-        Spacer(Modifier.height(12.dp))
-        Slider(
-            value = position.coerceIn(0f, duration.coerceAtLeast(1f)),
-            onValueChange = { controller?.seekTo(it.toLong()) },
-            valueRange = 0f..duration.coerceAtLeast(1f),
-            colors = SliderDefaults.colors(thumbColor = Accent, activeTrackColor = Accent, inactiveTrackColor = CardAlt)
-        )
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(formatDuration(position.toLong()), color = Muted, fontSize = 11.sp)
-            Text(formatDuration(duration.toLong()), color = Muted, fontSize = 11.sp)
-        }
-        Spacer(Modifier.height(10.dp))
-        var videoSpeed by remember(controller) { mutableFloatStateOf(1f) }
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            listOf(0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f, 3f, 4f).forEach { speed ->
-                FilterChip(
-                    selected = videoSpeed == speed,
-                    onClick = { videoSpeed = speed; controller?.setPlaybackSpeed(speed) },
-                    label = { Text("${speed}×", fontSize = 10.sp) }
-                )
-            }
-        }
-        Spacer(Modifier.height(10.dp))
-        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Brush.linearGradient(listOf(CardBg, CardAlt.copy(alpha = 0.48f)))).border(1.dp, Color.White.copy(alpha = 0.055f), RoundedCornerShape(20.dp)).padding(14.dp)) {
-            Text(if (language == "ar") "الترجمة الخارجية" else "EXTERNAL SUBTITLES", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(6.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    if (subtitleUri == null) {
-                        if (language == "ar") "لم يتم اختيار ملف ترجمة" else "No subtitle file selected"
-                    } else {
-                        if (language == "ar") "تم تحميل ملف الترجمة" else "Subtitle file loaded"
-                    },
-                    color = Muted, fontSize = 11.sp, modifier = Modifier.weight(1f)
-                )
-                OutlinedButton(onClick = { subtitlePicker.launch(arrayOf("application/x-subrip", "text/plain", "*/*")) }) {
-                    Icon(Icons.Rounded.Subtitles, null)
-                    Spacer(Modifier.width(5.dp))
-                    Text(if (language == "ar") "اختيار SRT" else "Load SRT")
+        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 15.dp)) {
+            Text(media.title, color = TextPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Spacer(Modifier.height(5.dp))
+            Text(if (language == "ar") "فيديو من مكتبتك" else "From your video library", color = Muted, fontSize = 12.sp)
+            Spacer(Modifier.height(14.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f).clip(RoundedCornerShape(17.dp)).background(CardBg).padding(12.dp)) {
+                    Text(if (language == "ar") "السرعة" else "SPEED", color = Muted, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                    Text(if (videoSpeed == 1f) "Normal · 1×" else "${videoSpeed}×", color = Accent, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                }
+                Column(Modifier.weight(1f).clip(RoundedCornerShape(17.dp)).background(CardBg).padding(12.dp)) {
+                    Text(if (language == "ar") "الترجمة" else "SUBTITLES", color = Muted, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                    Text(if (subtitleUri == null) (if (language == "ar") "غير مفعلة" else "Off") else "SRT", color = Accent, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                }
+                Column(Modifier.weight(1f).clip(RoundedCornerShape(17.dp)).background(CardBg).padding(12.dp)) {
+                    Text(if (language == "ar") "تكرار" else "A-B LOOP", color = Muted, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                    Text(if (loopStart >= 0L && loopEnd > loopStart) "A–B" else "Off", color = Accent, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                 }
             }
-            HorizontalDivider(color = CardAlt)
-            Spacer(Modifier.height(8.dp))
-            Text(if (language == "ar") "تكرار مقطع A-B" else "A-B REPEAT", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                OutlinedButton(onClick = {
-                    loopStart = controller?.currentPosition ?: 0L
-                    loopEnd = -1L
-                }, modifier = Modifier.weight(1f)) { Text("Set A") }
-                OutlinedButton(
-                    enabled = loopStart >= 0L,
-                    onClick = {
-                        val end = controller?.currentPosition ?: 0L
-                        if (end > loopStart) loopEnd = end
-                    },
-                    modifier = Modifier.weight(1f)
-                ) { Text("Set B") }
-                TextButton(onClick = { loopStart = -1L; loopEnd = -1L }) { Text(if (language == "ar") "إيقاف" else "Off") }
-            }
+            Spacer(Modifier.height(10.dp))
             if (loopStart >= 0L) {
                 Text(
-                    if (loopEnd > loopStart) "A ${formatDuration(loopStart)}  •  B ${formatDuration(loopEnd)}"
-                    else "A ${formatDuration(loopStart)}  •  Set point B",
+                    if (loopEnd > loopStart) "A ${formatDuration(loopStart)}  ·  B ${formatDuration(loopEnd)}" else "A ${formatDuration(loopStart)}  ·  Set B from video settings",
                     color = Muted, fontSize = 10.sp
                 )
             }
         }
-        Spacer(Modifier.height(8.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { controller?.let { it.seekTo((it.currentPosition - 10_000L).coerceAtLeast(0L)) } }) {
-                Icon(Icons.Rounded.Replay10, null, tint = TextPrimary, modifier = Modifier.size(32.dp))
-            }
-            IconButton(onClick = { controller?.let { if (it.isPlaying) it.pause() else it.play() } }) {
-                Icon(if (controller?.isPlaying == true) Icons.Rounded.PauseCircleFilled else Icons.Rounded.PlayCircle, null, tint = Accent, modifier = Modifier.size(54.dp))
-            }
-            IconButton(onClick = { controller?.let { it.seekTo(it.currentPosition + 10_000L) } }) {
-                Icon(Icons.Rounded.Forward10, null, tint = TextPrimary, modifier = Modifier.size(32.dp))
-            }
-        }
-        Spacer(Modifier.height(20.dp))
-        }
     }
 }
-
 @Composable
 private fun HomeScreen(
     modifier: Modifier, videoCount: Int, musicCount: Int,
