@@ -564,7 +564,6 @@ private fun NovraApp() {
                             Spacer(Modifier.height(14.dp))
                             Text("MORE", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.6.sp, modifier = Modifier.padding(start = 12.dp, bottom = 8.dp))
                             listOf(
-                                Triple("Premium", Icons.Rounded.WorkspacePremium, "NOVRA Premium"),
                                 Triple("Settings", Icons.Rounded.Settings, "Settings")
                             ).forEach { item ->
                                 NavigationDrawerItem(
@@ -638,7 +637,6 @@ private fun NovraApp() {
                                                 "Explore" -> "استكشف"
                                                 "Favorites" -> "المفضلة"
                                                 "Settings" -> "الإعدادات"
-                                                "Premium" -> "NOVRA Premium"
                                                 else -> selected
                                             } else selected,
                                             color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis
@@ -781,19 +779,8 @@ private fun NovraApp() {
                                 onDelete = { playlistName -> savePlaylists(playlists.filterNot { it.name == playlistName }) },
                                 onPlay = { items -> if (items.isNotEmpty()) startMedia(items.first(), items) }, language = language
                             )
-                            "Premium" -> PremiumScreen(
-                                Modifier.padding(padding),
-                                transactionReference = prefs.getString("premium_transaction_reference", "") ?: "",
-                                pendingReview = prefs.getBoolean("premium_pending_review", false),
-                                onReferenceChange = { prefs.edit().putString("premium_transaction_reference", it).apply() },
-                                onSubmit = { reference ->
-                                    prefs.edit().putString("premium_transaction_reference", reference)
-                                        .putBoolean("premium_pending_review", true).apply()
-                                }
-                            )
                             else -> SettingsScreen(
                                 Modifier.padding(padding), wallpaperUri, compactCards, cardStyle, listenedSeconds, themeMode, accentName,
-                                onOpenPremium = { navigateTo("Premium") },
                                 pinEnabled = pinEnabled,
                                 onEnablePin = { pinFlowMode = "setup" },
                                 onChangePin = { pinFlowMode = "verify_change" },
@@ -1780,7 +1767,6 @@ private fun SettingsScreen(
     modifier: Modifier, wallpaperUri: Uri?, compactCards: Boolean, cardStyle: String, listenedSeconds: Long, themeMode: String, accentName: String,
     onThemeChange: (String) -> Unit, onAccentChange: (String) -> Unit, onChooseWallpaper: () -> Unit, onClearWallpaper: () -> Unit,
     onCompactChange: (Boolean) -> Unit, onCardStyleChange: (String) -> Unit,
-    onOpenPremium: () -> Unit,
     pinEnabled: Boolean, onEnablePin: () -> Unit, onChangePin: () -> Unit, onDisablePin: () -> Unit,
     language: String, onLanguageChange: (String) -> Unit,
     wallpaperDim: Float, onWallpaperDimChange: (Float) -> Unit
@@ -1790,23 +1776,6 @@ private fun SettingsScreen(
         Text(if (language == "ar") "الإعدادات" else "Settings", color = TextPrimary, fontSize = 30.sp, fontWeight = FontWeight.Bold)
         Text(if (language == "ar") "خصص NOVRA بالشكل اللي يناسبك." else "Make NOVRA feel like yours.", color = Muted, fontSize = 13.sp)
         Spacer(Modifier.height(18.dp))
-        Column(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
-                .background(Brush.linearGradient(listOf(Color(0xFF354A3D), Color(0xFF1D2922))))
-                .clickable(onClick = onOpenPremium).padding(18.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Rounded.WorkspacePremium, null, tint = Color(0xFFE8D49A), modifier = Modifier.size(28.dp))
-                Spacer(Modifier.width(10.dp))
-                Column(Modifier.weight(1f)) {
-                    Text("NOVRA Premium", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                    Text(if (language == "ar") "افتح تجربة NOVRA المطوّرة" else "Unlock the enhanced NOVRA experience", color = Color(0xFFD4DED6), fontSize = 11.sp)
-                }
-                Icon(Icons.Rounded.ChevronRight, null, tint = Color.White)
-            }
-            Spacer(Modifier.height(12.dp))
-            Text("50 EGP / 1 month", color = Color(0xFFE8D49A), fontWeight = FontWeight.Bold, fontSize = 14.sp)
-        }
         Spacer(Modifier.height(18.dp))
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(CardBg).padding(15.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -2020,139 +1989,3 @@ private fun PlaylistsScreen(
     }
 }
 
-
-@Composable
-private fun PremiumScreen(
-    modifier: Modifier,
-    transactionReference: String,
-    pendingReview: Boolean,
-    onReferenceChange: (String) -> Unit,
-    onSubmit: (String) -> Unit
-) {
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val walletNumber = "01131023695"
-    var receiptUri by remember { mutableStateOf<Uri?>(null) }
-    val receiptPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) {
-            runCatching {
-                context.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-            receiptUri = uri
-        }
-    }
-    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
-        Spacer(Modifier.height(18.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Rounded.WorkspacePremium, null, tint = Color(0xFFE8C979), modifier = Modifier.size(32.dp))
-            Spacer(Modifier.width(10.dp))
-            Column {
-                Text("NOVRA Premium", color = TextPrimary, fontSize = 28.sp, fontWeight = FontWeight.Bold)
-                Text("More control. More ways to enjoy.", color = Muted, fontSize = 12.sp)
-            }
-        }
-        Spacer(Modifier.height(20.dp))
-        Column(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp))
-                .background(Brush.linearGradient(listOf(Color(0xFF394E40), Color(0xFF18251D))))
-                .padding(20.dp)
-        ) {
-            Text("ONE-MONTH MEMBERSHIP", color = Color(0xFFE8D49A), fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
-            Spacer(Modifier.height(8.dp))
-            Row(verticalAlignment = Alignment.Bottom) {
-                Text("50", color = Color.White, fontSize = 46.sp, fontWeight = FontWeight.Black)
-                Text(" EGP / month", color = Color(0xFFE1E8E2), fontSize = 14.sp, modifier = Modifier.padding(bottom = 8.dp))
-            }
-            Text("Valid for 30 days after payment approval.", color = Color(0xFFD4DED6), fontSize = 11.sp)
-        }
-        Spacer(Modifier.height(20.dp))
-        Text("PREMIUM BENEFITS", color = Accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp)
-        Spacer(Modifier.height(10.dp))
-        val benefits = listOf(
-            "Exclusive themes and accent color combinations",
-            "More home-screen and media-card customization",
-            "Advanced playback and listening statistics",
-            "Expanded playlist and queue organization",
-            "Premium visual styles and backgrounds"
-        )
-        benefits.forEach { benefit ->
-            Row(Modifier.fillMaxWidth().padding(vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Rounded.CheckCircle, null, tint = Accent, modifier = Modifier.size(19.dp))
-                Spacer(Modifier.width(10.dp))
-                Text(benefit, color = TextPrimary, fontSize = 13.sp)
-            }
-        }
-        Spacer(Modifier.height(18.dp))
-        Text("PAY WITH VODAFONE CASH", color = Accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp)
-        Spacer(Modifier.height(9.dp))
-        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(CardBg).padding(16.dp)) {
-            Text("Transfer 50 EGP to this Vodafone Cash number:", color = Muted, fontSize = 12.sp)
-            Spacer(Modifier.height(7.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(walletNumber, color = TextPrimary, fontSize = 21.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                OutlinedButton(onClick = {
-                    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("NOVRA Vodafone Cash number", walletNumber))
-                }) { Text("Copy") }
-            }
-            Text("After transferring, attach the receipt image and enter its transaction reference. Your request will be reviewed manually.", color = Muted, fontSize = 11.sp)
-        }
-        Spacer(Modifier.height(14.dp))
-        OutlinedTextField(
-            value = transactionReference,
-            onValueChange = onReferenceChange,
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            label = { Text("Transfer transaction reference") },
-            placeholder = { Text("Enter the reference shown in your receipt") }
-        )
-        Spacer(Modifier.height(10.dp))
-        OutlinedButton(
-            onClick = { receiptPicker.launch(arrayOf("image/*")) },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Icon(Icons.Rounded.AttachFile, null)
-            Spacer(Modifier.width(8.dp))
-            Text(if (receiptUri == null) "Attach transfer receipt image" else "Receipt attached — change image")
-        }
-        Spacer(Modifier.height(12.dp))
-        Button(
-            onClick = {
-                val reference = transactionReference.trim()
-                val receipt = receiptUri
-                if (reference.isNotEmpty() && receipt != null) {
-                    onSubmit(reference)
-                    val message = "NOVRA Premium — 50 EGP / 1 month\nVodafone Cash transfer to: $walletNumber\nTransaction reference: $reference\nPlease verify this payment and activate the one-month membership."
-                    val sendIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                        type = "image/*"
-                        putExtra(android.content.Intent.EXTRA_SUBJECT, "NOVRA Premium payment verification")
-                        putExtra(android.content.Intent.EXTRA_TEXT, message)
-                        putExtra(android.content.Intent.EXTRA_STREAM, receipt)
-                        clipData = android.content.ClipData.newUri(context.contentResolver, "NOVRA transfer receipt", receipt)
-                        addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    }
-                    context.startActivity(android.content.Intent.createChooser(sendIntent, "Send payment receipt"))
-                }
-            },
-            enabled = transactionReference.trim().isNotEmpty() && receiptUri != null,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Icon(Icons.Rounded.Send, null)
-            Spacer(Modifier.width(8.dp))
-            Text("Send receipt for manual review")
-        }
-        if (pendingReview) {
-            Spacer(Modifier.height(12.dp))
-            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(CardAlt).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Rounded.HourglassTop, null, tint = Accent)
-                Spacer(Modifier.width(8.dp))
-                Text("A review request was saved on this device. Premium is not active until payment is verified.", color = TextPrimary, fontSize = 11.sp)
-            }
-        }
-        Spacer(Modifier.height(10.dp))
-        Text(
-            "Sending this request does not verify the transfer or activate Premium automatically. Never share your wallet PIN or OTP.",
-            color = Muted, fontSize = 10.sp
-        )
-        Spacer(Modifier.height(24.dp))
-    }
-}
