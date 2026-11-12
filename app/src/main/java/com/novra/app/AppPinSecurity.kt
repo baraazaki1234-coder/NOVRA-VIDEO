@@ -6,7 +6,6 @@ import android.security.keystore.KeyProperties
 import android.util.Base64
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Lock
@@ -26,7 +25,6 @@ import javax.crypto.KeyGenerator
 import javax.crypto.Mac
 import javax.crypto.SecretKey
 import kotlinx.coroutines.delay
-import javax.crypto.spec.SecretKeySpec
 
 /**
  * Stores only a random salt and a Keystore-keyed verifier.
@@ -47,10 +45,11 @@ internal object AppPinVault {
         require(pin.length in 4..8 && pin.all(Char::isDigit)) { "PIN must contain 4 to 8 digits" }
         val salt = ByteArray(32).also(SecureRandom()::nextBytes)
         val verifier = calculate(salt, pin)
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+        val saved = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putString(SALT, Base64.encodeToString(salt, Base64.NO_WRAP))
             .putString(VERIFIER, Base64.encodeToString(verifier, Base64.NO_WRAP))
             .commit()
+        check(saved) { "Unable to persist the PIN verifier" }
     }
 
     @Synchronized
@@ -93,9 +92,10 @@ internal object AppPinVault {
 
     @Synchronized
     fun disable(context: Context) {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+        val cleared = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .remove(SALT).remove(VERIFIER)
             .remove("pin_failed_attempts").remove("pin_lock_until").commit()
+        check(cleared) { "Unable to clear saved PIN data" }
         runCatching {
             KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
                 .deleteEntry(KEY_ALIAS)
@@ -130,6 +130,11 @@ internal fun AppPinGate(
     subtitle: String,
     confirmLabel: String,
     errorLabel: String,
+    pinLabel: String,
+    confirmationFieldLabel: String,
+    submitLabel: String,
+    cancelLabel: String,
+    lockoutMessage: (Int) -> String,
     onSubmit: (String) -> Boolean,
     onCancel: (() -> Unit)? = null
 ) {
@@ -166,7 +171,7 @@ internal fun AppPinGate(
         OutlinedTextField(
             value = pin,
             onValueChange = { value -> if (value.length <= 8 && value.all(Char::isDigit)) { pin = value; error = false } },
-            label = { Text(if (setup) "New PIN" else "PIN") },
+            label = { Text(pinLabel) },
             singleLine = true,
             visualTransformation = PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
@@ -181,7 +186,7 @@ internal fun AppPinGate(
             OutlinedTextField(
                 value = confirmation,
                 onValueChange = { value -> if (value.length <= 8 && value.all(Char::isDigit)) { confirmation = value; error = false } },
-                label = { Text("Confirm PIN") },
+                label = { Text(confirmationFieldLabel) },
                 singleLine = true,
                 visualTransformation = PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
@@ -195,7 +200,7 @@ internal fun AppPinGate(
         if (error) {
             Spacer(Modifier.height(8.dp))
             Text(
-                if (cooldownSeconds > 0) "Too many attempts. Try again in ${cooldownSeconds}s."
+                if (cooldownSeconds > 0) lockoutMessage(cooldownSeconds)
                 else errorLabel,
                 color = Color(0xFFFF8A80), fontSize = 12.sp
             )
@@ -209,9 +214,9 @@ internal fun AppPinGate(
             enabled = pin.length in 4..8 && (!setup || confirmation.length in 4..8) && cooldownSeconds == 0,
             modifier = Modifier.fillMaxWidth(),
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC7E8D1), contentColor = Color(0xFF101310))
-        ) { Text(if (setup) "Save PIN" else "Unlock") }
+        ) { Text(submitLabel) }
         if (onCancel != null) {
-            TextButton(onClick = onCancel) { Text("Cancel", color = Color(0xFFA7B0A8)) }
+            TextButton(onClick = onCancel) { Text(cancelLabel, color = Color(0xFFA7B0A8)) }
         }
     }
 }
