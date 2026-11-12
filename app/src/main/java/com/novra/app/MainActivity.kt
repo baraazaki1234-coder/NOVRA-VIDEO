@@ -2,6 +2,7 @@ package com.novra.app
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.content.ComponentName
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -30,6 +31,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.common.MediaItem
+import androidx.media3.session.MediaController
+import androidx.media3.session.SessionToken
+import androidx.media3.ui.PlayerView
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -56,6 +62,27 @@ private fun mediaPermissions(): Array<String> = when {
 private fun NovraApp() {
     val context = androidx.compose.ui.platform.LocalContext.current
     var selected by remember { mutableStateOf("Home") }
+    var selectedMedia by remember { mutableStateOf<LocalMedia?>(null) }
+    var showNowPlaying by remember { mutableStateOf(false) }
+    var controller by remember { mutableStateOf<MediaController?>(null) }
+    val controllerFuture = remember(context) {
+        MediaController.Builder(context, SessionToken(context, ComponentName(context, NovraPlaybackService::class.java))).buildAsync()
+    }
+    DisposableEffect(controllerFuture) {
+        controllerFuture.addListener({
+            runCatching { controllerFuture.get() }.onSuccess { controller = it }
+        }, ContextCompat.getMainExecutor(context))
+        onDispose { MediaController.releaseFuture(controllerFuture) }
+    }
+    LaunchedEffect(selectedMedia, controller) {
+        val media = selectedMedia
+        val player = controller
+        if (media != null && player != null) {
+            player.setMediaItem(MediaItem.fromUri(media.uri))
+            player.prepare()
+            player.play()
+        }
+    }
     var videos by remember { mutableStateOf<List<LocalMedia>>(emptyList()) }
     var tracks by remember { mutableStateOf<List<LocalMedia>>(emptyList()) }
     var hasPermission by remember {
@@ -90,7 +117,22 @@ private fun NovraApp() {
         Scaffold(
             containerColor = AppBg,
             bottomBar = {
-                NavigationBar(containerColor = CardBg, tonalElevation = 0.dp) {
+                Column {
+                    if (selectedMedia != null && !showNowPlaying) {
+                        Row(Modifier.fillMaxWidth().background(CardAlt).clickable { showNowPlaying = true }.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(if (selectedMedia?.isVideo == true) Icons.Rounded.PlayCircle else Icons.Rounded.GraphicEq, null, tint = Accent)
+                            Spacer(Modifier.width(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(selectedMedia?.title.orEmpty(), color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 12.sp)
+                                Text("NOW PLAYING", color = Muted, fontSize = 9.sp)
+                            }
+                            IconButton(onClick = { controller?.let { if (it.isPlaying) it.pause() else it.play() } }) {
+                                Icon(if (controller?.isPlaying == true) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, null, tint = Color.White)
+                            }
+                            IconButton(onClick = { controller?.stop(); selectedMedia = null }) { Icon(Icons.Rounded.Close, null, tint = Muted) }
+                        }
+                    }
+                    NavigationBar(containerColor = CardBg, tonalElevation = 0.dp) {
                     listOf(
                         Triple("Home", Icons.Rounded.Home, "Home"),
                         Triple("Videos", Icons.Rounded.OndemandVideo, "Videos"),
@@ -109,18 +151,23 @@ private fun NovraApp() {
                             )
                         )
                     }
+                    }
                 }
             }
         ) { padding ->
-            when (selected) {
+            if (showNowPlaying && selectedMedia != null) {
+                NowPlayingScreen(Modifier.padding(padding), selectedMedia!!, controller, onBack = { showNowPlaying = false })
+            } else when (selected) {
                 "Home" -> HomeScreen(Modifier.padding(padding), videos.size, tracks.size) { selected = it }
                 "Videos" -> MediaScreen(
                     Modifier.padding(padding), "Videos", videos, loading, hasPermission,
-                    onGrant = { permissionLauncher.launch(mediaPermissions()) }
+                    onGrant = { permissionLauncher.launch(mediaPermissions()) },
+                    onPlay = { selectedMedia = it; showNowPlaying = true }
                 )
                 "Music" -> MediaScreen(
                     Modifier.padding(padding), "Music", tracks, loading, hasPermission,
-                    onGrant = { permissionLauncher.launch(mediaPermissions()) }
+                    onGrant = { permissionLauncher.launch(mediaPermissions()) },
+                    onPlay = { selectedMedia = it; showNowPlaying = true }
                 )
                 else -> PlaylistsScreen(Modifier.padding(padding))
             }
@@ -203,7 +250,7 @@ private fun CountCard(label: String, count: String, icon: androidx.compose.ui.gr
 @Composable
 private fun MediaScreen(
     modifier: Modifier, type: String, media: List<LocalMedia>, loading: Boolean,
-    hasPermission: Boolean, onGrant: () -> Unit
+    hasPermission: Boolean, onGrant: () -> Unit, onPlay: (LocalMedia) -> Unit
 ) {
     var query by remember { mutableStateOf("") }
     var sortNewest by remember { mutableStateOf(true) }
@@ -257,7 +304,7 @@ private fun MediaScreen(
             else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(9.dp)) {
                 item { Text("${filtered.size} items", color = Muted, fontSize = 11.sp) }
                 items(filtered) { item ->
-                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(CardBg).clickable { }.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(CardBg).clickable { onPlay(item) }.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.size(54.dp).clip(RoundedCornerShape(13.dp)).background(CardAlt), contentAlignment = Alignment.Center) {
                             Icon(if (type == "Videos") Icons.Rounded.PlayArrow else Icons.Rounded.MusicNote, null, tint = Accent, modifier = Modifier.size(26.dp))
                         }
@@ -281,6 +328,47 @@ private fun formatDuration(duration: Long): String {
     val minutes = (total % 3600) / 60
     val seconds = total % 60
     return if (hours > 0) "%d:%02d:%02d".format(hours, minutes, seconds) else "%d:%02d".format(minutes, seconds)
+}
+
+
+@Composable
+private fun NowPlayingScreen(modifier: Modifier, media: LocalMedia, controller: MediaController?, onBack: () -> Unit) {
+    Column(modifier.fillMaxSize().padding(18.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) { Icon(Icons.Rounded.KeyboardArrowDown, "Back", tint = Color.White) }
+            Text("Now Playing", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        }
+        Spacer(Modifier.height(18.dp))
+        if (media.isVideo) {
+            AndroidView(
+                modifier = Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(20.dp)),
+                factory = { ctx -> PlayerView(ctx).apply { useController = true } },
+                update = { view -> view.player = controller }
+            )
+        } else {
+            Box(Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(24.dp)).background(CardBg), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.Rounded.Album, null, tint = Accent, modifier = Modifier.size(112.dp))
+                    Spacer(Modifier.height(20.dp))
+                    Text("NOVRA MUSIC", color = Muted, fontSize = 10.sp, letterSpacing = 3.sp)
+                }
+            }
+        }
+        Spacer(Modifier.height(22.dp))
+        Text(media.title, color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text(if (media.isVideo) "Video" else "Audio", color = Muted, fontSize = 12.sp)
+        Spacer(Modifier.height(16.dp))
+        if (!media.isVideo) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = { controller?.seekToPreviousMediaItem() }) { Icon(Icons.Rounded.SkipPrevious, null, tint = Color.White, modifier = Modifier.size(34.dp)) }
+                IconButton(onClick = { controller?.let { if (it.isPlaying) it.pause() else it.play() } }) {
+                    Icon(if (controller?.isPlaying == true) Icons.Rounded.PauseCircleFilled else Icons.Rounded.PlayCircle, null, tint = Accent, modifier = Modifier.size(58.dp))
+                }
+                IconButton(onClick = { controller?.seekToNextMediaItem() }) { Icon(Icons.Rounded.SkipNext, null, tint = Color.White, modifier = Modifier.size(34.dp)) }
+            }
+        }
+        Spacer(Modifier.height(20.dp))
+    }
 }
 
 @Composable
