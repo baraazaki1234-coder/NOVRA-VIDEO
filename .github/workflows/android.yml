@@ -14,6 +14,23 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Restore stable debug signing key
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: novra-stable-debug-signing-v1
+      - name: Create stable debug signing key if missing
+        run: |
+          mkdir -p "$HOME/.android"
+          if [ ! -f "$HOME/.android/debug.keystore" ]; then
+            keytool -genkeypair -v \\
+              -keystore "$HOME/.android/debug.keystore" \\
+              -storepass android \\
+              -alias androiddebugkey \\
+              -keypass android \\
+              -dname "CN=NOVRA Debug,O=NOVRA,C=EG" \\
+              -keyalg RSA -keysize 2048 -validity 10000 -noprompt
+          fi
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.13'
