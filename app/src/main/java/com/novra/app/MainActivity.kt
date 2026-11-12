@@ -1161,7 +1161,6 @@ private fun VideoNowPlayingScreen(
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var seekFeedback by remember(media.id) { mutableStateOf("") }
-    var dragSeekDelta by remember(media.id) { mutableFloatStateOf(0f) }
     var showControls by remember(media.id) { mutableStateOf(true) }
     var settingsExpanded by remember(media.id) { mutableStateOf(false) }
     var videoSpeed by remember(controller) { mutableFloatStateOf(controller?.playbackParameters?.speed ?: 1f) }
@@ -1263,6 +1262,15 @@ private fun VideoNowPlayingScreen(
                                 onClick = { settingsExpanded = false; loopStart = controller?.currentPosition ?: 0L; loopEnd = -1L }
                             )
                             DropdownMenuItem(
+                                text = { Text(if (language == "ar") "تحديد نهاية المقطع B" else "Set loop point B") },
+                                enabled = loopStart >= 0L,
+                                onClick = {
+                                    val endPoint = controller?.currentPosition ?: 0L
+                                    if (endPoint > loopStart) loopEnd = endPoint
+                                    settingsExpanded = false
+                                }
+                            )
+                            DropdownMenuItem(
                                 text = { Text(if (language == "ar") "إلغاء تكرار المقطع" else "Clear A-B loop") },
                                 onClick = { loopStart = -1L; loopEnd = -1L; settingsExpanded = false }
                             )
@@ -1308,14 +1316,6 @@ private fun VideoNowPlayingScreen(
                     if (isPlaying) " " else "Ⅱ",
                     color = Color.White.copy(alpha = 0.7f),
                     modifier = Modifier.align(Alignment.Center)
-                )
-            }
-            if (dragSeekDelta != 0f && duration > 0f) {
-                Text(
-                    formatDuration(((controller?.currentPosition ?: 0L) + (dragSeekDelta / 360f * 60_000f).toLong()).coerceIn(0L, duration.toLong())),
-                    color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold,
-                    modifier = Modifier.align(Alignment.Center).clip(RoundedCornerShape(12.dp))
-                        .background(Color.Black.copy(alpha = 0.78f)).padding(horizontal = 18.dp, vertical = 10.dp)
                 )
             }
         }
@@ -1804,6 +1804,7 @@ private fun NowPlayingScreen(
     var repeatMode by remember(controller) { mutableIntStateOf(controller?.repeatMode ?: Player.REPEAT_MODE_OFF) }
     var currentQueueIndex by remember(controller) { mutableIntStateOf(controller?.currentMediaItemIndex ?: 0) }
     var playbackPosition by remember(controller) { mutableFloatStateOf(0f) }
+    var isSeeking by remember(controller) { mutableStateOf(false) }
     var playbackDuration by remember(controller) { mutableFloatStateOf(media.durationMs.coerceAtLeast(1L).toFloat()) }
     var playbackSpeed by remember(controller) { mutableFloatStateOf(1f) }
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -1831,7 +1832,7 @@ private fun NowPlayingScreen(
         while (true) {
             val duration = controller?.duration?.takeIf { it > 0L } ?: media.durationMs
             playbackDuration = duration.coerceAtLeast(1L).toFloat()
-            playbackPosition = (controller?.currentPosition ?: 0L).coerceIn(0L, duration.coerceAtLeast(1L)).toFloat()
+            if (!isSeeking) playbackPosition = (controller?.currentPosition ?: 0L).coerceIn(0L, duration.coerceAtLeast(1L)).toFloat()
             currentQueueIndex = controller?.currentMediaItemIndex ?: 0
             delay(500)
         }
@@ -1878,7 +1879,7 @@ private fun NowPlayingScreen(
                                 val threshold = 72.dp.toPx()
                                 when {
                                     kotlin.math.abs(totalX) > kotlin.math.abs(totalY) && totalX <= -threshold -> controller?.seekToNextMediaItem()
-                                    kotlin.math.abs(totalX) > kotlin.math.abs(totalY) && totalX >= threshold -> controller?.seekToPreviousMediaItem()
+                                    kotlin.math.abs(totalX) > kotlin.math.abs(totalY) && totalX >= threshold -> controller?.let { if (it.currentPosition > 3_000L) it.seekTo(0L) else it.seekToPreviousMediaItem() }
                                     totalY >= threshold && kotlin.math.abs(totalY) > kotlin.math.abs(totalX) -> onBack()
                                 }
                                 totalX = 0f
@@ -1934,8 +1935,8 @@ private fun NowPlayingScreen(
         Spacer(Modifier.height(12.dp))
         Slider(
             value = playbackPosition.coerceIn(0f, playbackDuration),
-            onValueChange = { playbackPosition = it },
-            onValueChangeFinished = { controller?.seekTo(playbackPosition.toLong()) },
+            onValueChange = { isSeeking = true; playbackPosition = it },
+            onValueChangeFinished = { controller?.seekTo(playbackPosition.toLong()); isSeeking = false },
             valueRange = 0f..playbackDuration,
             colors = SliderDefaults.colors(
                 thumbColor = Accent,
@@ -1953,7 +1954,7 @@ private fun NowPlayingScreen(
                 IconButton(onClick = { shuffle = !shuffle; controller?.shuffleModeEnabled = shuffle }) {
                     Icon(Icons.Rounded.Shuffle, "Shuffle", tint = if (shuffle) Accent else Muted)
                 }
-                IconButton(onClick = { controller?.seekToPreviousMediaItem() }) { Icon(Icons.Rounded.SkipPrevious, null, tint = TextPrimary, modifier = Modifier.size(34.dp)) }
+                IconButton(onClick = { controller?.let { if (it.currentPosition > 3_000L) it.seekTo(0L) else it.seekToPreviousMediaItem() } }) { Icon(Icons.Rounded.SkipPrevious, null, tint = TextPrimary, modifier = Modifier.size(34.dp)) }
                 Box(
                     Modifier.size(70.dp).clip(CircleShape)
                         .background(Brush.linearGradient(listOf(Color(0xFF9B83FF), Color(0xFF5A46B5))))
