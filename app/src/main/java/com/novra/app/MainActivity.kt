@@ -117,7 +117,15 @@ private fun NovraApp() {
     var compactCards by remember { mutableStateOf(prefs.getBoolean("compact_cards", false)) }
     var cardStyle by remember { mutableStateOf(prefs.getString("card_style", "rounded") ?: "rounded") }
     var themeMode by remember { mutableStateOf(prefs.getString("theme_mode", "dark") ?: "dark") }
-    val palette = if (themeMode == "light") LightPalette else DarkPalette
+    var accentName by remember { mutableStateOf(prefs.getString("accent_name", "mint") ?: "mint") }
+    val isLightTheme = themeMode == "light"
+    val chosenAccent = when (accentName) {
+        "ocean" -> if (isLightTheme) Color(0xFF0369A1) else Color(0xFF7DD3FC)
+        "violet" -> if (isLightTheme) Color(0xFF6D28D9) else Color(0xFFC4B5FD)
+        "rose" -> if (isLightTheme) Color(0xFFBE123C) else Color(0xFFFDA4AF)
+        else -> if (isLightTheme) Color(0xFF286B47) else Color(0xFFC7E8D1)
+    }
+    val palette = (if (isLightTheme) LightPalette else DarkPalette).copy(accent = chosenAccent)
     val wallpaperPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             runCatching { context.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION) }
@@ -374,8 +382,9 @@ private fun NovraApp() {
                     onPlay = { items -> if (items.isNotEmpty()) startMedia(items.first(), items) }
                 )
                 else -> SettingsScreen(
-                    Modifier.padding(padding), wallpaperUri, compactCards, cardStyle, listenedSeconds, themeMode,
+                    Modifier.padding(padding), wallpaperUri, compactCards, cardStyle, listenedSeconds, themeMode, accentName,
                     onThemeChange = { themeMode = it; prefs.edit().putString("theme_mode", it).apply() },
+                    onAccentChange = { accentName = it; prefs.edit().putString("accent_name", it).apply() },
                     onChooseWallpaper = { wallpaperPicker.launch(arrayOf("image/*")) },
                     onClearWallpaper = { wallpaperUri = null; prefs.edit().remove("wallpaper_uri").apply() },
                     onCompactChange = { compactCards = it; prefs.edit().putBoolean("compact_cards", it).apply() },
@@ -750,8 +759,8 @@ private fun NowPlayingScreen(
 
 @Composable
 private fun SettingsScreen(
-    modifier: Modifier, wallpaperUri: Uri?, compactCards: Boolean, cardStyle: String, listenedSeconds: Long, themeMode: String,
-    onThemeChange: (String) -> Unit, onChooseWallpaper: () -> Unit, onClearWallpaper: () -> Unit,
+    modifier: Modifier, wallpaperUri: Uri?, compactCards: Boolean, cardStyle: String, listenedSeconds: Long, themeMode: String, accentName: String,
+    onThemeChange: (String) -> Unit, onAccentChange: (String) -> Unit, onChooseWallpaper: () -> Unit, onClearWallpaper: () -> Unit,
     onCompactChange: (Boolean) -> Unit, onCardStyleChange: (String) -> Unit
 ) {
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
@@ -768,6 +777,14 @@ private fun SettingsScreen(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(selected = themeMode == "dark", onClick = { onThemeChange("dark") }, label = { Text("Dark") }, leadingIcon = { Icon(Icons.Rounded.DarkMode, null) })
                 FilterChip(selected = themeMode == "light", onClick = { onThemeChange("light") }, label = { Text("Light") }, leadingIcon = { Icon(Icons.Rounded.LightMode, null) })
+            }
+            HorizontalDivider(color = CardAlt)
+            Text("Accent color", color = TextPrimary, fontSize = 13.sp)
+            Spacer(Modifier.height(6.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf("mint" to "Mint", "ocean" to "Ocean", "violet" to "Violet", "rose" to "Rose").forEach { (key, label) ->
+                    FilterChip(selected = accentName == key, onClick = { onAccentChange(key) }, label = { Text(label, fontSize = 10.sp) })
+                }
             }
         }
         Spacer(Modifier.height(12.dp))
