@@ -683,7 +683,7 @@ private fun SettingsScreen(
         }
         Spacer(Modifier.height(12.dp))
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(CardBg).padding(15.dp)) {
-            Text("Your listening time", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Text("Total playback time", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
             Text(formatDuration(listenedSeconds * 1000L), color = Accent, fontSize = 27.sp, fontWeight = FontWeight.Bold)
             Text("Total time NOVRA has spent playing media on this device.", color = Muted, fontSize = 11.sp)
             Spacer(Modifier.height(10.dp))
