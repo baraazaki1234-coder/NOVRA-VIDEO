@@ -715,7 +715,8 @@ private fun NovraApp() {
                                 compactCards = compactCards, cardStyle = cardStyle,
                                 playCounts = playCounts, favorites = favorites,
                                 onToggleFavorite = ::toggleFavorite,
-                                onPlay = { item -> startMedia(item, videos) }
+                                onPlay = { item -> startMedia(item, videos) },
+                                language = language
                             )
                             "Music" -> MediaScreen(
                                 Modifier.padding(padding), "Music", tracks, loading, hasPermission,
@@ -723,7 +724,8 @@ private fun NovraApp() {
                                 compactCards = compactCards, cardStyle = cardStyle,
                                 playCounts = playCounts, favorites = favorites,
                                 onToggleFavorite = ::toggleFavorite,
-                                onPlay = { item -> startMedia(item, tracks) }
+                                onPlay = { item -> startMedia(item, tracks) },
+                                language = language
                             )
                             "Favorites" -> MediaScreen(
                                 Modifier.padding(padding), "Favorites", (videos + tracks).distinctBy { mediaKey(it) }, loading, hasPermission,
@@ -731,7 +733,8 @@ private fun NovraApp() {
                                 compactCards = compactCards, cardStyle = cardStyle,
                                 playCounts = playCounts, favorites = favorites,
                                 onToggleFavorite = ::toggleFavorite,
-                                onPlay = { item -> startMedia(item, (videos + tracks).distinctBy { mediaKey(it) }) }
+                                onPlay = { item -> startMedia(item, (videos + tracks).distinctBy { mediaKey(it) }) },
+                                language = language
                             )
                             "Playlists" -> PlaylistsScreen(
                                 Modifier.padding(padding), playlists, (videos + tracks).distinctBy { mediaKey(it) },
@@ -883,7 +886,8 @@ private fun MediaScreen(
     modifier: Modifier, type: String, media: List<LocalMedia>, loading: Boolean,
     hasPermission: Boolean, onGrant: () -> Unit, compactCards: Boolean, cardStyle: String,
     playCounts: Map<String, Int>, favorites: Set<String>,
-    onToggleFavorite: (LocalMedia) -> Unit, onPlay: (LocalMedia) -> Unit
+    onToggleFavorite: (LocalMedia) -> Unit, onPlay: (LocalMedia) -> Unit,
+    language: String = "en"
 ) {
     var query by remember { mutableStateOf("") }
     var sortMenuExpanded by remember { mutableStateOf(false) }
@@ -891,7 +895,7 @@ private fun MediaScreen(
     var mediaFilter by remember(type) { mutableStateOf(if (type == "Favorites") "Favorites" else "All") }
     val ranked = media.mapNotNull { item ->
         mediaSearchScore(item, query)?.let { item to it }
-    }.filter { mediaFilter != "Favorites" || mediaKey(it.first) in favorites }
+    }.filter { (mediaFilter != "Favorites" && mediaFilter != "المفضلة") || mediaKey(it.first) in favorites }
     val sortedMedia = when (sortBy) {
         "Name" -> ranked.sortedBy { it.first.title.lowercase() }.map { it.first }
         "Duration" -> ranked.sortedByDescending { it.first.durationMs }.map { it.first }
@@ -906,7 +910,7 @@ private fun MediaScreen(
     Column(modifier.fillMaxSize().padding(horizontal = 18.dp)) {
         Spacer(Modifier.height(22.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(type, color = TextPrimary, fontSize = 29.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            Text(if (language == "ar") when (type) { "Videos" -> "الفيديوهات"; "Music" -> "الأغاني"; else -> "المفضلة" } else type, color = TextPrimary, fontSize = 29.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
             Box {
                 IconButton(onClick = { sortMenuExpanded = true }) { Icon(Icons.Rounded.Sort, "Sort", tint = TextPrimary) }
                 DropdownMenu(expanded = sortMenuExpanded, onDismissRequest = { sortMenuExpanded = false }) {
@@ -922,9 +926,9 @@ private fun MediaScreen(
         }
         Text(
             when (type) {
-                "Videos" -> "Your video collection"
-                "Music" -> "Your music collection"
-                else -> "Everything you saved"
+                "Videos" -> if (language == "ar") "مجموعتك من الفيديوهات" else "Your video collection"
+                "Music" -> if (language == "ar") "مجموعتك الموسيقية" else "Your music collection"
+                else -> if (language == "ar") "كل الوسائط المحفوظة" else "Everything you saved"
             },
             color = Muted, fontSize = 12.sp
         )
@@ -932,7 +936,7 @@ private fun MediaScreen(
         OutlinedTextField(
             value = query, onValueChange = { query = it },
             modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text("Search $type", color = Muted) },
+            placeholder = { Text(if (language == "ar") "ابحث في ${if (type == "Music") "الأغاني" else "الفيديوهات"}" else "Search $type", color = Muted) },
             leadingIcon = { Icon(Icons.Rounded.Search, null, tint = Muted) },
             singleLine = true,
             shape = RoundedCornerShape(16.dp),
@@ -944,7 +948,7 @@ private fun MediaScreen(
         )
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("All", "Favorites").forEach { label ->
+            listOf(if (language == "ar") "الكل" else "All", if (language == "ar") "المفضلة" else "Favorites").forEach { label ->
                 Surface(
                     color = if (mediaFilter == label) Accent else CardBg,
                     shape = CircleShape,
@@ -974,8 +978,8 @@ private fun MediaScreen(
             sortedMedia.isEmpty() -> Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                 Icon(if (type == "Videos") Icons.Rounded.OndemandVideo else Icons.Rounded.MusicNote, null, tint = Accent, modifier = Modifier.size(42.dp))
                 Spacer(Modifier.height(12.dp))
-                Text(if (query.isBlank()) "Nothing here yet" else "No results found", color = TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
-                Text(if (query.isBlank()) "Media on your device will appear here." else "Try another search.", color = Muted, fontSize = 11.sp)
+                Text(if (language == "ar") { if (query.isBlank()) "لا توجد وسائط بعد" else "لا توجد نتائج مطابقة" } else if (query.isBlank()) "Nothing here yet" else "No results found", color = TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                Text(if (language == "ar") { if (query.isBlank()) "ستظهر وسائط جهازك هنا." else "جرّب كلمات بحث أخرى." } else if (query.isBlank()) "Media on your device will appear here." else "Try another search.", color = Muted, fontSize = 11.sp)
             }
             else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(9.dp)) {
                 item { Text("${sortedMedia.size} items", color = Muted, fontSize = 11.sp) }
