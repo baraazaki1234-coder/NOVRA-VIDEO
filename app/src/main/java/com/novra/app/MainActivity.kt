@@ -503,6 +503,22 @@ private fun NovraApp() {
         if (currentQueue.any { mediaKey(it) == mediaKey(item) }) return
         updatePlaybackQueue(currentQueue + item)
     }
+    fun playNextMedia(item: LocalMedia) {
+        val currentQueue = playQueue.ifEmpty { listOfNotNull(selectedMedia) }
+        if (currentQueue.isEmpty()) {
+            startMedia(item, listOf(item))
+            return
+        }
+        val activeIndex = (controller?.currentMediaItemIndex ?: 0).coerceIn(0, currentQueue.lastIndex)
+        val activeKey = currentQueue[activeIndex].let(::mediaKey)
+        if (mediaKey(item) == activeKey) return
+        val updated = currentQueue.toMutableList()
+        val existingIndex = updated.indexOfFirst { mediaKey(it) == mediaKey(item) }
+        if (existingIndex >= 0) updated.removeAt(existingIndex)
+        val newActiveIndex = updated.indexOfFirst { mediaKey(it) == activeKey }.coerceAtLeast(0)
+        updated.add((newActiveIndex + 1).coerceAtMost(updated.size), item)
+        updatePlaybackQueue(updated)
+    }
     val controllerFuture = remember(context) {
         MediaController.Builder(context, SessionToken(context, ComponentName(context, NovraPlaybackService::class.java))).buildAsync()
     }
@@ -918,7 +934,10 @@ private fun NovraApp() {
                                     })
                                 },
                                 onDelete = { playlistName -> savePlaylists(playlists.filterNot { it.name == playlistName }) },
-                                onPlay = { items -> if (items.isNotEmpty()) startMedia(items.first(), items) }, language = language
+                                onPlay = { items -> if (items.isNotEmpty()) startMedia(items.first(), items) },
+                                onAddToQueue = ::enqueueMedia,
+                                onPlayNext = ::playNextMedia,
+                                language = language
                             )
                             else -> SettingsScreen(
                                 Modifier.padding(padding), wallpaperUri, compactCards, cardStyle, listenedSeconds, themeMode, accentName, pureBlack,
@@ -2296,7 +2315,10 @@ private fun PlaylistsScreen(
     onAdd: (String, LocalMedia) -> Unit,
     onRemove: (String, LocalMedia) -> Unit,
     onDelete: (String) -> Unit,
-    onPlay: (List<LocalMedia>) -> Unit, language: String = "en"
+    onPlay: (List<LocalMedia>) -> Unit,
+    onAddToQueue: (LocalMedia) -> Unit,
+    onPlayNext: (LocalMedia) -> Unit,
+    language: String = "en"
 ) {
     var showCreate by remember { mutableStateOf(false) }
     var newName by remember { mutableStateOf("") }
@@ -2362,6 +2384,12 @@ private fun PlaylistsScreen(
                             Column(Modifier.weight(1f)) {
                                 Text(item.title, color = TextPrimary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 Text(if (language == "ar") if (item.isVideo) "فيديو" else "صوت" else if (item.isVideo) "Video" else "Audio", color = Muted, fontSize = 9.sp)
+                            }
+                            IconButton(onClick = { onPlayNext(item) }, modifier = Modifier.size(34.dp)) {
+                                Icon(Icons.Rounded.SkipNext, if (language == "ar") "تشغيل بعد المقطع الحالي" else "Play next", tint = Accent, modifier = Modifier.size(17.dp))
+                            }
+                            IconButton(onClick = { onAddToQueue(item) }, modifier = Modifier.size(34.dp)) {
+                                Icon(Icons.Rounded.QueueMusic, if (language == "ar") "إضافة إلى آخر الطابور" else "Add to queue", tint = Muted, modifier = Modifier.size(17.dp))
                             }
                             IconButton(onClick = { onRemove(playlist.name, item) }, modifier = Modifier.size(34.dp)) {
                                 Icon(Icons.Rounded.Close, if (language == "ar") "إزالة من القائمة" else "Remove from playlist", tint = Muted, modifier = Modifier.size(17.dp))
