@@ -1,0 +1,51 @@
+stages:
+  - build
+
+variables:
+  ANDROID_HOME: "$CI_PROJECT_DIR/.android-sdk"
+  ANDROID_SDK_ROOT: "$CI_PROJECT_DIR/.android-sdk"
+  GRADLE_USER_HOME: "$CI_PROJECT_DIR/.gradle"
+  DEBIAN_FRONTEND: "noninteractive"
+
+build_viora_debug_apk:
+  stage: build
+  image: ubuntu:24.04
+  timeout: 45m
+  cache:
+    key: "viora-android-gradle-sdk-v1"
+    paths:
+      - .gradle/caches/
+      - .gradle/wrapper/
+      - .android-sdk/
+  before_script:
+    - apt-get update -qq
+    - apt-get install -y -qq openjdk-17-jdk wget unzip ca-certificates
+    - java -version
+    - mkdir -p "$ANDROID_HOME/cmdline-tools"
+    - wget -q https://dl.google.com/android/repository/commandlinetools-linux-latest.zip -O /tmp/android-cmdline-tools.zip
+    - mkdir -p /tmp/android-cmdline-tools
+    - unzip -q /tmp/android-cmdline-tools.zip -d /tmp/android-cmdline-tools
+    - mkdir -p "$ANDROID_HOME/cmdline-tools/latest"
+    - mv /tmp/android-cmdline-tools/cmdline-tools/* "$ANDROID_HOME/cmdline-tools/latest/"
+    - export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
+    - yes | sdkmanager --licenses >/dev/null || true
+    - sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+    - wget -q https://services.gradle.org/distributions/gradle-8.13-bin.zip -O /tmp/gradle-8.13-bin.zip
+    - unzip -q /tmp/gradle-8.13-bin.zip -d /opt
+    - export PATH="/opt/gradle-8.13/bin:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
+    - gradle --version
+  script:
+    - export PATH="/opt/gradle-8.13/bin:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
+    - gradle --no-daemon --stacktrace --console=plain assembleDebug
+    - test -s app/build/outputs/apk/debug/app-debug.apk
+    - "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging app/build/outputs/apk/debug/app-debug.apk | head -n 8
+    - sha256sum app/build/outputs/apk/debug/app-debug.apk
+  artifacts:
+    name: "viora-debug-apk-$CI_COMMIT_SHORT_SHA"
+    paths:
+      - app/build/outputs/apk/debug/app-debug.apk
+    expire_in: 14 days
+    when: on_success
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "release/novra-android-next"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
