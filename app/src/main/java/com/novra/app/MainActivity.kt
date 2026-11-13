@@ -2089,7 +2089,7 @@ private fun NowPlayingScreen(
                         Text(item.title, color = if (current) Accent else TextPrimary, fontSize = 12.sp, fontWeight = if (current) FontWeight.Bold else FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(if (current) { if (language == "ar") "يعمل الآن" else "Now playing" } else "${item.artist.ifBlank { "Unknown artist" }} · ${formatDuration(item.durationMs)}", color = Muted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
-                    IconButton(enabled = index > firstUpcoming, onClick = { onMoveQueueItem(index,index-1) }, modifier = Modifier.size(32.dp)) { Icon(Icons.Rounded.KeyboardArrowUp, null, tint = if (index > firstUpcoming) TextPrimary else Muted) }
+                    IconButton(enabled = index > firstUpcoming + 1, onClick = { onMoveQueueItem(index,index-1) }, modifier = Modifier.size(32.dp)) { Icon(Icons.Rounded.KeyboardArrowUp, null, tint = if (index > firstUpcoming + 1) TextPrimary else Muted) }
                     IconButton(enabled = index > firstUpcoming && index < queue.lastIndex, onClick = { onMoveQueueItem(index,index+1) }, modifier = Modifier.size(32.dp)) { Icon(Icons.Rounded.KeyboardArrowDown, null, tint = if (index > firstUpcoming && index < queue.lastIndex) TextPrimary else Muted) }
                     IconButton(enabled = !current, onClick = { onRemoveQueueItem(index) }, modifier = Modifier.size(32.dp)) { Icon(Icons.Rounded.Close, "Remove", tint = if (current) Muted.copy(alpha = 0.35f) else Muted) }
                 }
