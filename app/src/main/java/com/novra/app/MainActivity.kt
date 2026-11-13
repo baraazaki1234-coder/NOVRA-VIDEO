@@ -1426,113 +1426,158 @@ private fun HomeScreen(
     topTracks: List<Pair<LocalMedia, Int>>,
     navigate: (String) -> Unit, onPlay: (LocalMedia) -> Unit, language: String = "en"
 ) {
-    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
-        Spacer(Modifier.height(22.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("Viora", color = TextPrimary, fontSize = 25.sp, fontWeight = FontWeight.Black, letterSpacing = 3.sp)
-                Text(if (language == "ar") "شغّل عالمك." else "Play your world.", color = Muted, fontSize = 11.sp)
+    val featured = topTracks.firstOrNull()?.first
+    val isArabic = language == "ar"
+    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp)) {
+            Spacer(Modifier.height(12.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(if (isArabic) "أهلاً بك في" else "WELCOME TO", color = Muted, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+                    Text("Viora", color = TextPrimary, fontSize = 30.sp, fontWeight = FontWeight.Black, letterSpacing = 1.2.sp)
+                    Text(if (isArabic) "شغّل عالمك. واكتشف أكثر." else "Play your world. Discover more.", color = Muted, fontSize = 11.sp)
+                }
+                Box(Modifier.size(48.dp).clip(RoundedCornerShape(17.dp)).background(Brush.linearGradient(listOf(Color(0xFF9B45F5), Color(0xFF326CE4), Color(0xFF32C9E8)))).border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(17.dp)), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Rounded.PlayArrow, null, tint = Color.White, modifier = Modifier.size(34.dp))
+                }
+                Spacer(Modifier.width(5.dp))
+                IconButton(onClick = { navigate("Explore") }) { Icon(Icons.Rounded.Search, if (isArabic) "بحث" else "Search", tint = TextPrimary) }
+                IconButton(onClick = { navigate("Settings") }) { Icon(Icons.Rounded.Settings, if (isArabic) "الإعدادات" else "Settings", tint = Muted) }
             }
-            IconButton(onClick = { navigate("Explore") }) { Icon(Icons.Rounded.Search, "Explore online", tint = TextPrimary) }
-            IconButton(onClick = { navigate("Playlists") }) { Icon(Icons.Rounded.MoreHoriz, "More", tint = TextPrimary) }
-        }
-        Spacer(Modifier.height(25.dp))
-        Text(if (language == "ar") "ترفيهك كله" else "YOUR ENTERTAINMENT", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
-        Spacer(Modifier.height(7.dp))
-        Text(if (language == "ar") "إيه حابب تسمع أو\nتشاهد النهارده؟" else "What feels like\nplaying today?", color = TextPrimary, fontSize = 32.sp, lineHeight = 46.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(21.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            HomeTile(if (language == "ar") "مشغل الفيديو" else "VIDEO PLAYER", if (language == "ar") "شاهد فيديوهاتك" else "Watch your videos", Icons.Rounded.PlayCircle, Brush.linearGradient(listOf(Color(0xFF7656D8), Color(0xFF34265F))), Modifier.weight(1f)) { navigate("Videos") }
-            HomeTile(if (language == "ar") "مشغل الموسيقى" else "MUSIC PLAYER", if (language == "ar") "استمع لأغانيك" else "Listen to your music", Icons.Rounded.GraphicEq, Brush.linearGradient(listOf(Color(0xFF238D9D), Color(0xFF164354))), Modifier.weight(1f)) { navigate("Music") }
-        }
-        Spacer(Modifier.height(27.dp))
-        Text(if (language == "ar") "مكتبتك" else "YOUR MEDIA", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
-        Spacer(Modifier.height(12.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            CountCard(if (language == "ar") "فيديوهات" else "VIDEOS", videoCount.toString(), Icons.Rounded.Movie, Modifier.weight(1f)) { navigate("Videos") }
-            CountCard(if (language == "ar") "أغاني" else "SONGS", musicCount.toString(), Icons.Rounded.MusicNote, Modifier.weight(1f)) { navigate("Music") }
+            Spacer(Modifier.height(18.dp))
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(
+                    Triple("Home", if (isArabic) "الكل" else "For you", Icons.Rounded.AutoAwesome),
+                    Triple("Music", if (isArabic) "موسيقى" else "Music", Icons.Rounded.MusicNote),
+                    Triple("Videos", if (isArabic) "فيديو" else "Videos", Icons.Rounded.OndemandVideo),
+                    Triple("Playlists", if (isArabic) "قوائم التشغيل" else "Playlists", Icons.Rounded.QueueMusic)
+                ).forEach { item ->
+                    Surface(
+                        color = if (item.first == "Home") Accent else CardBg,
+                        shape = CircleShape,
+                        modifier = Modifier.clickable { if (item.first != "Home") navigate(item.first) }
+                    ) {
+                        Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(item.third, null, tint = if (item.first == "Home") AppBg else Muted, modifier = Modifier.size(15.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(item.second, color = if (item.first == "Home") AppBg else TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(19.dp))
+            Box(
+                Modifier.fillMaxWidth().height(218.dp).clip(RoundedCornerShape(27.dp))
+                    .background(Brush.linearGradient(listOf(Color(0xFF37156D), Color(0xFF152A59), Color(0xFF073B52))))
+                    .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(27.dp))
+            ) {
+                Box(Modifier.align(Alignment.TopEnd).offset(x = 40.dp, y = (-60).dp).size(190.dp).blur(55.dp).background(Color(0xFFB34DFF).copy(alpha = 0.45f), CircleShape))
+                Box(Modifier.align(Alignment.BottomStart).offset(x = (-50).dp, y = 55.dp).size(170.dp).blur(55.dp).background(Color(0xFF24BFEA).copy(alpha = 0.25f), CircleShape))
+                if (featured != null) {
+                    MediaArtwork(featured, Modifier.align(Alignment.CenterEnd).padding(end = 14.dp).size(148.dp).clip(RoundedCornerShape(23.dp)).border(1.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(23.dp)))
+                } else {
+                    Box(Modifier.align(Alignment.CenterEnd).padding(end = 20.dp).size(140.dp).clip(RoundedCornerShape(26.dp)).background(Brush.linearGradient(listOf(Color(0xFFAA4DFF), Color(0xFF347DEB)))), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Rounded.GraphicEq, null, tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(78.dp))
+                    }
+                }
+                Column(Modifier.align(Alignment.CenterStart).fillMaxWidth(0.64f).padding(start = 18.dp, top = 14.dp, bottom = 14.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(6.dp).clip(CircleShape).background(Color(0xFF56E6D1)))
+                        Spacer(Modifier.width(6.dp))
+                        Text(if (isArabic) "تجربة Viora" else "THE VIORA EXPERIENCE", color = Color(0xFFBEEBFF), fontSize = 8.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Text(if (isArabic) "كل ترفيهك\nفي مكان واحد" else "Your world.\nYour soundtrack.", color = Color.White, fontSize = 23.sp, lineHeight = 28.sp, fontWeight = FontWeight.ExtraBold)
+                    Spacer(Modifier.height(7.dp))
+                    Text(if (isArabic) "موسيقى وفيديوهات بتجربة مختلفة." else "Music and video, beautifully together.", color = Color.White.copy(alpha = 0.78f), fontSize = 9.sp, maxLines = 2)
+                    Spacer(Modifier.height(13.dp))
+                    Row(
+                        Modifier.clip(CircleShape).background(Color.White).clickable { if (featured != null) onPlay(featured) else navigate("Music") }.padding(horizontal = 13.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Rounded.PlayArrow, null, tint = Color(0xFF28104D), modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text(if (isArabic) "ابدأ الاستماع" else "Start listening", color = Color(0xFF28104D), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+            Spacer(Modifier.height(20.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(if (isArabic) "مكتبتك" else "YOUR LIBRARY", color = Accent, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.7.sp)
+                    Text(if (isArabic) "كل شيء جاهز للتشغيل" else "Ready when you are", color = TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                }
+                Text(if (isArabic) "عرض الكل" else "VIEW ALL", color = Muted, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clickable { navigate("Music") })
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(Modifier.weight(1f).clip(RoundedCornerShape(20.dp)).background(Brush.linearGradient(listOf(Color(0xFF54218A), Color(0xFF28204F)))).clickable { navigate("Music") }.padding(14.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Rounded.MusicNote, null, tint = Color(0xFFE6C9FF), modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.weight(1f))
+                        Icon(Icons.Rounded.ArrowOutward, null, tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(14.dp))
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Text(musicCount.toString(), color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.ExtraBold)
+                    Text(if (isArabic) "أغنية" else "SONGS", color = Color.White.copy(alpha = 0.72f), fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                }
+                Column(Modifier.weight(1f).clip(RoundedCornerShape(20.dp)).background(Brush.linearGradient(listOf(Color(0xFF15516C), Color(0xFF172B51)))).clickable { navigate("Videos") }.padding(14.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Rounded.OndemandVideo, null, tint = Color(0xFFB7F1FF), modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.weight(1f))
+                        Icon(Icons.Rounded.ArrowOutward, null, tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(14.dp))
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Text(videoCount.toString(), color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.ExtraBold)
+                    Text(if (isArabic) "فيديو" else "VIDEOS", color = Color.White.copy(alpha = 0.72f), fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                }
+            }
         }
         if (topTracks.isNotEmpty()) {
-            Spacer(Modifier.height(24.dp))
-            Text(if (language == "ar") "الأكثر تشغيلًا" else "MOST PLAYED", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
-            Spacer(Modifier.height(10.dp))
-            topTracks.forEachIndexed { index, entry ->
-                Row(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(CardBg)
-                        .clickable { onPlay(entry.first) }.padding(10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("${index + 1}", color = Muted, fontSize = 12.sp, modifier = Modifier.width(22.dp))
-                    MediaArtwork(entry.first, Modifier.size(42.dp).clip(RoundedCornerShape(9.dp)))
-                    Spacer(Modifier.width(11.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(entry.first.title, color = TextPrimary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(if (language == "ar") "تم التشغيل ${entry.second} مرة" else "${entry.second} plays", color = Muted, fontSize = 10.sp)
-                    }
-                    Icon(Icons.Rounded.PlayArrow, null, tint = Accent)
+            Spacer(Modifier.height(22.dp))
+            Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(if (isArabic) "عد إلى موسيقاك" else "BACK TO YOUR MUSIC", color = Accent, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+                    Text(if (isArabic) "الأكثر استماعًا" else "Most played", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 }
-                Spacer(Modifier.height(7.dp))
+                Text(if (isArabic) "المكتبة" else "LIBRARY", color = Muted, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clickable { navigate("Music") })
+            }
+            Spacer(Modifier.height(11.dp))
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 18.dp), horizontalArrangement = Arrangement.spacedBy(11.dp)) {
+                topTracks.take(8).forEach { entry ->
+                    Column(Modifier.width(132.dp).clip(RoundedCornerShape(18.dp)).background(CardBg).clickable { onPlay(entry.first) }.padding(9.dp)) {
+                        Box {
+                            MediaArtwork(entry.first, Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(13.dp)))
+                            Box(Modifier.align(Alignment.BottomEnd).padding(7.dp).size(31.dp).clip(CircleShape).background(Accent), contentAlignment = Alignment.Center) {
+                                Icon(Icons.Rounded.PlayArrow, null, tint = AppBg, modifier = Modifier.size(21.dp))
+                            }
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        Text(entry.first.title, color = TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(entry.first.artist, color = Muted, fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
             }
         }
-        Spacer(Modifier.height(24.dp))
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("Quick access", color = TextPrimary, fontSize = 19.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-            Text("SEE ALL", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-        }
-        Spacer(Modifier.height(10.dp))
-        listOf("Favorites", "Playlists").forEach { label ->
-            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(15.dp)).background(CardBg).clickable {
-                navigate(if (label == "Favorites") "Favorites" else "Playlists")
-            }.padding(15.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(when (label) {
-                    "Favorites" -> Icons.Rounded.FavoriteBorder
-                    "Playlists" -> Icons.Rounded.QueueMusic
-                    else -> Icons.Rounded.History
-                }, null, tint = Accent)
-                Spacer(Modifier.width(13.dp))
-                Text(label, color = TextPrimary, modifier = Modifier.weight(1f), fontSize = 13.sp)
-                Icon(Icons.Rounded.ChevronRight, null, tint = Muted)
-            }
-            Spacer(Modifier.height(8.dp))
-        }
-        Spacer(Modifier.height(24.dp))
-    }
-}
-
-@Composable
-private fun HomeTile(tag: String, title: String, icon: androidx.compose.ui.graphics.vector.ImageVector, brush: Brush, modifier: Modifier, onClick: () -> Unit) {
-    Box(modifier.clip(RoundedCornerShape(26.dp)).background(brush).clickable(onClick = onClick)) {
-        Box(Modifier.align(Alignment.TopEnd).offset(x = 35.dp, y = (-35).dp).size(125.dp).blur(42.dp).background(Color.White.copy(alpha = 0.15f), CircleShape))
-        Column(Modifier.fillMaxWidth().padding(17.dp)) {
-            Box(Modifier.size(48.dp).clip(RoundedCornerShape(17.dp)).background(Color.White.copy(alpha = 0.15f)).border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(17.dp)), contentAlignment = Alignment.Center) {
-                Icon(icon, null, tint = Color.White, modifier = Modifier.size(27.dp))
-            }
-            Spacer(Modifier.height(27.dp))
-            Text(tag, color = Color.White.copy(alpha = 0.72f), fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
-            Spacer(Modifier.height(5.dp))
-            Text(title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 2)
-            Spacer(Modifier.height(4.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(if (tag.contains("VIDEO", true) || tag.contains("فيديو")) "Explore library" else "Open collection", color = Color.White.copy(alpha = 0.70f), fontSize = 10.sp, modifier = Modifier.weight(1f))
-                Icon(Icons.Rounded.ArrowOutward, null, tint = Color.White.copy(alpha = 0.85f), modifier = Modifier.size(16.dp))
+        Spacer(Modifier.height(22.dp))
+        Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp)) {
+            Text(if (isArabic) "اكتشف Viora" else "DISCOVER VIORA", color = Accent, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                listOf(
+                    Triple("Playlists", Icons.Rounded.QueueMusic, if (isArabic) "قوائمك" else "Playlists"),
+                    Triple("Favorites", Icons.Rounded.Favorite, if (isArabic) "المفضلة" else "Favorites"),
+                    Triple("Explore", Icons.Rounded.Explore, if (isArabic) "استكشف" else "Explore")
+                ).forEach { item ->
+                    Column(Modifier.weight(1f).clip(RoundedCornerShape(17.dp)).background(CardBg).clickable { navigate(item.first) }.padding(vertical = 13.dp, horizontal = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(item.second, null, tint = Accent, modifier = Modifier.size(22.dp))
+                        Spacer(Modifier.height(7.dp))
+                        Text(item.third, color = TextPrimary, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                    }
+                }
             }
         }
-    }
-}
-
-@Composable
-private fun CountCard(label: String, count: String, icon: androidx.compose.ui.graphics.vector.ImageVector, modifier: Modifier, onClick: () -> Unit) {
-    Column(modifier.clip(RoundedCornerShape(22.dp)).background(Brush.linearGradient(listOf(CardBg, CardAlt.copy(alpha = 0.72f)))).border(1.dp, Color.White.copy(alpha = 0.055f), RoundedCornerShape(22.dp)).clickable(onClick = onClick).padding(16.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(36.dp).clip(RoundedCornerShape(12.dp)).background(Accent.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
-                Icon(icon, null, tint = Accent, modifier = Modifier.size(19.dp))
-            }
-            Spacer(Modifier.weight(1f))
-            Icon(Icons.Rounded.ArrowOutward, null, tint = Muted, modifier = Modifier.size(15.dp))
-        }
-        Spacer(Modifier.height(13.dp))
-        Text(count, color = TextPrimary, fontSize = 28.sp, fontWeight = FontWeight.ExtraBold)
-        Text(label, color = Muted, fontSize = 9.sp, letterSpacing = 1.1.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(28.dp))
     }
 }
 
