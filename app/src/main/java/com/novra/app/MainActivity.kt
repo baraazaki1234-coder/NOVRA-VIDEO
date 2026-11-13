@@ -477,6 +477,13 @@ private fun NovraApp() {
         if (current != null) updatePlaybackQueue(listOf(current))
         else updatePlaybackQueue(emptyList())
     }
+    fun stopPlayback() {
+        controller?.stop()
+        controller?.clearMediaItems()
+        playQueue = emptyList()
+        selectedMedia = null
+        showNowPlaying = false
+    }
     fun startMedia(item: LocalMedia, queue: List<LocalMedia>) {
         selectedMedia = item
         playQueue = queue
@@ -818,7 +825,7 @@ private fun NovraApp() {
                                         IconButton(onClick = { controller?.let { if (it.currentPosition > 3_000L) it.seekTo(0L) else it.seekToPreviousMediaItem() } }) { Icon(Icons.Rounded.SkipPrevious, if (language == "ar") "السابق" else "Previous", tint = Muted) }
                                         IconButton(onClick = { controller?.let { if (it.isPlaying) it.pause() else it.play() } }) { Icon(if (controller?.isPlaying == true) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, null, tint = TextPrimary) }
                                         IconButton(onClick = { controller?.seekToNextMediaItem() }) { Icon(Icons.Rounded.SkipNext, if (language == "ar") "التالي" else "Next", tint = Muted) }
-                                        IconButton(onClick = { controller?.stop(); selectedMedia = null }) { Icon(Icons.Rounded.Close, null, tint = Muted) }
+                                        IconButton(onClick = ::stopPlayback) { Icon(Icons.Rounded.Close, null, tint = Muted) }
                                     }
                                     Spacer(Modifier.height(8.dp))
                                 }
