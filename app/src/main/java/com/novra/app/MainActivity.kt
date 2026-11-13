@@ -471,6 +471,12 @@ private fun NovraApp() {
         if (index !in playQueue.indices) return
         updatePlaybackQueue(playQueue.toMutableList().also { it.removeAt(index) })
     }
+    fun clearUpcomingQueue() {
+        val currentIndex = controller?.currentMediaItemIndex ?: 0
+        val current = playQueue.getOrNull(currentIndex) ?: selectedMedia
+        if (current != null) updatePlaybackQueue(listOf(current))
+        else updatePlaybackQueue(emptyList())
+    }
     fun startMedia(item: LocalMedia, queue: List<LocalMedia>) {
         selectedMedia = item
         playQueue = queue
@@ -843,6 +849,7 @@ private fun NovraApp() {
                                 Modifier.padding(padding), selectedMedia!!, controller, playQueue,
                                 sleepTimerMinutes, onSleepTimerChange = { sleepTimerMinutes = it },
                                 onMoveQueueItem = ::moveQueueItem, onRemoveQueueItem = ::removeQueueItem,
+                                onClearQueue = ::clearUpcomingQueue,
                                 onBack = { showNowPlaying = false }, language = language
                             )
                         } else when (selected) {
@@ -1841,6 +1848,7 @@ private fun NowPlayingScreen(
     modifier: Modifier, media: LocalMedia, controller: MediaController?, queue: List<LocalMedia>,
     sleepTimerMinutes: Int, onSleepTimerChange: (Int) -> Unit,
     onMoveQueueItem: (Int, Int) -> Unit, onRemoveQueueItem: (Int) -> Unit,
+    onClearQueue: () -> Unit,
     onBack: () -> Unit, language: String = "en"
 ) {
     var shuffle by remember(controller) { mutableStateOf(controller?.shuffleModeEnabled == true) }
@@ -2062,6 +2070,11 @@ private fun NowPlayingScreen(
                 Text(if (language == "ar") "التالي في قائمة التشغيل" else "UP NEXT", color = Accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp)
                 Spacer(Modifier.weight(1f))
                 Text(if (language == "ar") "${queue.size} عناصر" else "${queue.size} items", color = Muted, fontSize = 10.sp)
+                if (queue.size > 1) {
+                    TextButton(onClick = onClearQueue, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)) {
+                        Text(if (language == "ar") "مسح التالي" else "Clear upcoming", color = Muted, fontSize = 10.sp)
+                    }
+                }
             }
             Spacer(Modifier.height(8.dp))
             queue.forEachIndexed { index, item ->
