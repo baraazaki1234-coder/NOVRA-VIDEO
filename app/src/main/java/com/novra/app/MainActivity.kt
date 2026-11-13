@@ -1830,51 +1830,62 @@ private fun decodeAlbumArtwork(data: ByteArray): Bitmap? {
     ).also { if (it !== decoded) decoded.recycle() }
 }
 
+private fun loadAlbumArtwork(context: android.content.Context, media: LocalMedia): Bitmap? {
+    val retriever = MediaMetadataRetriever()
+    return try {
+        retriever.setDataSource(context, media.uri)
+        val embedded = retriever.embeddedPicture
+        if (embedded != null) {
+            decodeAlbumArtwork(embedded)
+        } else if (media.albumId >= 0L) {
+            val albumUri = Uri.parse("content://media/external/audio/albumart/${media.albumId}")
+            runCatching {
+                context.contentResolver.openInputStream(albumUri)?.use { input ->
+                    decodeAlbumArtwork(input.readBytes())
+                }
+            }.getOrNull()
+        } else null
+    } catch (_: Throwable) {
+        null
+    } finally {
+        retriever.release()
+    }
+}
+
 @Composable
 private fun MediaArtwork(media: LocalMedia, modifier: Modifier = Modifier) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    val bitmap by produceState<Bitmap?>(initialValue = null, media.uri) {
+    val bitmap by produceState<Bitmap?>(initialValue = null, media.uri, media.albumId) {
         value = withContext(Dispatchers.IO) {
             val cacheKey = media.uri.toString()
             mediaArtworkCache.get(cacheKey) ?: runCatching {
-                val retriever = MediaMetadataRetriever()
-                try {
-                    retriever.setDataSource(context, media.uri)
-                    if (media.isVideo) {
-                        // Prefer Android's generated thumbnail, then fall back to
-                        // decoding an actual frame for providers that omit it.
+                if (!media.isVideo) {
+                    loadAlbumArtwork(context, media)
+                } else {
+                    val retriever = MediaMetadataRetriever()
+                    try {
+                        retriever.setDataSource(context, media.uri)
                         val generatedThumbnail: Bitmap? =
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                                runCatching {
-                                    context.contentResolver.loadThumbnail(media.uri, Size(256, 256), null)
-                                }.getOrNull()
+                                runCatching { context.contentResolver.loadThumbnail(media.uri, Size(512, 512), null) }.getOrNull()
                             } else null
                         generatedThumbnail ?: retriever.getFrameAtTime(
-                            0L,
-                            MediaMetadataRetriever.OPTION_CLOSEST_SYNC
+                            0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC
                         )?.let { frame ->
                             val maxSide = maxOf(frame.width, frame.height)
-                            if (maxSide > 512) {
-                                val scale = 512f / maxSide
+                            if (maxSide > 768) {
+                                val scale = 768f / maxSide
                                 Bitmap.createScaledBitmap(
-                                    frame,
-                                    (frame.width * scale).toInt().coerceAtLeast(1),
-                                    (frame.height * scale).toInt().coerceAtLeast(1),
-                                    true
+                                    frame, (frame.width * scale).toInt().coerceAtLeast(1),
+                                    (frame.height * scale).toInt().coerceAtLeast(1), true
                                 ).also { if (it !== frame) frame.recycle() }
                             } else frame
                         }
-                    } else {
-                        retriever.embeddedPicture?.let { imageBytes ->
-                            decodeAlbumArtwork(imageBytes)
-                        }
+                    } finally {
+                        retriever.release()
                     }
-                } finally {
-                    retriever.release()
                 }
-            }.getOrNull()?.also { bitmap ->
-                mediaArtworkCache.put(cacheKey, bitmap)
-            }
+            }.getOrNull()?.also { bitmap -> mediaArtworkCache.put(cacheKey, bitmap) }
         }
     }
     Box(modifier.background(CardAlt), contentAlignment = Alignment.Center) {
@@ -1927,15 +1938,7 @@ private fun NowPlayingScreen(
     val artworkBitmap by produceState<Bitmap?>(null, media.uri) {
         value = withContext(Dispatchers.IO) {
             val key = media.uri.toString()
-            mediaArtworkCache.get(key) ?: runCatching {
-                val retriever = MediaMetadataRetriever()
-                try {
-                    retriever.setDataSource(context, media.uri)
-                    retriever.embeddedPicture?.let { bytes ->
-                        decodeAlbumArtwork(bytes)
-                    }
-                } finally { retriever.release() }
-            }.getOrNull()?.also { mediaArtworkCache.put(key, it) }
+            mediaArtworkCache.get(key) ?: loadAlbumArtwork(context, media)?.also { mediaArtworkCache.put(key, it) }
         }
     }
     val artworkTint = remember(artworkBitmap) { dominantArtworkColor(artworkBitmap) }
@@ -1980,7 +1983,7 @@ private fun NowPlayingScreen(
             }
             Spacer(Modifier.height(15.dp))
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Box(Modifier.fillMaxWidth(0.82f).aspectRatio(1f).blur(42.dp).background(artworkTint.copy(alpha = 0.58f), RoundedCornerShape(34.dp)))
+                Box(Modifier.fillMaxWidth(0.88f).aspectRatio(1f).blur(42.dp).background(artworkTint.copy(alpha = 0.58f), RoundedCornerShape(34.dp)))
                 Box(
                     Modifier.fillMaxWidth(0.82f).aspectRatio(1f)
                         .graphicsLayer {
