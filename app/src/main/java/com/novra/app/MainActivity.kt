@@ -2067,17 +2067,20 @@ private fun NowPlayingScreen(
         }
     }
     if (activePanel == "queue") ModalBottomSheet(onDismissRequest = { activePanel = "none" }, containerColor = CardBg, contentColor = TextPrimary) {
+        val firstUpcoming = currentQueueIndex.coerceIn(0, queue.size)
+        val upcomingCount = (queue.size - firstUpcoming).coerceAtLeast(0)
         Column(Modifier.fillMaxWidth().heightIn(max = 620.dp).verticalScroll(rememberScrollState()).padding(horizontal = 18.dp).padding(bottom = 28.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(if (language == "ar") "قائمة التشغيل" else "UP NEXT", color = TextPrimary, fontSize = 19.sp, fontWeight = FontWeight.Bold)
-                    Text(if (language == "ar") "${queue.size} أغنية في الطابور" else "${queue.size} tracks in queue", color = Muted, fontSize = 11.sp)
+                    Text(if (language == "ar") "${upcomingCount} مقاطع في الانتظار" else "${upcomingCount} tracks in queue", color = Muted, fontSize = 11.sp)
                 }
-                if (queue.size > 1) TextButton(onClick = onClearQueue) { Text(if (language == "ar") "مسح التالي" else "Clear upcoming") }
+                if (upcomingCount > 1) TextButton(onClick = onClearQueue) { Text(if (language == "ar") "مسح التالي" else "Clear upcoming") }
             }
             Spacer(Modifier.height(10.dp))
-            if (queue.isEmpty()) Text(if (language == "ar") "الطابور فارغ" else "Your queue is empty", color = Muted, modifier = Modifier.padding(vertical = 24.dp))
-            else queue.forEachIndexed { index, item ->
+            if (upcomingCount == 0) Text(if (language == "ar") "لا توجد أغانٍ تالية" else "Nothing queued next", color = Muted, modifier = Modifier.padding(vertical = 24.dp))
+            else for (index in firstUpcoming until queue.size) {
+                val item = queue[index]
                 val current = index == currentQueueIndex
                 Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(if (current) CardAlt else Color.Transparent)
                     .clickable { controller?.seekTo(index, 0L) }.padding(horizontal = 8.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -2086,9 +2089,9 @@ private fun NowPlayingScreen(
                         Text(item.title, color = if (current) Accent else TextPrimary, fontSize = 12.sp, fontWeight = if (current) FontWeight.Bold else FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(if (current) { if (language == "ar") "يعمل الآن" else "Now playing" } else "${item.artist.ifBlank { "Unknown artist" }} · ${formatDuration(item.durationMs)}", color = Muted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
-                    IconButton(enabled = index > 0, onClick = { onMoveQueueItem(index,index-1) }, modifier = Modifier.size(32.dp)) { Icon(Icons.Rounded.KeyboardArrowUp, null, tint = if (index > 0) TextPrimary else Muted) }
-                    IconButton(enabled = index < queue.lastIndex, onClick = { onMoveQueueItem(index,index+1) }, modifier = Modifier.size(32.dp)) { Icon(Icons.Rounded.KeyboardArrowDown, null, tint = if (index < queue.lastIndex) TextPrimary else Muted) }
-                    IconButton(enabled = queue.size > 1, onClick = { onRemoveQueueItem(index) }, modifier = Modifier.size(32.dp)) { Icon(Icons.Rounded.Close, "Remove", tint = Muted) }
+                    IconButton(enabled = index > firstUpcoming, onClick = { onMoveQueueItem(index,index-1) }, modifier = Modifier.size(32.dp)) { Icon(Icons.Rounded.KeyboardArrowUp, null, tint = if (index > firstUpcoming) TextPrimary else Muted) }
+                    IconButton(enabled = index > firstUpcoming && index < queue.lastIndex, onClick = { onMoveQueueItem(index,index+1) }, modifier = Modifier.size(32.dp)) { Icon(Icons.Rounded.KeyboardArrowDown, null, tint = if (index > firstUpcoming && index < queue.lastIndex) TextPrimary else Muted) }
+                    IconButton(enabled = !current, onClick = { onRemoveQueueItem(index) }, modifier = Modifier.size(32.dp)) { Icon(Icons.Rounded.Close, "Remove", tint = if (current) Muted.copy(alpha = 0.35f) else Muted) }
                 }
             }
         }
