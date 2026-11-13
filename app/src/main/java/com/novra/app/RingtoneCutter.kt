@@ -137,7 +137,7 @@ internal fun RingtoneCutterDialog(
                             scope.launch(Dispatchers.IO) {
                                 var saved: Uri? = null
                                 runCatching {
-                                    val safeTitle = media.title.replace(Regex("[^A-Za-z0-9 _-]"), "").trim().take(42).ifBlank { "Viora" }
+                                    val safeTitle = media.title.replace(Regex("[^\\p{L}\\p{N} _-]"), "").trim().take(42).ifBlank { "Viora" }
                                     val values = ContentValues().apply {
                                         put(MediaStore.MediaColumns.DISPLAY_NAME, "${safeTitle}_ringtone.m4a")
                                         put(MediaStore.MediaColumns.MIME_TYPE, "audio/mp4")
