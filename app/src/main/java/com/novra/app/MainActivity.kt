@@ -2030,7 +2030,7 @@ private fun NowPlayingScreen(
             }
         }
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(CardBg).padding(12.dp)) {
-            Text("PLAYBACK SPEED", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+            Text(if (language == "ar") "سرعة التشغيل" else "PLAYBACK SPEED", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
             Spacer(Modifier.height(7.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 listOf(0.75f, 1f, 1.25f, 1.5f, 2f).forEach { speed ->
@@ -2043,9 +2043,9 @@ private fun NowPlayingScreen(
             }
             Spacer(Modifier.height(9.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("SLEEP TIMER", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                Text(if (language == "ar") "مؤقت إيقاف التشغيل" else "SLEEP TIMER", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
                 Spacer(Modifier.weight(1f))
-                if (sleepTimerMinutes > 0) Text("Timer set: ${sleepTimerMinutes} min", color = Accent, fontSize = 10.sp)
+                if (sleepTimerMinutes > 0) Text(if (language == "ar") "متبقي: ${sleepTimerMinutes} دقيقة" else "Timer set: ${sleepTimerMinutes} min", color = Accent, fontSize = 10.sp)
             }
             Spacer(Modifier.height(6.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -2057,7 +2057,7 @@ private fun NowPlayingScreen(
                     )
                 }
                 if (sleepTimerMinutes > 0) {
-                    FilterChip(selected = false, onClick = { onSleepTimerChange(0) }, label = { Text("Off", fontSize = 10.sp) })
+                    FilterChip(selected = false, onClick = { onSleepTimerChange(0) }, label = { Text(if (language == "ar") "إيقاف" else "Off", fontSize = 10.sp) })
                 }
             }
         }
@@ -2090,24 +2090,24 @@ private fun NowPlayingScreen(
                     Spacer(Modifier.width(10.dp))
                     Column(Modifier.weight(1f)) {
                         Text(item.title, color = if (isCurrent) Accent else TextPrimary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(if (isCurrent) "Now playing" else formatDuration(item.durationMs), color = Muted, fontSize = 10.sp)
+                        Text(if (isCurrent) { if (language == "ar") "يعمل الآن" else "Now playing" } else formatDuration(item.durationMs), color = Muted, fontSize = 10.sp)
                     }
                     if (isCurrent) Icon(Icons.Rounded.VolumeUp, null, tint = Accent, modifier = Modifier.size(17.dp))
                     IconButton(
                         enabled = index > 0,
                         onClick = { onMoveQueueItem(index, index - 1) },
                         modifier = Modifier.size(32.dp)
-                    ) { Icon(Icons.Rounded.KeyboardArrowUp, "Move up", tint = if (index > 0) TextPrimary else Muted) }
+                    ) { Icon(Icons.Rounded.KeyboardArrowUp, if (language == "ar") "تحريك لأعلى" else "Move up", tint = if (index > 0) TextPrimary else Muted) }
                     IconButton(
                         enabled = index < queue.lastIndex,
                         onClick = { onMoveQueueItem(index, index + 1) },
                         modifier = Modifier.size(32.dp)
-                    ) { Icon(Icons.Rounded.KeyboardArrowDown, "Move down", tint = if (index < queue.lastIndex) TextPrimary else Muted) }
+                    ) { Icon(Icons.Rounded.KeyboardArrowDown, if (language == "ar") "تحريك لأسفل" else "Move down", tint = if (index < queue.lastIndex) TextPrimary else Muted) }
                     IconButton(
                         enabled = queue.size > 1,
                         onClick = { onRemoveQueueItem(index) },
                         modifier = Modifier.size(32.dp)
-                    ) { Icon(Icons.Rounded.Close, "Remove from queue", tint = Muted) }
+                    ) { Icon(Icons.Rounded.Close, if (language == "ar") "إزالة من قائمة التشغيل" else "Remove from queue", tint = Muted) }
                 }
             }
         }
