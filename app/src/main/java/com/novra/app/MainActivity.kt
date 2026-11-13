@@ -453,7 +453,7 @@ private fun NovraApp() {
 
         val mediaItems = updated.map { entry ->
             MediaItem.Builder().setUri(entry.uri)
-                .setMediaMetadata(MediaMetadata.Builder().setTitle(entry.title).setArtist(entry.artist).build())
+                .setMediaMetadata(MediaMetadata.Builder().setTitle(entry.title).setDisplayTitle(entry.title).setArtist(entry.artist).setDurationMs(entry.durationMs.coerceAtLeast(0L)).apply { if (!entry.isVideo && entry.albumId >= 0L) setArtworkUri(Uri.parse("content://media/external/audio/albumart/${entry.albumId}")) }.build())
                 .build()
         }
         player?.setMediaItems(mediaItems, targetIndex, if (keepPosition) currentPosition else 0L)
@@ -560,7 +560,7 @@ private fun NovraApp() {
             val items = queue.map { entry ->
                 MediaItem.Builder()
                     .setUri(entry.uri)
-                    .setMediaMetadata(MediaMetadata.Builder().setTitle(entry.title).setArtist(entry.artist).build())
+                    .setMediaMetadata(MediaMetadata.Builder().setTitle(entry.title).setDisplayTitle(entry.title).setArtist(entry.artist).setDurationMs(entry.durationMs.coerceAtLeast(0L)).apply { if (!entry.isVideo && entry.albumId >= 0L) setArtworkUri(Uri.parse("content://media/external/audio/albumart/${entry.albumId}")) }.build())
                     .build()
             }
             player.setMediaItems(items, startIndex, 0L)
@@ -1255,7 +1255,7 @@ private fun VideoNowPlayingScreen(
                 val rebuiltItems = activeQueue.mapIndexed { index, entry ->
                     val builder = MediaItem.Builder()
                         .setUri(entry.uri)
-                        .setMediaMetadata(MediaMetadata.Builder().setTitle(entry.title).setArtist(entry.artist).build())
+                        .setMediaMetadata(MediaMetadata.Builder().setTitle(entry.title).setDisplayTitle(entry.title).setArtist(entry.artist).setDurationMs(entry.durationMs.coerceAtLeast(0L)).apply { if (!entry.isVideo && entry.albumId >= 0L) setArtworkUri(Uri.parse("content://media/external/audio/albumart/${entry.albumId}")) }.build())
                     if (index == activeIndex) builder.setSubtitleConfigurations(listOf(subtitle))
                     builder.build()
                 }
@@ -1810,6 +1810,26 @@ private fun formatDuration(duration: Long): String {
 }
 
 
+private fun decodeAlbumArtwork(data: ByteArray): Bitmap? {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeByteArray(data, 0, data.size, bounds)
+    val maxDimension = maxOf(bounds.outWidth, bounds.outHeight)
+    if (maxDimension <= 0) return null
+    var sample = 1
+    while (maxDimension / sample > 1200) sample *= 2
+    val decoded = BitmapFactory.decodeByteArray(
+        data, 0, data.size,
+        BitmapFactory.Options().apply { inSampleSize = sample.coerceAtLeast(1) }
+    ) ?: return null
+    val side = maxOf(decoded.width, decoded.height)
+    if (side <= 1200) return decoded
+    val scale = 1200f / side
+    return Bitmap.createScaledBitmap(
+        decoded, (decoded.width * scale).toInt().coerceAtLeast(1),
+        (decoded.height * scale).toInt().coerceAtLeast(1), true
+    ).also { if (it !== decoded) decoded.recycle() }
+}
+
 @Composable
 private fun MediaArtwork(media: LocalMedia, modifier: Modifier = Modifier) {
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -1846,10 +1866,7 @@ private fun MediaArtwork(media: LocalMedia, modifier: Modifier = Modifier) {
                         }
                     } else {
                         retriever.embeddedPicture?.let { imageBytes ->
-                            BitmapFactory.decodeByteArray(
-                                imageBytes, 0, imageBytes.size,
-                                BitmapFactory.Options().apply { inSampleSize = 4 }
-                            )
+                            decodeAlbumArtwork(imageBytes)
                         }
                     }
                 } finally {
@@ -1915,13 +1932,16 @@ private fun NowPlayingScreen(
                 try {
                     retriever.setDataSource(context, media.uri)
                     retriever.embeddedPicture?.let { bytes ->
-                        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = 4 })
+                        decodeAlbumArtwork(bytes)
                     }
                 } finally { retriever.release() }
             }.getOrNull()?.also { mediaArtworkCache.put(key, it) }
         }
     }
     val artworkTint = remember(artworkBitmap) { dominantArtworkColor(artworkBitmap) }
+    var artworkDragOffset by remember(media.id) { mutableFloatStateOf(0f) }
+    val artworkSwipeScope = rememberCoroutineScope()
+    val artworkSwipeThreshold = 72f * context.resources.displayMetrics.density
     LaunchedEffect(lyricsUri, media.id) {
         lyricLines = if (lyricsUri == null) emptyList() else withContext(Dispatchers.IO) {
             runCatching { context.contentResolver.openInputStream(lyricsUri!!)?.bufferedReader()?.use { parseLrc(it.readText()) } ?: emptyList() }.getOrDefault(emptyList())
@@ -1960,8 +1980,54 @@ private fun NowPlayingScreen(
             }
             Spacer(Modifier.height(15.dp))
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Box(Modifier.fillMaxWidth(0.82f).aspectRatio(1f).blur(34.dp).background(artworkTint.copy(alpha = 0.45f), RoundedCornerShape(34.dp)))
-                MediaArtwork(media, Modifier.fillMaxWidth(0.82f).aspectRatio(1f).clip(RoundedCornerShape(26.dp)).border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(26.dp)))
+                Box(Modifier.fillMaxWidth(0.82f).aspectRatio(1f).blur(42.dp).background(artworkTint.copy(alpha = 0.58f), RoundedCornerShape(34.dp)))
+                Box(
+                    Modifier.fillMaxWidth(0.82f).aspectRatio(1f)
+                        .graphicsLayer {
+                            translationX = artworkDragOffset
+                            rotationZ = (artworkDragOffset / 85f).coerceIn(-8f, 8f)
+                            scaleX = 1f - (kotlin.math.abs(artworkDragOffset) / 1800f).coerceIn(0f, 0.08f)
+                            scaleY = scaleX
+                        }
+                        .pointerInput(media.id, controller, currentQueueIndex, queue.size) {
+                            detectHorizontalDragGestures(
+                                onHorizontalDrag = { change, dragAmount ->
+                                    change.consume()
+                                    artworkDragOffset = (artworkDragOffset + dragAmount).coerceIn(-size.width * 0.42f, size.width * 0.42f)
+                                },
+                                onDragEnd = {
+                                    val distance = artworkDragOffset
+                                    val wantsNext = distance < -artworkSwipeThreshold && controller?.hasNextMediaItem() == true
+                                    val wantsPrevious = distance > artworkSwipeThreshold && controller?.hasPreviousMediaItem() == true
+                                    artworkSwipeScope.launch {
+                                        val destination = when {
+                                            wantsNext -> -size.width.toFloat() * 1.1f
+                                            wantsPrevious -> size.width.toFloat() * 1.1f
+                                            else -> 0f
+                                        }
+                                        val animation = androidx.compose.animation.core.Animatable(artworkDragOffset)
+                                        animation.animateTo(destination, animationSpec = androidx.compose.animation.core.tween(190)) {
+                                            artworkDragOffset = value
+                                        }
+                                        if (wantsNext) controller?.seekToNextMediaItem()
+                                        else if (wantsPrevious) controller?.seekToPreviousMediaItem()
+                                        artworkDragOffset = 0f
+                                    }
+                                },
+                                onDragCancel = {
+                                    artworkSwipeScope.launch {
+                                        val animation = androidx.compose.animation.core.Animatable(artworkDragOffset)
+                                        animation.animateTo(0f, animationSpec = androidx.compose.animation.core.tween(170)) {
+                                            artworkDragOffset = value
+                                        }
+                                    }
+                                }
+                            )
+                        }
+                ) {
+                    MediaArtwork(media, Modifier.fillMaxSize().clip(RoundedCornerShape(26.dp))
+                        .border(1.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(26.dp)))
+                }
             }
             Spacer(Modifier.height(22.dp))
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
