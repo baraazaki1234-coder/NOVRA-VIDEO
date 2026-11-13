@@ -480,7 +480,8 @@ private fun NovraApp() {
         val count = prefs.getInt(key, 0) + 1
         prefs.edit().putInt(key, count).apply()
         playCounts[key] = count
-    }    fun enqueueMedia(item: LocalMedia) {
+    }
+    fun enqueueMedia(item: LocalMedia) {
         val currentQueue = playQueue.ifEmpty { listOfNotNull(selectedMedia) }
         if (currentQueue.isEmpty()) {
             startMedia(item, listOf(item))
