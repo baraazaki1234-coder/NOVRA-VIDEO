@@ -2002,6 +2002,7 @@ private fun NowPlayingScreen(
                 } else Text(if (language == "ar") "الكلمات المتزامنة هتظهر هنا أثناء التشغيل." else "Synced lyrics appear here while the song plays.", color = Color.White.copy(alpha = 0.48f), fontSize = 11.sp, modifier = Modifier.padding(top = 7.dp))
             }
             Spacer(Modifier.height(18.dp))
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = { activePanel = "tools" }, modifier = Modifier.size(42.dp)) {
                     Icon(Icons.Rounded.Tune, if (language == "ar") "إعدادات الصوت" else "Audio settings", tint = Color.White.copy(alpha = 0.85f), modifier = Modifier.size(23.dp))
@@ -2031,6 +2032,7 @@ private fun NowPlayingScreen(
                     }
                     IconButton(onClick = { activePanel = "queue" }, modifier = Modifier.size(36.dp)) { Icon(Icons.Rounded.QueueMusic, "Queue", tint = Color.White.copy(alpha = 0.85f), modifier = Modifier.size(19.dp)) }
                 }
+            }
             }
             Spacer(Modifier.height(25.dp))
         }
