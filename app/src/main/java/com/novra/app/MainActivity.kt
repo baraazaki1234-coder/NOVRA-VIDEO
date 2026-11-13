@@ -1895,6 +1895,7 @@ private fun NowPlayingScreen(
     var playbackSpeed by remember(controller) { mutableFloatStateOf(1f) }
     var isPlaying by remember(controller) { mutableStateOf(controller?.isPlaying == true) }
     var activePanel by remember { mutableStateOf("none") }
+    var showRingtoneCutter by remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
     val lyricPrefs = remember(context) { context.getSharedPreferences("novra_lyrics", android.content.Context.MODE_PRIVATE) }
     var lyricsUri by remember(media.id) { mutableStateOf(lyricPrefs.getString("audio_${media.id}", null)?.let(Uri::parse)) }
@@ -2056,6 +2057,11 @@ private fun NowPlayingScreen(
                 listOf(15,30,45,60).forEach { m -> FilterChip(selected = sleepTimerMinutes == m, onClick = { onSleepTimerChange(m) }, label = { Text("${m}m") }) }
             }
             if (controller != null) { Spacer(Modifier.height(16.dp)); EqualizerPanel(controller = controller, language = language) }
+            OutlinedButton(onClick = { showRingtoneCutter = true }, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Rounded.ContentCut, null)
+                Spacer(Modifier.width(8.dp))
+                Text(if (language == "ar") "قص جزء من الأغنية كنغمة" else "Trim song as ringtone")
+            }
         }
     }
     if (activePanel == "queue") ModalBottomSheet(onDismissRequest = { activePanel = "none" }, containerColor = CardBg, contentColor = TextPrimary) {
@@ -2085,6 +2091,8 @@ private fun NowPlayingScreen(
             }
         }
     }
+    if (showRingtoneCutter) RingtoneCutterDialog(context, media, controller, playbackDuration.toLong(), language) { showRingtoneCutter = false }
+
 }
 
 private fun dominantArtworkColor(bitmap: Bitmap?): Color {
