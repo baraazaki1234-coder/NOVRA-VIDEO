@@ -1,5 +1,6 @@
 package com.novra.app
 
+import android.app.PendingIntent
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.exoplayer.ExoPlayer
@@ -23,7 +24,16 @@ class NovraPlaybackService : MediaSessionService() {
             .setWakeMode(C.WAKE_MODE_LOCAL)
             .build()
         currentAudioSessionId = player.audioSessionId
-        mediaSession = MediaSession.Builder(this, player).build()
+        val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
+        val sessionActivity = launchIntent?.let { intent ->
+            PendingIntent.getActivity(
+                this, 0, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+        }
+        mediaSession = MediaSession.Builder(this, player)
+            .setSessionActivity(sessionActivity)
+            .build()
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
