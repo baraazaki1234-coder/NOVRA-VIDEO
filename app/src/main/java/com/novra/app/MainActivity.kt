@@ -92,8 +92,8 @@ private data class NovraPalette(
     val muted: Color, val accent: Color, val text: Color
 )
 private val DarkPalette = NovraPalette(
-    Color(0xFF080A12), Color(0xE6171B2A), Color(0xF0222940),
-    Color(0xFF9AA4BC), Color(0xFFB9A5FF), Color(0xFFF5F4FF)
+    Color(0xFF080512), Color(0xE6171228), Color(0xF0231B3B),
+    Color(0xFFAAA0C2), Color(0xFFC18BFF), Color(0xFFF8F3FF)
 )
 private val LightPalette = NovraPalette(
     Color(0xFFF4F3FA), Color(0xEFFFFFFF), Color(0xFFF0EDFA),
@@ -289,7 +289,7 @@ private fun NovraApp() {
     val isLightTheme = themeMode == "light"
     val chosenAccent = when (accentName) {
         "ocean" -> if (isLightTheme) Color(0xFF0369A1) else Color(0xFF7DD3FC)
-        "violet", "mint" -> if (isLightTheme) Color(0xFF7052D8) else Color(0xFFB9A5FF)
+        "violet", "mint" -> if (isLightTheme) Color(0xFF7052D8) else Color(0xFFC18BFF)
         "rose" -> if (isLightTheme) Color(0xFFBE123C) else Color(0xFFFDA4AF)
         "amber" -> if (isLightTheme) Color(0xFFB45309) else Color(0xFFFCD34D)
         "cyan" -> if (isLightTheme) Color(0xFF0E7490) else Color(0xFF67E8F9)
@@ -651,8 +651,8 @@ private fun NovraApp() {
         )) {
             Box(Modifier.fillMaxSize()) {
             if (!isLightTheme && wallpaperUri == null) {
-                Box(Modifier.align(Alignment.TopEnd).offset(x = 110.dp, y = (-90).dp).size(270.dp).blur(90.dp).background(Color(0xFF6750C8).copy(alpha = 0.20f), CircleShape))
-                Box(Modifier.align(Alignment.BottomStart).offset(x = (-110).dp, y = 90.dp).size(230.dp).blur(85.dp).background(Color(0xFF287E9A).copy(alpha = 0.13f), CircleShape))
+                Box(Modifier.align(Alignment.TopEnd).offset(x = 110.dp, y = (-90).dp).size(270.dp).blur(90.dp).background(Color(0xFF8B35E8).copy(alpha = 0.24f), CircleShape))
+                Box(Modifier.align(Alignment.BottomStart).offset(x = (-110).dp, y = 90.dp).size(230.dp).blur(85.dp).background(Color(0xFF287ECA).copy(alpha = 0.17f), CircleShape))
             }
             if (!pinLocked && pinFlowMode == "none" && showExitDialog) AlertDialog(
                 onDismissRequest = { showExitDialog = false },
@@ -789,10 +789,12 @@ private fun NovraApp() {
                                     } else {
                                         Box(
                                             Modifier.size(42.dp).clip(RoundedCornerShape(15.dp))
-                                                .background(Brush.linearGradient(listOf(Color(0xFF9C83FF), Color(0xFF53C8D9)))),
+                                                .background(Brush.linearGradient(listOf(Color(0xFF9B45F5), Color(0xFF4169E8), Color(0xFF31C9E8))))
+                                                .border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(15.dp)),
                                             contentAlignment = Alignment.Center
                                         ) {
-                                            Icon(Icons.Rounded.GraphicEq, contentDescription = "Viora", tint = Color.White, modifier = Modifier.size(24.dp))
+                                            Text("V", color = Color.White, fontSize = 27.sp, fontWeight = FontWeight.Black, letterSpacing = (-2).sp)
+                                            Icon(Icons.Rounded.PlayArrow, contentDescription = "Viora", tint = Color.White.copy(alpha = 0.95f), modifier = Modifier.size(15.dp).align(Alignment.BottomEnd).padding(end = 3.dp, bottom = 3.dp))
                                         }
                                     }
                                     Column(Modifier.weight(1f).padding(start = 10.dp)) {
