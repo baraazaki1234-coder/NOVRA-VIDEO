@@ -51,11 +51,16 @@ internal fun RingtoneCutterDialog(
 
     val settingsLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         val uri = pendingRingtone
-        if (uri != null && Settings.System.canWrite(context)) {
-            runCatching { RingtoneManager.setActualDefaultRingtoneUri(context, RingtoneManager.TYPE_RINGTONE, uri) }
-                .onSuccess { Toast.makeText(context, if (language == "ar") "تم تعيين نغمة الرنين" else "Default ringtone updated", Toast.LENGTH_LONG).show() }
-                .onFailure { Toast.makeText(context, if (language == "ar") "تم حفظ النغمة لكن تعذر تعيينها تلقائيًا" else "Saved, but Android could not set it automatically", Toast.LENGTH_LONG).show() }
+        if (uri != null) {
+            if (Settings.System.canWrite(context)) {
+                runCatching { RingtoneManager.setActualDefaultRingtoneUri(context, RingtoneManager.TYPE_RINGTONE, uri) }
+                    .onSuccess { Toast.makeText(context, if (language == "ar") "تم تعيين نغمة الرنين" else "Default ringtone updated", Toast.LENGTH_LONG).show() }
+                    .onFailure { Toast.makeText(context, if (language == "ar") "تم حفظ النغمة لكن تعذر تعيينها تلقائيًا" else "Saved, but Android could not set it automatically", Toast.LENGTH_LONG).show() }
+            } else {
+                Toast.makeText(context, if (language == "ar") "تم حفظ الملف داخل مجلد Ringtones ويمكنك اختياره من إعدادات الصوت." else "Saved in Ringtones. You can select it from Android sound settings.", Toast.LENGTH_LONG).show()
+            }
             pendingRingtone = null
+            onDismiss()
         }
     }
 
@@ -160,13 +165,13 @@ internal fun RingtoneCutterDialog(
                                     exporting = false
                                     val uri = saved
                                     if (uri != null) {
-                                        onDismiss()
                                         pendingRingtone = uri
                                         if (Settings.System.canWrite(context)) {
                                             runCatching { RingtoneManager.setActualDefaultRingtoneUri(context, RingtoneManager.TYPE_RINGTONE, uri) }
                                                 .onSuccess { Toast.makeText(context, if (language == "ar") "تم حفظ النغمة وتعيينها كنغمة رنين" else "Ringtone saved and set as default", Toast.LENGTH_LONG).show() }
                                                 .onFailure { Toast.makeText(context, if (language == "ar") "تم حفظ النغمة في مجلد Ringtones" else "Ringtone saved in Ringtones", Toast.LENGTH_LONG).show() }
                                             pendingRingtone = null
+                                            onDismiss()
                                         } else {
                                             Toast.makeText(context, if (language == "ar") "تم حفظ النغمة. اسمح لـ Viora بتعديل إعدادات النظام لتعيينها تلقائيًا." else "Saved. Allow Viora to modify system settings to set it as default.", Toast.LENGTH_LONG).show()
                                             settingsLauncher.launch(android.content.Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, Uri.parse("package:${context.packageName}")))
