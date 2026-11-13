@@ -1997,12 +1997,13 @@ private fun NowPlayingScreen(
                                 },
                                 onDragEnd = {
                                     val distance = artworkDragOffset
+                                    val artworkWidth = size.width.toFloat()
                                     val wantsNext = distance < -artworkSwipeThreshold && controller?.hasNextMediaItem() == true
                                     val wantsPrevious = distance > artworkSwipeThreshold && controller?.hasPreviousMediaItem() == true
                                     artworkSwipeScope.launch {
                                         val destination = when {
-                                            wantsNext -> -size.width.toFloat() * 1.1f
-                                            wantsPrevious -> size.width.toFloat() * 1.1f
+                                            wantsNext -> -artworkWidth * 1.1f
+                                            wantsPrevious -> artworkWidth * 1.1f
                                             else -> 0f
                                         }
                                         val animation = androidx.compose.animation.core.Animatable(artworkDragOffset)
