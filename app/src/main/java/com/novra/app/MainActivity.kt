@@ -893,6 +893,7 @@ private fun NovraApp() {
                                 onToggleFavorite = ::toggleFavorite,
                                 onPlay = { item -> startMedia(item, videos) },
                                 onAddToQueue = ::enqueueMedia,
+                                onPlayNext = ::playNextMedia,
                                 language = language
                             )
                             "Music" -> MediaScreen(
@@ -903,6 +904,7 @@ private fun NovraApp() {
                                 onToggleFavorite = ::toggleFavorite,
                                 onPlay = { item -> startMedia(item, tracks) },
                                 onAddToQueue = ::enqueueMedia,
+                                onPlayNext = ::playNextMedia,
                                 language = language
                             )
                             "Explore" -> OnlineSearchScreen(language = language)
@@ -914,6 +916,7 @@ private fun NovraApp() {
                                 onToggleFavorite = ::toggleFavorite,
                                 onPlay = { item -> startMedia(item, (videos + tracks).distinctBy { mediaKey(it) }) },
                                 onAddToQueue = ::enqueueMedia,
+                                onPlayNext = ::playNextMedia,
                                 language = language
                             )
                             "Playlists" -> PlaylistsScreen(
@@ -1540,6 +1543,7 @@ private fun MediaScreen(
     playCounts: Map<String, Int>, favorites: Set<String>,
     onToggleFavorite: (LocalMedia) -> Unit, onPlay: (LocalMedia) -> Unit,
     onAddToQueue: (LocalMedia) -> Unit = {},
+    onPlayNext: (LocalMedia) -> Unit = {},
     language: String = "en"
 ) {
     var query by remember { mutableStateOf("") }
@@ -1711,8 +1715,11 @@ private fun MediaScreen(
                                             color = Muted, fontSize = 10.sp, maxLines = 1
                                         )
                                     }
+                                    IconButton(onClick = { onPlayNext(item) }) {
+                                        Icon(Icons.Rounded.SkipNext, if (language == "ar") "تشغيل بعد المقطع الحالي" else "Play next", tint = Accent)
+                                    }
                                     IconButton(onClick = { onAddToQueue(item) }) {
-                                        Icon(Icons.Rounded.QueueMusic, if (language == "ar") "إضافة إلى قائمة التشغيل الحالية" else "Add to queue", tint = Muted)
+                                        Icon(Icons.Rounded.QueueMusic, if (language == "ar") "إضافة إلى آخر الطابور" else "Add to queue", tint = Muted)
                                     }
                                     IconButton(onClick = { onToggleFavorite(item) }) {
                                         Icon(
@@ -1769,8 +1776,11 @@ private fun MediaScreen(
                                         color = Muted.copy(alpha = 0.8f), fontSize = 9.sp, maxLines = 1
                                     )
                                 }
+                                IconButton(onClick = { onPlayNext(item) }) {
+                                    Icon(Icons.Rounded.SkipNext, if (language == "ar") "تشغيل بعد المقطع الحالي" else "Play next", tint = Accent)
+                                }
                                 IconButton(onClick = { onAddToQueue(item) }) {
-                                    Icon(Icons.Rounded.QueueMusic, if (language == "ar") "إضافة إلى قائمة التشغيل الحالية" else "Add to queue", tint = Muted)
+                                    Icon(Icons.Rounded.QueueMusic, if (language == "ar") "إضافة إلى آخر الطابور" else "Add to queue", tint = Muted)
                                 }
                                 IconButton(onClick = { onToggleFavorite(item) }) {
                                     Icon(
