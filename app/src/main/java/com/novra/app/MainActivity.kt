@@ -1884,8 +1884,7 @@ private fun NowPlayingScreen(
     modifier: Modifier, media: LocalMedia, controller: MediaController?, queue: List<LocalMedia>,
     sleepTimerMinutes: Int, onSleepTimerChange: (Int) -> Unit,
     onMoveQueueItem: (Int, Int) -> Unit, onRemoveQueueItem: (Int) -> Unit,
-    onClearQueue: () -> Unit,
-    onBack: () -> Unit, language: String = "en"
+    onClearQueue: () -> Unit, onBack: () -> Unit, language: String = "en"
 ) {
     var shuffle by remember(controller) { mutableStateOf(controller?.shuffleModeEnabled == true) }
     var repeatMode by remember(controller) { mutableIntStateOf(controller?.repeatMode ?: Player.REPEAT_MODE_OFF) }
@@ -1894,25 +1893,37 @@ private fun NowPlayingScreen(
     var isSeeking by remember(controller) { mutableStateOf(false) }
     var playbackDuration by remember(controller) { mutableFloatStateOf(media.durationMs.coerceAtLeast(1L).toFloat()) }
     var playbackSpeed by remember(controller) { mutableFloatStateOf(1f) }
+    var isPlaying by remember(controller) { mutableStateOf(controller?.isPlaying == true) }
+    var activePanel by remember { mutableStateOf("none") }
     val context = androidx.compose.ui.platform.LocalContext.current
     val lyricPrefs = remember(context) { context.getSharedPreferences("novra_lyrics", android.content.Context.MODE_PRIVATE) }
-    var lyricsUri by remember(media.id, media.isVideo) {
-        mutableStateOf(lyricPrefs.getString("${if (media.isVideo) "video" else "audio"}_${media.id}", null)?.let(Uri::parse))
-    }
-    var lyricLines by remember(media.id, media.isVideo) { mutableStateOf<List<LyricLine>>(emptyList()) }
+    var lyricsUri by remember(media.id) { mutableStateOf(lyricPrefs.getString("audio_${media.id}", null)?.let(Uri::parse)) }
+    var lyricLines by remember(media.id) { mutableStateOf<List<LyricLine>>(emptyList()) }
     val lyricsPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
             lyricsUri = uri
-            lyricPrefs.edit().putString("${if (media.isVideo) "video" else "audio"}_${media.id}", uri.toString()).apply()
+            lyricPrefs.edit().putString("audio_${media.id}", uri.toString()).apply()
         }
     }
+    val artworkBitmap by produceState<Bitmap?>(null, media.uri) {
+        value = withContext(Dispatchers.IO) {
+            val key = media.uri.toString()
+            mediaArtworkCache.get(key) ?: runCatching {
+                val retriever = MediaMetadataRetriever()
+                try {
+                    retriever.setDataSource(context, media.uri)
+                    retriever.embeddedPicture?.let { bytes ->
+                        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = 4 })
+                    }
+                } finally { retriever.release() }
+            }.getOrNull()?.also { mediaArtworkCache.put(key, it) }
+        }
+    }
+    val artworkTint = remember(artworkBitmap) { dominantArtworkColor(artworkBitmap) }
     LaunchedEffect(lyricsUri, media.id) {
         lyricLines = if (lyricsUri == null) emptyList() else withContext(Dispatchers.IO) {
-            runCatching {
-                context.contentResolver.openInputStream(lyricsUri!!)?.bufferedReader()?.use { parseLrc(it.readText()) }
-                    ?: emptyList()
-            }.getOrDefault(emptyList())
+            runCatching { context.contentResolver.openInputStream(lyricsUri!!)?.bufferedReader()?.use { parseLrc(it.readText()) } ?: emptyList() }.getOrDefault(emptyList())
         }
     }
     LaunchedEffect(controller, media.id) {
@@ -1921,235 +1932,178 @@ private fun NowPlayingScreen(
             playbackDuration = duration.coerceAtLeast(1L).toFloat()
             if (!isSeeking) playbackPosition = (controller?.currentPosition ?: 0L).coerceIn(0L, duration.coerceAtLeast(1L)).toFloat()
             currentQueueIndex = controller?.currentMediaItemIndex ?: 0
-            delay(500)
+            isPlaying = controller?.isPlaying == true
+            delay(350)
         }
     }
     if (media.isVideo) {
-        VideoNowPlayingScreen(
-            modifier = modifier,
-            media = media,
-            controller = controller,
-            queue = queue,
-            position = playbackPosition,
-            duration = playbackDuration,
-            onBack = onBack,
-            language = language
-        )
+        VideoNowPlayingScreen(modifier, media, controller, queue, playbackPosition, playbackDuration, onBack, language)
         return
     }
     Box(modifier.fillMaxSize()) {
-        MediaArtwork(media, Modifier.fillMaxSize().blur(38.dp).graphicsLayer(alpha = 0.32f))
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.72f), Color.Black.copy(alpha = 0.90f)))))
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp)) {
-        Spacer(Modifier.height(10.dp))
-        if (media.isVideo) {
-            AndroidView(
-                modifier = Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(20.dp)),
-                factory = { ctx -> PlayerView(ctx).apply { useController = true } },
-                update = { view -> view.player = controller }
-            )
-        } else {
-            MediaArtwork(
-                media,
-                Modifier.fillMaxWidth().padding(horizontal = 18.dp).aspectRatio(1f)
-                    .clip(RoundedCornerShape(28.dp))
-                    .border(1.dp, Accent.copy(alpha = 0.24f), RoundedCornerShape(28.dp))
-                    .pointerInput(media.id, queue.size) {
-                        var totalX = 0f
-                        var totalY = 0f
-                        detectDragGestures(
-                            onDrag = { change, amount ->
-                                change.consume()
-                                totalX += amount.x
-                                totalY += amount.y
-                            },
-                            onDragEnd = {
-                                val threshold = 72.dp.toPx()
-                                when {
-                                    kotlin.math.abs(totalX) > kotlin.math.abs(totalY) && totalX <= -threshold -> controller?.seekToNextMediaItem()
-                                    kotlin.math.abs(totalX) > kotlin.math.abs(totalY) && totalX >= threshold -> controller?.let { if (it.currentPosition > 3_000L) it.seekTo(0L) else it.seekToPreviousMediaItem() }
-                                    totalY >= threshold && kotlin.math.abs(totalY) > kotlin.math.abs(totalX) -> onBack()
-                                }
-                                totalX = 0f
-                                totalY = 0f
-                            },
-                            onDragCancel = { totalX = 0f; totalY = 0f }
-                        )
-                    }
-            )
-        }
-        Spacer(Modifier.height(22.dp))
-        Text(media.title, color = TextPrimary, fontSize = 21.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        if (media.artist.isNotBlank()) Text(media.artist, color = Muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        if (!media.isVideo) {
-            Spacer(Modifier.height(12.dp))
+        if (artworkBitmap != null) {
+            androidx.compose.foundation.Image(bitmap = artworkBitmap!!.asImageBitmap(), contentDescription = null,
+                modifier = Modifier.fillMaxSize().graphicsLayer(scaleX = 1.16f, scaleY = 1.16f).blur(58.dp), contentScale = ContentScale.Crop)
+        } else Box(Modifier.fillMaxSize().background(artworkTint.copy(alpha = 0.35f)))
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.50f), Color.Black.copy(alpha = 0.83f), Color.Black.copy(alpha = 0.96f)))))
+        Box(Modifier.align(Alignment.TopCenter).offset(y = (-70).dp).size(330.dp).blur(90.dp).background(artworkTint.copy(alpha = 0.42f), CircleShape))
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
+            Spacer(Modifier.height(8.dp))
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onBack) { Icon(Icons.Rounded.KeyboardArrowDown, "Back", tint = Color.White, modifier = Modifier.size(30.dp)) }
+                Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(if (language == "ar") "يعمل الآن" else "NOW PLAYING", color = Color.White.copy(alpha = 0.8f), fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+                    Text(if (language == "ar") "من مكتبتك" else "FROM YOUR LIBRARY", color = Color.White.copy(alpha = 0.55f), fontSize = 9.sp)
+                }
+                IconButton(onClick = { activePanel = "queue" }) { Icon(Icons.Rounded.QueueMusic, "Queue", tint = Color.White) }
+            }
+            Spacer(Modifier.height(15.dp))
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Box(Modifier.fillMaxWidth(0.82f).aspectRatio(1f).blur(34.dp).background(artworkTint.copy(alpha = 0.45f), RoundedCornerShape(34.dp)))
+                MediaArtwork(media, Modifier.fillMaxWidth(0.82f).aspectRatio(1f).clip(RoundedCornerShape(26.dp)).border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(26.dp)))
+            }
+            Spacer(Modifier.height(22.dp))
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(if (language == "ar") "كلمات الأغنية" else "SYNCED LYRICS", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
-                    Text(
-                        if (lyricLines.isEmpty()) {
-                            if (language == "ar") "استورد ملف كلمات بصيغة LRC" else "Import an .LRC lyrics file"
-                        } else {
-                            if (language == "ar") "${lyricLines.size} سطر متزامن" else "${lyricLines.size} synced lines"
-                        },
-                        color = Muted, fontSize = 10.sp
-                    )
+                    Text(media.title, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(media.artist.ifBlank { if (language == "ar") "فنان غير معروف" else "Unknown artist" }, color = Color.White.copy(alpha = 0.68f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                OutlinedButton(onClick = { lyricsPicker.launch(arrayOf("text/plain", "application/octet-stream", "*/*")) }) {
-                    Icon(Icons.Rounded.Subtitles, null)
-                    Spacer(Modifier.width(5.dp))
-                    Text(if (language == "ar") "استيراد" else "Import LRC")
-                }
-            }
-            if (lyricLines.isNotEmpty()) {
-                val activeLyric = lyricLines.indexOfLast { it.timeMs <= playbackPosition.toLong() }.coerceAtLeast(0)
-                Column(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(CardBg).padding(horizontal = 14.dp, vertical = 10.dp)
-                ) {
-                    lyricLines.slice(maxOf(0, activeLyric - 1)..minOf(lyricLines.lastIndex, activeLyric + 2)).forEachIndexed { visibleIndex, line ->
-                        val actualIndex = maxOf(0, activeLyric - 1) + visibleIndex
-                        Text(
-                            line.text,
-                            color = if (actualIndex == activeLyric) Accent else Muted,
-                            fontSize = if (actualIndex == activeLyric) 16.sp else 13.sp,
-                            fontWeight = if (actualIndex == activeLyric) FontWeight.Bold else FontWeight.Normal,
-                            modifier = Modifier.fillMaxWidth().clickable { controller?.seekTo(line.timeMs) }.padding(vertical = 6.dp)
-                        )
-                    }
-                }
-            }
-        }
-        Text(if (language == "ar") { if (media.isVideo) "فيديو" else "صوت" } else if (media.isVideo) "Video" else "Audio", color = Muted, fontSize = 12.sp)
-        Spacer(Modifier.height(12.dp))
-        Slider(
-            value = playbackPosition.coerceIn(0f, playbackDuration),
-            onValueChange = { isSeeking = true; playbackPosition = it },
-            onValueChangeFinished = { controller?.seekTo(playbackPosition.toLong()); isSeeking = false },
-            valueRange = 0f..playbackDuration,
-            colors = SliderDefaults.colors(
-                thumbColor = Accent,
-                activeTrackColor = Accent,
-                inactiveTrackColor = CardAlt
-            )
-        )
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(formatDuration(playbackPosition.toLong()), color = Muted, fontSize = 10.sp)
-            Text(formatDuration(playbackDuration.toLong()), color = Muted, fontSize = 10.sp)
-        }
-        Spacer(Modifier.height(16.dp))
-        if (!media.isVideo) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { shuffle = !shuffle; controller?.shuffleModeEnabled = shuffle }) {
-                    Icon(Icons.Rounded.Shuffle, "Shuffle", tint = if (shuffle) Accent else Muted)
-                }
-                IconButton(onClick = { controller?.let { if (it.currentPosition > 3_000L) it.seekTo(0L) else it.seekToPreviousMediaItem() } }) { Icon(Icons.Rounded.SkipPrevious, null, tint = TextPrimary, modifier = Modifier.size(34.dp)) }
-                Box(
-                    Modifier.size(70.dp).clip(CircleShape)
-                        .background(Brush.linearGradient(listOf(Color(0xFF9B83FF), Color(0xFF5A46B5))))
-                        .border(1.dp, Color.White.copy(alpha = 0.22f), CircleShape)
-                        .clickable { controller?.let { if (it.isPlaying) it.pause() else it.play() } },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(if (controller?.isPlaying == true) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, null, tint = Color.White, modifier = Modifier.size(37.dp))
-                }
-                IconButton(onClick = { controller?.seekToNextMediaItem() }) { Icon(Icons.Rounded.SkipNext, null, tint = TextPrimary, modifier = Modifier.size(34.dp)) }
-                IconButton(onClick = {
-                    repeatMode = when (repeatMode) {
-                        Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ONE
-                        Player.REPEAT_MODE_ONE -> Player.REPEAT_MODE_ALL
-                        else -> Player.REPEAT_MODE_OFF
-                    }
-                    controller?.repeatMode = repeatMode
-                }) {
-                    Icon(if (repeatMode == Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat, "Repeat", tint = if (repeatMode == Player.REPEAT_MODE_OFF) Muted else Accent)
-                }
-            }
-        }
-        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(CardBg).padding(12.dp)) {
-            Text(if (language == "ar") "سرعة التشغيل" else "PLAYBACK SPEED", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-            Spacer(Modifier.height(7.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                listOf(0.75f, 1f, 1.25f, 1.5f, 2f).forEach { speed ->
-                    FilterChip(
-                        selected = playbackSpeed == speed,
-                        onClick = { playbackSpeed = speed; controller?.setPlaybackSpeed(speed) },
-                        label = { Text(if (speed == 1f) "1×" else "${speed}×", fontSize = 10.sp) }
-                    )
-                }
-            }
-            Spacer(Modifier.height(9.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(if (language == "ar") "مؤقت إيقاف التشغيل" else "SLEEP TIMER", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-                Spacer(Modifier.weight(1f))
-                if (sleepTimerMinutes > 0) Text(if (language == "ar") "متبقي: ${sleepTimerMinutes} دقيقة" else "Timer set: ${sleepTimerMinutes} min", color = Accent, fontSize = 10.sp)
-            }
-            Spacer(Modifier.height(6.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                listOf(15, 30, 45, 60).forEach { minutes ->
-                    FilterChip(
-                        selected = sleepTimerMinutes == minutes,
-                        onClick = { onSleepTimerChange(minutes) },
-                        label = { Text("${minutes}m", fontSize = 10.sp) }
-                    )
-                }
-                if (sleepTimerMinutes > 0) {
-                    FilterChip(selected = false, onClick = { onSleepTimerChange(0) }, label = { Text(if (language == "ar") "إيقاف" else "Off", fontSize = 10.sp) })
-                }
-            }
-        }
-        if (controller != null) {
-            EqualizerPanel(controller = controller, language = language)
-        }
-        if (queue.isNotEmpty()) {
-            Spacer(Modifier.height(12.dp))
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text(if (language == "ar") "التالي في قائمة التشغيل" else "UP NEXT", color = Accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp)
-                Spacer(Modifier.weight(1f))
-                Text(if (language == "ar") "${queue.size} عناصر" else "${queue.size} items", color = Muted, fontSize = 10.sp)
-                if (queue.size > 1) {
-                    TextButton(onClick = onClearQueue, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)) {
-                        Text(if (language == "ar") "مسح التالي" else "Clear upcoming", color = Muted, fontSize = 10.sp)
-                    }
-                }
+                IconButton(onClick = { activePanel = "tools" }) { Icon(Icons.Rounded.MoreHoriz, "More", tint = Color.White) }
             }
             Spacer(Modifier.height(8.dp))
-            queue.forEachIndexed { index, item ->
-                val isCurrent = index == currentQueueIndex
-                Row(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(13.dp))
-                        .background(if (isCurrent) CardAlt else Color.Transparent)
-                        .clickable { controller?.seekTo(index, 0L) }
-                        .padding(horizontal = 9.dp, vertical = 7.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    MediaArtwork(item, Modifier.size(42.dp).clip(RoundedCornerShape(8.dp)))
-                    Spacer(Modifier.width(10.dp))
+            Slider(value = playbackPosition.coerceIn(0f, playbackDuration), onValueChange = { isSeeking = true; playbackPosition = it },
+                onValueChangeFinished = { controller?.seekTo(playbackPosition.toLong()); isSeeking = false }, valueRange = 0f..playbackDuration,
+                colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Color.White, inactiveTrackColor = Color.White.copy(alpha = 0.25f)))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(formatDuration(playbackPosition.toLong()), color = Color.White.copy(alpha = 0.7f), fontSize = 10.sp)
+                Text("-${formatDuration((playbackDuration-playbackPosition).toLong().coerceAtLeast(0L))}", color = Color.White.copy(alpha = 0.7f), fontSize = 10.sp)
+            }
+            Spacer(Modifier.height(12.dp))
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Color.White.copy(alpha = 0.085f)).border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(20.dp)).padding(horizontal = 15.dp, vertical = 12.dp)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text(item.title, color = if (isCurrent) Accent else TextPrimary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(if (isCurrent) { if (language == "ar") "يعمل الآن" else "Now playing" } else formatDuration(item.durationMs), color = Muted, fontSize = 10.sp)
+                        Text(if (language == "ar") "كلمات الأغنية" else "LYRICS", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+                        Text(if (lyricLines.isEmpty()) { if (language == "ar") "أضف ملف كلمات LRC متزامن" else "Add a synced LRC lyrics file" } else "${lyricLines.size} lines", color = Color.White.copy(alpha = 0.58f), fontSize = 10.sp)
                     }
-                    if (isCurrent) Icon(Icons.Rounded.VolumeUp, null, tint = Accent, modifier = Modifier.size(17.dp))
-                    IconButton(
-                        enabled = index > 0,
-                        onClick = { onMoveQueueItem(index, index - 1) },
-                        modifier = Modifier.size(32.dp)
-                    ) { Icon(Icons.Rounded.KeyboardArrowUp, if (language == "ar") "تحريك لأعلى" else "Move up", tint = if (index > 0) TextPrimary else Muted) }
-                    IconButton(
-                        enabled = index < queue.lastIndex,
-                        onClick = { onMoveQueueItem(index, index + 1) },
-                        modifier = Modifier.size(32.dp)
-                    ) { Icon(Icons.Rounded.KeyboardArrowDown, if (language == "ar") "تحريك لأسفل" else "Move down", tint = if (index < queue.lastIndex) TextPrimary else Muted) }
-                    IconButton(
-                        enabled = queue.size > 1,
-                        onClick = { onRemoveQueueItem(index) },
-                        modifier = Modifier.size(32.dp)
-                    ) { Icon(Icons.Rounded.Close, if (language == "ar") "إزالة من قائمة التشغيل" else "Remove from queue", tint = Muted) }
+                    TextButton(onClick = { lyricsPicker.launch(arrayOf("text/plain", "application/octet-stream", "*/*")) }) {
+                        Icon(Icons.Rounded.Subtitles, null, tint = Color.White); Spacer(Modifier.width(4.dp))
+                        Text(if (language == "ar") "استيراد" else "Import", color = Color.White, fontSize = 11.sp)
+                    }
+                }
+                if (lyricLines.isNotEmpty()) {
+                    val active = lyricLines.indexOfLast { it.timeMs <= playbackPosition.toLong() }.coerceAtLeast(0)
+                    lyricLines.slice(maxOf(0, active-1)..minOf(lyricLines.lastIndex, active+2)).forEachIndexed { i, line ->
+                        val index = maxOf(0, active-1)+i
+                        Text(line.text, color = if (index == active) Color.White else Color.White.copy(alpha = 0.52f),
+                            fontSize = if (index == active) 16.sp else 13.sp, fontWeight = if (index == active) FontWeight.Bold else FontWeight.Medium,
+                            modifier = Modifier.fillMaxWidth().clickable { controller?.seekTo(line.timeMs) }.padding(vertical = 5.dp))
+                    }
+                } else Text(if (language == "ar") "الكلمات المتزامنة هتظهر هنا أثناء التشغيل." else "Synced lyrics appear here while the song plays.", color = Color.White.copy(alpha = 0.48f), fontSize = 11.sp, modifier = Modifier.padding(top = 7.dp))
+            }
+            Spacer(Modifier.height(18.dp))
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = { activePanel = "tools" }, modifier = Modifier.size(42.dp)) {
+                    Icon(Icons.Rounded.Tune, if (language == "ar") "إعدادات الصوت" else "Audio settings", tint = Color.White.copy(alpha = 0.85f), modifier = Modifier.size(23.dp))
+                }
+                Spacer(Modifier.weight(1f))
+                IconButton(onClick = { controller?.let { if (it.currentPosition > 3000L) it.seekTo(0L) else it.seekToPreviousMediaItem() } }) {
+                    Icon(Icons.Rounded.SkipPrevious, "Previous", tint = Color.White, modifier = Modifier.size(32.dp))
+                }
+                Box(Modifier.padding(horizontal = 7.dp).size(66.dp).clip(CircleShape)
+                    .background(Brush.linearGradient(listOf(artworkTint, artworkTint.copy(alpha = 0.72f), Color.White.copy(alpha = 0.2f))))
+                    .border(1.dp, Color.White.copy(alpha = 0.25f), CircleShape)
+                    .clickable { controller?.let { if (it.isPlaying) it.pause() else it.play() } }, contentAlignment = Alignment.Center) {
+                    Icon(if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, null, tint = Color.White, modifier = Modifier.size(35.dp))
+                }
+                IconButton(onClick = { controller?.seekToNextMediaItem() }) { Icon(Icons.Rounded.SkipNext, "Next", tint = Color.White, modifier = Modifier.size(32.dp)) }
+                Spacer(Modifier.weight(1f))
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    IconButton(onClick = { shuffle = !shuffle; controller?.shuffleModeEnabled = shuffle }, modifier = Modifier.size(36.dp)) {
+                        Icon(Icons.Rounded.Shuffle, "Shuffle", tint = if (shuffle) Color.White else Color.White.copy(alpha = 0.48f), modifier = Modifier.size(19.dp))
+                    }
+                    IconButton(onClick = {
+                        repeatMode = when (repeatMode) { Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL; Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE; else -> Player.REPEAT_MODE_OFF }
+                        controller?.repeatMode = repeatMode
+                    }, modifier = Modifier.size(36.dp)) {
+                        Icon(if (repeatMode == Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat, "Repeat",
+                            tint = if (repeatMode == Player.REPEAT_MODE_OFF) Color.White.copy(alpha = 0.48f) else Color.White, modifier = Modifier.size(19.dp))
+                    }
+                    IconButton(onClick = { activePanel = "queue" }, modifier = Modifier.size(36.dp)) { Icon(Icons.Rounded.QueueMusic, "Queue", tint = Color.White.copy(alpha = 0.85f), modifier = Modifier.size(19.dp)) }
+                }
+            }
+            Spacer(Modifier.height(25.dp))
+        }
+    }
+    if (activePanel == "tools") ModalBottomSheet(onDismissRequest = { activePanel = "none" }, containerColor = CardBg, contentColor = TextPrimary) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 28.dp)) {
+            Text(if (language == "ar") "إعدادات الصوت" else "AUDIO SETTINGS", color = Accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(12.dp))
+            Text(if (language == "ar") "سرعة التشغيل" else "Playback speed", color = TextPrimary, fontWeight = FontWeight.SemiBold)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                listOf(0.75f, 1f, 1.25f, 1.5f, 2f).forEach { speed ->
+                    FilterChip(selected = playbackSpeed == speed, onClick = { playbackSpeed = speed; controller?.setPlaybackSpeed(speed) }, label = { Text("${speed}×", fontSize = 10.sp) })
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(if (language == "ar") "مؤقت إيقاف التشغيل" else "Sleep timer", color = TextPrimary, fontWeight = FontWeight.SemiBold)
+                    Text(if (sleepTimerMinutes > 0) "${sleepTimerMinutes} min" else if (language == "ar") "غير مفعّل" else "Off", color = Muted, fontSize = 11.sp)
+                }
+                if (sleepTimerMinutes > 0) TextButton(onClick = { onSleepTimerChange(0) }) { Text(if (language == "ar") "إلغاء" else "Cancel") }
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                listOf(15,30,45,60).forEach { m -> FilterChip(selected = sleepTimerMinutes == m, onClick = { onSleepTimerChange(m) }, label = { Text("${m}m") }) }
+            }
+            if (controller != null) { Spacer(Modifier.height(16.dp)); EqualizerPanel(controller = controller, language = language) }
+        }
+    }
+    if (activePanel == "queue") ModalBottomSheet(onDismissRequest = { activePanel = "none" }, containerColor = CardBg, contentColor = TextPrimary) {
+        Column(Modifier.fillMaxWidth().heightIn(max = 620.dp).verticalScroll(rememberScrollState()).padding(horizontal = 18.dp).padding(bottom = 28.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(if (language == "ar") "قائمة التشغيل" else "UP NEXT", color = TextPrimary, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+                    Text(if (language == "ar") "${queue.size} أغنية في الطابور" else "${queue.size} tracks in queue", color = Muted, fontSize = 11.sp)
+                }
+                if (queue.size > 1) TextButton(onClick = onClearQueue) { Text(if (language == "ar") "مسح التالي" else "Clear upcoming") }
+            }
+            Spacer(Modifier.height(10.dp))
+            if (queue.isEmpty()) Text(if (language == "ar") "الطابور فارغ" else "Your queue is empty", color = Muted, modifier = Modifier.padding(vertical = 24.dp))
+            else queue.forEachIndexed { index, item ->
+                val current = index == currentQueueIndex
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(if (current) CardAlt else Color.Transparent)
+                    .clickable { controller?.seekTo(index, 0L) }.padding(horizontal = 8.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+                    MediaArtwork(item, Modifier.size(43.dp).clip(RoundedCornerShape(9.dp))); Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(item.title, color = if (current) Accent else TextPrimary, fontSize = 12.sp, fontWeight = if (current) FontWeight.Bold else FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(if (current) { if (language == "ar") "يعمل الآن" else "Now playing" } else "${item.artist.ifBlank { "Unknown artist" }} · ${formatDuration(item.durationMs)}", color = Muted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    IconButton(enabled = index > 0, onClick = { onMoveQueueItem(index,index-1) }, modifier = Modifier.size(32.dp)) { Icon(Icons.Rounded.KeyboardArrowUp, null, tint = if (index > 0) TextPrimary else Muted) }
+                    IconButton(enabled = index < queue.lastIndex, onClick = { onMoveQueueItem(index,index+1) }, modifier = Modifier.size(32.dp)) { Icon(Icons.Rounded.KeyboardArrowDown, null, tint = if (index < queue.lastIndex) TextPrimary else Muted) }
+                    IconButton(enabled = queue.size > 1, onClick = { onRemoveQueueItem(index) }, modifier = Modifier.size(32.dp)) { Icon(Icons.Rounded.Close, "Remove", tint = Muted) }
                 }
             }
         }
-        Spacer(Modifier.height(20.dp))
-        }
     }
+}
+
+private fun dominantArtworkColor(bitmap: Bitmap?): Color {
+    if (bitmap == null || bitmap.width == 0 || bitmap.height == 0) return Color(0xFF7663B5)
+    var r = 0L; var g = 0L; var b = 0L; var count = 0L
+    val sx = (bitmap.width / 28).coerceAtLeast(1); val sy = (bitmap.height / 28).coerceAtLeast(1)
+    for (y in 0 until bitmap.height step sy) for (x in 0 until bitmap.width step sx) {
+        val p = bitmap.getPixel(x,y)
+        if (android.graphics.Color.alpha(p) < 180) continue
+        val rr = android.graphics.Color.red(p); val gg = android.graphics.Color.green(p); val bb = android.graphics.Color.blue(p)
+        val hsv = FloatArray(3); android.graphics.Color.RGBToHSV(rr,gg,bb,hsv)
+        if (hsv[1] < 0.18f || hsv[2] < 0.16f || hsv[2] > 0.96f) continue
+        r += rr; g += gg; b += bb; count++
+    }
+    if (count == 0L) return Color(0xFF7663B5)
+    val hsv = FloatArray(3)
+    android.graphics.Color.RGBToHSV((r/count).toInt(),(g/count).toInt(),(b/count).toInt(),hsv)
+    hsv[1] = (hsv[1]*1.16f).coerceIn(0.25f,0.78f); hsv[2] = (hsv[2]*0.78f).coerceIn(0.28f,0.72f)
+    return Color(android.graphics.Color.HSVToColor(hsv))
 }
 
 @Composable
