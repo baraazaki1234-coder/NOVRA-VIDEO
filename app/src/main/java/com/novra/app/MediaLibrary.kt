@@ -13,7 +13,8 @@ data class LocalMedia(
     val durationMs: Long,
     val sizeBytes: Long,
     val isVideo: Boolean,
-    val dateAddedSeconds: Long = 0L
+    val dateAddedSeconds: Long = 0L,
+    val albumId: Long = -1L
 )
 
 object MediaLibrary {
@@ -31,7 +32,8 @@ object MediaLibrary {
             MediaStore.Video.Media.DURATION, MediaStore.Video.Media.SIZE, MediaStore.Video.Media.DATE_ADDED
         ) else arrayOf(
             MediaStore.Audio.Media._ID, MediaStore.Audio.Media.TITLE, MediaStore.Audio.Media.ARTIST,
-            MediaStore.Audio.Media.DURATION, MediaStore.Audio.Media.SIZE, MediaStore.Audio.Media.DATE_ADDED
+            MediaStore.Audio.Media.DURATION, MediaStore.Audio.Media.SIZE, MediaStore.Audio.Media.DATE_ADDED,
+            MediaStore.Audio.Media.ALBUM_ID
         )
         val result = mutableListOf<LocalMedia>()
         val selection = if (video) null else "${MediaStore.Audio.Media.IS_MUSIC} != 0"
@@ -46,6 +48,7 @@ object MediaLibrary {
             val artistCol = if (!video) cursor.getColumnIndex(MediaStore.Audio.Media.ARTIST) else -1
             val sizeCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.SIZE)
             val dateAddedCol = cursor.getColumnIndex(MediaStore.MediaColumns.DATE_ADDED)
+            val albumIdCol = if (!video) cursor.getColumnIndex(MediaStore.Audio.Media.ALBUM_ID) else -1
             while (cursor.moveToNext()) {
                 val id = cursor.getLong(idCol)
                 result += LocalMedia(
@@ -56,7 +59,8 @@ object MediaLibrary {
                     durationMs = cursor.getLong(durationCol),
                     sizeBytes = cursor.getLong(sizeCol),
                     isVideo = video,
-                    dateAddedSeconds = if (dateAddedCol >= 0) cursor.getLong(dateAddedCol) else 0L
+                    dateAddedSeconds = if (dateAddedCol >= 0) cursor.getLong(dateAddedCol) else 0L,
+                    albumId = if (albumIdCol >= 0) cursor.getLong(albumIdCol) else -1L
                 )
             }
         }
