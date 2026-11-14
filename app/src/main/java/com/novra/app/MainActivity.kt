@@ -1851,7 +1851,7 @@ private fun MediaScreen(
     }
 }
 
-private fun formatDuration(duration: Long): String {
+internal fun formatDuration(duration: Long): String {
     val total = duration / 1000
     val hours = total / 3600
     val minutes = (total % 3600) / 60
@@ -1957,6 +1957,7 @@ private fun MediaArtwork(media: LocalMedia, modifier: Modifier = Modifier) {
     }
 }
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 private fun NowPlayingScreen(
     modifier: Modifier, media: LocalMedia, controller: MediaController?, queue: List<LocalMedia>,
