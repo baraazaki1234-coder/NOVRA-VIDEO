@@ -95,6 +95,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
 
 private val mediaArtworkCache = object : LruCache<String, Bitmap>(12 * 1024 * 1024) {
     override fun sizeOf(key: String, value: Bitmap): Int = value.allocationByteCount
@@ -123,6 +125,16 @@ private val TextPrimary: Color @Composable get() = LocalNovraPalette.current.tex
 data class UserPlaylist(val name: String, val mediaKeys: List<String>)
 
 private fun mediaKey(media: LocalMedia): String = "${if (media.isVideo) "v" else "a"}:${media.id}"
+
+private data class OnlineTrack(
+    val id: Long,
+    val title: String,
+    val artist: String,
+    val album: String,
+    val previewUrl: String,
+    val artworkUrl: String,
+    val storeUrl: String
+)
 
 private fun normalizeSearchText(value: String): String = value.lowercase()
     .replace(Regex("[\\u064B-\\u065F\\u0670]"), "")
@@ -499,7 +511,12 @@ private fun NovraApp() {
 
         val mediaItems = updated.map { entry ->
             MediaItem.Builder().setUri(entry.uri)
-                .setMediaMetadata(MediaMetadata.Builder().setTitle(entry.title).setDisplayTitle(entry.title).setArtist(entry.artist).setDurationMs(entry.durationMs.coerceAtLeast(0L)).apply { if (!entry.isVideo && entry.albumId >= 0L) setArtworkUri(Uri.parse("content://media/external/audio/albumart/${entry.albumId}")) }.build())
+                .setMediaMetadata(MediaMetadata.Builder().setTitle(entry.title).setDisplayTitle(entry.title).setArtist(entry.artist).setDurationMs(entry.durationMs.coerceAtLeast(0L)).apply {
+                    if (!entry.isVideo) {
+                        if (entry.artworkUri != null) setArtworkUri(entry.artworkUri)
+                        else if (entry.albumId >= 0L) setArtworkUri(Uri.parse("content://media/external/audio/albumart/${entry.albumId}"))
+                    }
+                }.build())
                 .build()
         }
         player?.setMediaItems(mediaItems, targetIndex, if (keepPosition) currentPosition else 0L)
@@ -998,7 +1015,10 @@ private fun NovraApp() {
                                 },
                                 onDelete = ::requestMediaDelete
                             )
-                            "Explore" -> OnlineSearchScreen(language = language)
+                            "Explore" -> OnlineSearchScreen(
+                                language = language,
+                                onPlayPreview = { item -> startMedia(item, listOf(item)) }
+                            )
                             "Favorites" -> MediaScreen(
                                 Modifier.padding(padding), "Favorites", (videos + tracks).distinctBy { mediaKey(it) }, loading, hasPermission,
                                 onGrant = { permissionLauncher.launch(mediaPermissions()) },
@@ -1118,59 +1138,78 @@ private fun NovraApp() {
 
 
 @Composable
-private fun OnlineSearchScreen(language: String) {
-    val context = androidx.compose.ui.platform.LocalContext.current
+private fun OnlineSearchScreen(
+    language: String,
+    onPlayPreview: (LocalMedia) -> Unit
+) {
     var query by remember { mutableStateOf("") }
-    var provider by remember { mutableStateOf("web") }
-    var submittedUrl by remember { mutableStateOf<String?>(null) }
-    var canGoBack by remember { mutableStateOf(false) }
-    var canGoForward by remember { mutableStateOf(false) }
-    val webView = remember(context) {
-        WebView(context).apply {
-            settings.javaScriptEnabled = true
-            settings.domStorageEnabled = true
-            settings.loadsImagesAutomatically = true
-            settings.javaScriptCanOpenWindowsAutomatically = false
-            settings.setSupportMultipleWindows(false)
-            settings.builtInZoomControls = false
-            settings.displayZoomControls = false
-            webViewClient = object : WebViewClient() {
-                override fun onPageFinished(view: WebView, url: String?) {
-                    canGoBack = view.canGoBack()
-                    canGoForward = view.canGoForward()
+    var submittedQuery by remember { mutableStateOf("") }
+    var tracks by remember { mutableStateOf<List<OnlineTrack>>(emptyList()) }
+    var loading by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    LaunchedEffect(submittedQuery) {
+        val term = submittedQuery.trim()
+        if (term.isBlank()) {
+            tracks = emptyList()
+            return@LaunchedEffect
+        }
+        loading = true
+        error = null
+        try {
+            val found = withContext(Dispatchers.IO) {
+                val connection = (URL("https://itunes.apple.com/search?term=${Uri.encode(term)}&media=music&entity=song&limit=30").openConnection() as HttpURLConnection).apply {
+                    requestMethod = "GET"
+                    connectTimeout = 12000
+                    readTimeout = 15000
+                    setRequestProperty("Accept", "application/json")
+                    setRequestProperty("User-Agent", "Viora-Android")
+                }
+                try {
+                    val response = connection.inputStream.bufferedReader().use { it.readText() }
+                    val json = JSONObject(response)
+                    val results = json.optJSONArray("results") ?: JSONArray()
+                    buildList {
+                        for (index in 0 until results.length()) {
+                            val item = results.optJSONObject(index) ?: continue
+                            val preview = item.optString("previewUrl")
+                            if (preview.isBlank()) continue
+                            val artwork = item.optString("artworkUrl100")
+                            add(
+                                OnlineTrack(
+                                    id = item.optLong("trackId", index.toLong()),
+                                    title = item.optString("trackName").ifBlank { "Unknown track" },
+                                    artist = item.optString("artistName").ifBlank { "Unknown artist" },
+                                    album = item.optString("collectionName"),
+                                    previewUrl = preview,
+                                    artworkUrl = artwork.replace("100x100bb", "600x600bb"),
+                                    storeUrl = item.optString("trackViewUrl")
+                                )
+                            )
+                        }
+                    }
+                } finally {
+                    connection.disconnect()
                 }
             }
-            webChromeClient = WebChromeClient()
-            setBackgroundColor(android.graphics.Color.rgb(16, 19, 16))
+            tracks = found
+            if (found.isEmpty()) error = if (language == "ar") "لم نعثر على معاينات متاحة. جرّب اسمًا آخر." else "No playable previews found. Try another search."
+        } catch (_: Exception) {
+            error = if (language == "ar") "تعذر الاتصال بخدمة البحث. تحقق من الإنترنت وحاول مجددًا." else "Search is unavailable. Check your connection and try again."
+            tracks = emptyList()
+        } finally {
+            loading = false
         }
     }
-    DisposableEffect(webView) {
-        onDispose { webView.stopLoading(); webView.destroy() }
-    }
-    fun submitSearch() {
-        val clean = query.trim()
-        if (clean.isBlank()) return
-        val encoded = Uri.encode(clean)
-        submittedUrl = when (provider) {
-            "youtube" -> "https://m.youtube.com/results?search_query=$encoded"
-            "spotify" -> "https://open.spotify.com/search/$encoded"
-            else -> "https://www.google.com/search?q=$encoded"
-        }
-    }
-    LaunchedEffect(submittedUrl) {
-        submittedUrl?.let { url -> if (webView.url != url) webView.loadUrl(url) }
-    }
-    BackHandler(enabled = canGoBack) { webView.goBack() }
 
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text(if (language == "ar") "استكشف" else "Explore", color = TextPrimary, fontSize = 27.sp, fontWeight = FontWeight.Bold)
-                Text(if (language == "ar") "ابحث واكتشف من داخل Viora" else "Discover without leaving Viora", color = Muted, fontSize = 12.sp)
+                Text(if (language == "ar") "اكتشف الموسيقى" else "Discover music", color = TextPrimary, fontSize = 25.sp, fontWeight = FontWeight.Bold)
+                Text(if (language == "ar") "ابحث عن الأغاني واستمع إلى معاينة فورية" else "Find tracks and play instant previews", color = Muted, fontSize = 11.sp)
             }
-            if (submittedUrl != null) {
-                IconButton(onClick = { webView.reload() }) { Icon(Icons.Rounded.Refresh, if (language == "ar") "تحديث" else "Refresh", tint = Muted) }
-            }
+            Icon(Icons.Rounded.Explore, null, tint = Accent, modifier = Modifier.size(25.dp))
         }
         Spacer(Modifier.height(13.dp))
         OutlinedTextField(
@@ -1178,11 +1217,11 @@ private fun OnlineSearchScreen(language: String) {
             onValueChange = { query = it },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
-            shape = RoundedCornerShape(17.dp),
-            placeholder = { Text(if (language == "ar") "فنان، أغنية، ألبوم أو فيديو..." else "Artist, song, album or video...", color = Muted) },
+            shape = RoundedCornerShape(15.dp),
+            placeholder = { Text(if (language == "ar") "اسم الأغنية أو الفنان..." else "Song or artist name...", color = Muted) },
             leadingIcon = { Icon(Icons.Rounded.Search, null, tint = Accent) },
             trailingIcon = {
-                if (query.isNotBlank()) IconButton(onClick = { query = ""; submittedUrl = null }) {
+                if (query.isNotBlank()) IconButton(onClick = { query = ""; submittedQuery = ""; tracks = emptyList(); error = null }) {
                     Icon(Icons.Rounded.Close, if (language == "ar") "مسح" else "Clear", tint = Muted)
                 }
             },
@@ -1191,119 +1230,92 @@ private fun OnlineSearchScreen(language: String) {
                 focusedTextColor = TextPrimary, unfocusedTextColor = TextPrimary, cursorColor = Accent
             )
         )
-        Spacer(Modifier.height(9.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(7.dp), verticalAlignment = Alignment.CenterVertically) {
-            listOf("web" to (if (language == "ar") "الويب" else "Web"), "youtube" to "YouTube", "spotify" to "Spotify").forEach { (key, label) ->
-                FilterChip(
-                    selected = provider == key,
-                    onClick = { provider = key },
-                    label = { Text(label, fontSize = 11.sp) },
-                    leadingIcon = if (provider == key) ({ Icon(Icons.Rounded.Check, null, modifier = Modifier.size(15.dp)) }) else null
-                )
-            }
-            Spacer(Modifier.weight(1f))
-            Button(onClick = ::submitSearch, enabled = query.isNotBlank(), contentPadding = PaddingValues(horizontal = 15.dp, vertical = 9.dp)) {
-                Icon(Icons.Rounded.Search, null, modifier = Modifier.size(17.dp))
-                Spacer(Modifier.width(5.dp))
-                Text(if (language == "ar") "بحث" else "Search")
-            }
+        Spacer(Modifier.height(8.dp))
+        Button(
+            onClick = { submittedQuery = query.trim() },
+            enabled = query.isNotBlank() && !loading,
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(13.dp)
+        ) {
+            Icon(Icons.Rounded.Search, null, modifier = Modifier.size(17.dp))
+            Spacer(Modifier.width(7.dp))
+            Text(if (language == "ar") "ابحث عن الأغاني" else "Search songs")
         }
         Spacer(Modifier.height(10.dp))
-        if (submittedUrl == null) {
-            Box(Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(CardBg), contentAlignment = Alignment.Center) {
-                Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Box(Modifier.size(64.dp).clip(RoundedCornerShape(22.dp)).background(CardAlt), contentAlignment = Alignment.Center) {
-                        Icon(Icons.Rounded.Explore, null, tint = Accent, modifier = Modifier.size(32.dp))
-                    }
-                    Spacer(Modifier.height(16.dp))
-                    Text(if (language == "ar") "اكتشف حاجات جديدة" else "Find something new", color = TextPrimary, fontSize = 19.sp, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(7.dp))
-                    Text(
-                        if (language == "ar") "اكتب اسم الفنان أو الأغنية، واختر المكان اللي تحب تبحث فيه. النتائج هتظهر هنا داخل التطبيق." else "Search for an artist or a track. Results will appear here inside the app.",
-                        color = Muted, fontSize = 12.sp, lineHeight = 19.sp
-                    )
+        if (loading) {
+            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator(color = Accent)
+                    Spacer(Modifier.height(10.dp))
+                    Text(if (language == "ar") "نبحث عن الموسيقى..." else "Finding music...", color = Muted, fontSize = 12.sp)
+                }
+            }
+        } else if (error != null) {
+            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Text(error.orEmpty(), color = Muted, fontSize = 13.sp)
+            }
+        } else if (tracks.isEmpty()) {
+            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.Rounded.GraphicEq, null, tint = Accent, modifier = Modifier.size(48.dp))
+                    Spacer(Modifier.height(12.dp))
+                    Text(if (language == "ar") "موسيقى جديدة في انتظارك" else "Your next favorite track awaits", color = TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                    Text(if (language == "ar") "اكتب اسم أغنية أو فنان للبدء." else "Search for a song or artist to begin.", color = Muted, fontSize = 11.sp)
                 }
             }
         } else {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = { if (canGoBack) webView.goBack() }, enabled = canGoBack) { Icon(Icons.Rounded.ArrowBack, null); Text(if (language == "ar") "رجوع" else "Back") }
-                TextButton(onClick = { if (canGoForward) webView.goForward() }, enabled = canGoForward) { Icon(Icons.Rounded.ArrowForward, null); Text(if (language == "ar") "التالي" else "Forward") }
-            }
-            AndroidView(
-                factory = { webView },
-                modifier = Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(16.dp))
-            )
-        }
-    }
-}
-
-
-@Composable
-private fun EqualizerPanel(controller: MediaController?, language: String) {
-    var sessionId by remember { mutableIntStateOf(NovraPlaybackService.currentAudioSessionId) }
-    LaunchedEffect(controller) {
-        while (sessionId == 0) {
-            delay(300)
-            sessionId = NovraPlaybackService.currentAudioSessionId
-        }
-    }
-    val equalizer = remember(sessionId) {
-        if (sessionId > 0) runCatching { Equalizer(0, sessionId).apply { enabled = true } }.getOrNull() else null
-    }
-    DisposableEffect(equalizer) {
-        onDispose { runCatching { equalizer?.release() } }
-    }
-    var expanded by remember { mutableStateOf(false) }
-    var levels by remember(sessionId) { mutableStateOf(List(5) { 0f }) }
-    val range = remember(equalizer) {
-        equalizer?.bandLevelRange?.let { it[0].toFloat() / 100f..it[1].toFloat() / 100f } ?: (-12f..12f)
-    }
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Brush.linearGradient(listOf(CardBg, CardAlt.copy(alpha = 0.48f)))).border(1.dp, Color.White.copy(alpha = 0.055f), RoundedCornerShape(20.dp)).padding(14.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(if (language == "ar") "معادل الصوت" else "AUDIO EQUALIZER", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                Text(
-                    if (equalizer == null) {
-                        if (language == "ar") "غير متاح في جلسة الصوت الحالية" else "Unavailable for this audio session"
-                    } else {
-                        if (language == "ar") "تحكم في ترددات الصوت مباشرة" else "Tune playback frequencies"
-                    },
-                    color = Muted, fontSize = 10.sp
-                )
-            }
-            TextButton(onClick = { expanded = !expanded }, enabled = equalizer != null) {
-                Text(if (expanded) (if (language == "ar") "إخفاء" else "Hide") else (if (language == "ar") "فتح" else "Open"))
-            }
-        }
-        if (expanded && equalizer != null) {
-            val bandCount = equalizer.numberOfBands.toInt().coerceAtMost(5)
-            LaunchedEffect(equalizer, bandCount) {
-                levels = List(bandCount) { index ->
-                    runCatching { equalizer.getBandLevel(index.toShort()).toFloat() / 100f }.getOrDefault(0f)
+            Text(if (language == "ar") "${tracks.size} نتيجة · معاينات موسيقية" else "${tracks.size} results · music previews", color = Muted, fontSize = 10.sp, modifier = Modifier.padding(vertical = 5.dp))
+            LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(7.dp), contentPadding = PaddingValues(bottom = 18.dp)) {
+                items(tracks, key = { it.id }) { track ->
+                    Row(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(15.dp)).background(CardBg).padding(9.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        AsyncImage(
+                            model = track.artworkUrl,
+                            contentDescription = track.title,
+                            modifier = Modifier.size(58.dp).clip(RoundedCornerShape(10.dp)),
+                            contentScale = ContentScale.Crop
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(track.title, color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(track.artist, color = Muted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            if (track.album.isNotBlank()) Text(track.album, color = Muted.copy(alpha = 0.75f), fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(if (language == "ar") "معاينة 30 ثانية" else "30-second preview", color = Accent, fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                        IconButton(onClick = {
+                            val item = LocalMedia(
+                                id = -((track.id and 0x7fffffffL) + 1L),
+                                uri = Uri.parse(track.previewUrl),
+                                title = track.title,
+                                artist = track.artist,
+                                durationMs = 30000L,
+                                sizeBytes = 0L,
+                                isVideo = false,
+                                artworkUri = Uri.parse(track.artworkUrl)
+                            )
+                            onPlayPreview(item)
+                        }) {
+                            Icon(Icons.Rounded.PlayCircleFilled, if (language == "ar") "تشغيل المعاينة" else "Play preview", tint = Accent, modifier = Modifier.size(31.dp))
+                        }
+                        if (track.storeUrl.isNotBlank()) {
+                            IconButton(onClick = {
+                                runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(track.storeUrl))) }
+                            }) {
+                                Icon(Icons.Rounded.OpenInNew, if (language == "ar") "فتح المصدر" else "Open source", tint = Muted)
+                            }
+                        }
+                    }
                 }
             }
-            repeat(bandCount) { index ->
-                val frequency = runCatching { equalizer.getCenterFreq(index.toShort()) / 1000 }.getOrDefault(0)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(if (frequency >= 1000) "${frequency / 1000}k" else "${frequency}Hz", color = Muted, fontSize = 10.sp, modifier = Modifier.width(42.dp))
-                    Slider(
-                        value = levels.getOrElse(index) { 0f }.coerceIn(range.start, range.endInclusive),
-                        onValueChange = { value ->
-                            runCatching { equalizer.setBandLevel(index.toShort(), (value * 100).toInt().toShort()) }
-                            levels = levels.toMutableList().also { it[index] = value }
-                        },
-                        valueRange = range,
-                        modifier = Modifier.weight(1f),
-                        colors = SliderDefaults.colors(thumbColor = Accent, activeTrackColor = Accent)
-                    )
-                    Text("${levels.getOrElse(index) { 0f }.toInt()} dB", color = Muted, fontSize = 9.sp, modifier = Modifier.width(42.dp))
-                }
-            }
-            TextButton(onClick = {
-                runCatching { equalizer.usePreset(0.toShort()) }
-                levels = List(bandCount) { 0f }
-            }) { Text(if (language == "ar") "إعادة ضبط" else "Reset") }
         }
+        Text(
+            if (language == "ar") "المعاينات مقدمة عبر Apple Music؛ التشغيل الكامل متاح من المصدر." else "Previews are provided by Apple Music. Full tracks are available from the source.",
+            color = Muted.copy(alpha = 0.72f), fontSize = 9.sp,
+            modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+        )
     }
 }
 
@@ -2177,8 +2189,10 @@ private fun loadAlbumArtwork(context: android.content.Context, media: LocalMedia
 @Composable
 private fun MediaArtwork(media: LocalMedia, modifier: Modifier = Modifier) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    val bitmap by produceState<Bitmap?>(initialValue = null, media.uri, media.albumId) {
-        value = withContext(Dispatchers.IO) {
+    val bitmap by produceState<Bitmap?>(initialValue = null, media.uri, media.albumId, media.artworkUri) {
+        if (media.artworkUri != null) {
+            value = null
+        } else value = withContext(Dispatchers.IO) {
             val cacheKey = media.uri.toString()
             mediaArtworkCache.get(cacheKey) ?: runCatching {
                 if (!media.isVideo) {
@@ -2211,7 +2225,9 @@ private fun MediaArtwork(media: LocalMedia, modifier: Modifier = Modifier) {
         }
     }
     Box(modifier.background(CardAlt), contentAlignment = Alignment.Center) {
-        if (bitmap != null) {
+        if (media.artworkUri != null) {
+            AsyncImage(model = media.artworkUri, contentDescription = media.title, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        } else if (bitmap != null) {
             androidx.compose.foundation.Image(
                 bitmap = bitmap!!.asImageBitmap(),
                 contentDescription = media.title,
