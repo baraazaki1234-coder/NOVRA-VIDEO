@@ -2219,6 +2219,50 @@ private fun NowPlayingScreen(
             Spacer(Modifier.height(25.dp))
         }
     }
+    if (activePanel == "lyrics") ModalBottomSheet(
+        onDismissRequest = { activePanel = "none" },
+        containerColor = CardBg,
+        contentColor = TextPrimary
+    ) {
+        Column(
+            Modifier.fillMaxWidth().heightIn(max = 620.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp).padding(bottom = 28.dp)
+        ) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(if (language == "ar") "كلمات الأغنية" else "LYRICS",
+                        color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text(media.title, color = Muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                TextButton(onClick = { lyricsPicker.launch(arrayOf("text/plain", "application/octet-stream", "*/*")) }) {
+                    Icon(Icons.Rounded.Subtitles, null)
+                    Spacer(Modifier.width(5.dp))
+                    Text(if (language == "ar") "استيراد LRC" else "Import LRC")
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            if (lyricLines.isEmpty()) {
+                Text(
+                    if (language == "ar") "لم تتم إضافة كلمات لهذه الأغنية بعد." else "No synced lyrics added for this song yet.",
+                    color = Muted, modifier = Modifier.padding(vertical = 28.dp)
+                )
+            } else {
+                val activeLine = lyricLines.indexOfLast { it.timeMs <= playbackPosition.toLong() }.coerceAtLeast(0)
+                lyricLines.forEachIndexed { index, line ->
+                    Text(
+                        line.text,
+                        color = if (index == activeLine) Accent else TextPrimary.copy(alpha = 0.68f),
+                        fontSize = if (index == activeLine) 17.sp else 14.sp,
+                        fontWeight = if (index == activeLine) FontWeight.Bold else FontWeight.Medium,
+                        modifier = Modifier.fillMaxWidth()
+                            .clickable { controller?.seekTo(line.timeMs) }
+                            .padding(vertical = 9.dp)
+                    )
+                }
+            }
+        }
+    }
     if (activePanel == "tools") ModalBottomSheet(onDismissRequest = { activePanel = "none" }, containerColor = CardBg, contentColor = TextPrimary) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 28.dp)) {
             Text(if (language == "ar") "إعدادات الصوت" else "AUDIO SETTINGS", color = Accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
