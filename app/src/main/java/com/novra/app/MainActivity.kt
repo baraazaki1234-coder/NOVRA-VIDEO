@@ -30,6 +30,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.togetherWith
@@ -620,6 +621,19 @@ private fun NovraApp() {
     var hasVideoAccess by remember { mutableStateOf(hasVideoPermission(context)) }
     var loading by remember { mutableStateOf(false) }
     var mediaRefresh by remember { mutableIntStateOf(0) }
+    val deleteMediaLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) mediaRefresh += 1
+    }
+    fun requestMediaDelete(items: List<LocalMedia>) {
+        if (items.isEmpty()) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val request = MediaStore.createDeleteRequest(context.contentResolver, items.map { it.uri })
+            deleteMediaLauncher.launch(IntentSenderRequest.Builder(request.intentSender).build())
+        } else {
+            items.forEach { item -> runCatching { context.contentResolver.delete(item.uri, null, null) } }
+            mediaRefresh += 1
+        }
+    }
     DisposableEffect(context) {
         val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
             override fun onChange(selfChange: Boolean) { mediaRefresh += 1 }
@@ -949,10 +963,19 @@ private fun NovraApp() {
                                 compactCards = compactCards, cardStyle = cardStyle,
                                 playCounts = playCounts, favorites = favorites,
                                 onToggleFavorite = ::toggleFavorite,
-                                onPlay = { item -> startMedia(item, videos) },
+                                onPlay = { item -> startMedia(item, (videos + item).distinctBy { mediaKey(it) }) },
                                 onAddToQueue = ::enqueueMedia,
                                 onPlayNext = ::playNextMedia,
-                                language = language
+                                language = language,
+                                playlists = playlists,
+                                onAddToPlaylist = { playlistName, item ->
+                                    savePlaylists(playlists.map { playlist ->
+                                        if (playlist.name == playlistName && mediaKey(item) !in playlist.mediaKeys)
+                                            playlist.copy(mediaKeys = playlist.mediaKeys + mediaKey(item))
+                                        else playlist
+                                    })
+                                },
+                                onDelete = ::requestMediaDelete
                             )
                             "Music" -> MediaScreen(
                                 Modifier.padding(padding), "Music", tracks, loading, hasAudioAccess,
@@ -960,11 +983,20 @@ private fun NovraApp() {
                                 compactCards = compactCards, cardStyle = cardStyle,
                                 playCounts = playCounts, favorites = favorites,
                                 onToggleFavorite = ::toggleFavorite,
-                                onPlay = { item -> startMedia(item, tracks) },
+                                onPlay = { item -> startMedia(item, (tracks + item).distinctBy { mediaKey(it) }) },
                                 onAddToQueue = ::enqueueMedia,
                                 onPlayNext = ::playNextMedia,
                                 language = language,
-                                onNavigate = ::navigateTo
+                                onNavigate = ::navigateTo,
+                                playlists = playlists,
+                                onAddToPlaylist = { playlistName, item ->
+                                    savePlaylists(playlists.map { playlist ->
+                                        if (playlist.name == playlistName && mediaKey(item) !in playlist.mediaKeys)
+                                            playlist.copy(mediaKeys = playlist.mediaKeys + mediaKey(item))
+                                        else playlist
+                                    })
+                                },
+                                onDelete = ::requestMediaDelete
                             )
                             "Explore" -> OnlineSearchScreen(language = language)
                             "Favorites" -> MediaScreen(
@@ -973,10 +1005,19 @@ private fun NovraApp() {
                                 compactCards = compactCards, cardStyle = cardStyle,
                                 playCounts = playCounts, favorites = favorites,
                                 onToggleFavorite = ::toggleFavorite,
-                                onPlay = { item -> startMedia(item, (videos + tracks).distinctBy { mediaKey(it) }) },
+                                onPlay = { item -> startMedia(item, (videos + tracks + item).distinctBy { mediaKey(it) }) },
                                 onAddToQueue = ::enqueueMedia,
                                 onPlayNext = ::playNextMedia,
-                                language = language
+                                language = language,
+                                playlists = playlists,
+                                onAddToPlaylist = { playlistName, item ->
+                                    savePlaylists(playlists.map { playlist ->
+                                        if (playlist.name == playlistName && mediaKey(item) !in playlist.mediaKeys)
+                                            playlist.copy(mediaKeys = playlist.mediaKeys + mediaKey(item))
+                                        else playlist
+                                    })
+                                },
+                                onDelete = ::requestMediaDelete
                             )
                             "Playlists" -> PlaylistsScreen(
                                 Modifier.padding(padding), playlists, (videos + tracks).distinctBy { mediaKey(it) },
