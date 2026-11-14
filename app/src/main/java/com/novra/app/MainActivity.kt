@@ -289,7 +289,8 @@ private fun NovraApp() {
     val isLightTheme = themeMode == "light"
     val chosenAccent = when (accentName) {
         "ocean" -> if (isLightTheme) Color(0xFF0369A1) else Color(0xFF7DD3FC)
-        "violet", "mint" -> if (isLightTheme) Color(0xFF7052D8) else Color(0xFFC18BFF)
+        "violet" -> if (isLightTheme) Color(0xFF7052D8) else Color(0xFFC18BFF)
+        "mint" -> if (isLightTheme) Color(0xFF047857) else Color(0xFF6EE7B7)
         "rose" -> if (isLightTheme) Color(0xFFBE123C) else Color(0xFFFDA4AF)
         "amber" -> if (isLightTheme) Color(0xFFB45309) else Color(0xFFFCD34D)
         "cyan" -> if (isLightTheme) Color(0xFF0E7490) else Color(0xFF67E8F9)
@@ -821,7 +822,7 @@ private fun NovraApp() {
                                             color = Muted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis
                                         )
                                     }
-                                    if (!showNowPlaying) {
+                                    if (!showNowPlaying && selected != "Home" && selected != "Settings") {
                                         IconButton(onClick = { navigateTo("Settings") }) {
                                             Icon(Icons.Rounded.Tune, contentDescription = "Settings", tint = if (selected == "Settings") Accent else Muted)
                                         }
@@ -858,7 +859,7 @@ private fun NovraApp() {
                                         )
                                         dockItems.forEach { item ->
                                             val active = selected == item.first
-                                            Column(Modifier.weight(1f).clip(RoundedCornerShape(18.dp)).background(if (active) Accent.copy(alpha = 0.16f) else Color.Transparent).clickable { selected = item.first; showNowPlaying = false }.padding(vertical = 7.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Column(Modifier.weight(1f).clip(RoundedCornerShape(18.dp)).background(if (active) Accent.copy(alpha = 0.16f) else Color.Transparent).clickable { selected = item.first; navigationStack = emptyList(); showNowPlaying = false }.padding(vertical = 7.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                                                 Icon(item.second, contentDescription = item.third, tint = if (active) Accent else Muted, modifier = Modifier.size(21.dp))
                                                 Spacer(Modifier.height(3.dp))
                                                 Text(item.third, color = if (active) TextPrimary else Muted, fontSize = 9.sp, fontWeight = if (active) FontWeight.Bold else FontWeight.Medium, maxLines = 1)
@@ -1651,7 +1652,7 @@ private fun MediaScreen(
         OutlinedTextField(
             value = query, onValueChange = { query = it },
             modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text(if (language == "ar") "ابحث في ${if (type == "Music") "الأغاني" else "الفيديوهات"}" else "Search $type", color = Muted) },
+            placeholder = { Text(if (language == "ar") "ابحث في ${when (type) { "Music" -> "الأغاني"; "Videos" -> "الفيديوهات"; else -> "الوسائط" }}" else "Search $type", color = Muted) },
             leadingIcon = { Icon(Icons.Rounded.Search, null, tint = Muted) },
             singleLine = true,
             shape = RoundedCornerShape(16.dp),
@@ -1693,16 +1694,16 @@ private fun MediaScreen(
         }
         Spacer(Modifier.height(14.dp))
         when {
-            !hasPermission -> Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            !hasPermission -> Column(Modifier.weight(1f).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                 Icon(Icons.Rounded.FolderOpen, null, tint = Accent, modifier = Modifier.size(45.dp))
                 Spacer(Modifier.height(14.dp))
-                Text("Allow media access", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                Text("Viora needs permission to show your $type.", color = Muted, fontSize = 12.sp)
+                Text(if (language == "ar") "اسمح بالوصول إلى الوسائط" else "Allow media access", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                Text(if (language == "ar") "يحتاج Viora إلى إذن لعرض وسائط جهازك." else "Viora needs permission to show your $type.", color = Muted, fontSize = 12.sp)
                 Spacer(Modifier.height(14.dp))
-                Button(onClick = onGrant) { Text("Grant access") }
+                Button(onClick = onGrant) { Text(if (language == "ar") "السماح بالوصول" else "Grant access") }
             }
-            loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Accent) }
-            sortedMedia.isEmpty() -> Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            loading -> Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Accent) }
+            sortedMedia.isEmpty() -> Column(Modifier.weight(1f).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                 Icon(if (type == "Videos") Icons.Rounded.OndemandVideo else Icons.Rounded.MusicNote, null, tint = Accent, modifier = Modifier.size(42.dp))
                 Spacer(Modifier.height(12.dp))
                 Text(if (language == "ar") { if (query.isBlank()) "لا توجد وسائط بعد" else "لا توجد نتائج مطابقة" } else if (query.isBlank()) "Nothing here yet" else "No results found", color = TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
@@ -1711,6 +1712,7 @@ private fun MediaScreen(
             else -> {
                 if (type == "Videos") {
                     LazyColumn(
+                        modifier = Modifier.weight(1f),
                         verticalArrangement = Arrangement.spacedBy(if (compactCards) 10.dp else 16.dp),
                         contentPadding = PaddingValues(bottom = 20.dp)
                     ) {
@@ -1781,6 +1783,7 @@ private fun MediaScreen(
                     }
                 } else {
                     LazyColumn(
+                        modifier = Modifier.weight(1f),
                         verticalArrangement = Arrangement.spacedBy(if (compactCards) 5.dp else 8.dp),
                         contentPadding = PaddingValues(bottom = 20.dp)
                     ) {
@@ -1967,7 +1970,7 @@ private fun NowPlayingScreen(
     var playbackPosition by remember(controller) { mutableFloatStateOf(0f) }
     var isSeeking by remember(controller) { mutableStateOf(false) }
     var playbackDuration by remember(controller) { mutableFloatStateOf(media.durationMs.coerceAtLeast(1L).toFloat()) }
-    var playbackSpeed by remember(controller) { mutableFloatStateOf(1f) }
+    var playbackSpeed by remember(controller, media.id) { mutableFloatStateOf(controller?.playbackParameters?.speed ?: 1f) }
     var isPlaying by remember(controller) { mutableStateOf(controller?.isPlaying == true) }
     var activePanel by remember { mutableStateOf("none") }
     var showRingtoneCutter by remember { mutableStateOf(false) }
@@ -2004,6 +2007,9 @@ private fun NowPlayingScreen(
             if (!isSeeking) playbackPosition = (controller?.currentPosition ?: 0L).coerceIn(0L, duration.coerceAtLeast(1L)).toFloat()
             currentQueueIndex = controller?.currentMediaItemIndex ?: 0
             isPlaying = controller?.isPlaying == true
+            shuffle = controller?.shuffleModeEnabled == true
+            repeatMode = controller?.repeatMode ?: Player.REPEAT_MODE_OFF
+            playbackSpeed = controller?.playbackParameters?.speed ?: 1f
             delay(350)
         }
     }
@@ -2086,7 +2092,6 @@ private fun NowPlayingScreen(
                     Text(media.title, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     Text(media.artist.ifBlank { if (language == "ar") "فنان غير معروف" else "Unknown artist" }, color = Color.White.copy(alpha = 0.68f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                IconButton(onClick = { activePanel = "tools" }) { Icon(Icons.Rounded.MoreHoriz, "More", tint = Color.White) }
             }
             Spacer(Modifier.height(8.dp))
             Slider(value = playbackPosition.coerceIn(0f, playbackDuration), onValueChange = { isSeeking = true; playbackPosition = it },
@@ -2247,8 +2252,7 @@ private fun SettingsScreen(
     audioOutputs: List<String>
 ) {
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
-        Spacer(Modifier.height(20.dp))
-        Text(if (language == "ar") "الإعدادات" else "Settings", color = TextPrimary, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(8.dp))
         Text(if (language == "ar") "خصص Viora بالشكل اللي يناسبك." else "Make Viora feel like yours.", color = Muted, fontSize = 13.sp)
         Spacer(Modifier.height(18.dp))
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Brush.linearGradient(listOf(CardBg, CardAlt.copy(alpha = 0.48f)))).border(1.dp, Color.White.copy(alpha = 0.055f), RoundedCornerShape(22.dp)).padding(16.dp)) {
@@ -2334,7 +2338,7 @@ private fun SettingsScreen(
             HorizontalDivider(color = CardAlt)
             Text(if (language == "ar") "اللون الأساسي" else "Accent color", color = TextPrimary, fontSize = 13.sp)
             Spacer(Modifier.height(6.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 listOf("mint" to "Mint", "ocean" to "Ocean", "violet" to "Violet", "rose" to "Rose", "amber" to "Amber", "cyan" to "Cyan", "indigo" to "Indigo", "orange" to "Orange").forEach { (key, label) ->
                     FilterChip(selected = accentName == key, onClick = { onAccentChange(key) }, label = { Text(label, fontSize = 10.sp) })
                 }
