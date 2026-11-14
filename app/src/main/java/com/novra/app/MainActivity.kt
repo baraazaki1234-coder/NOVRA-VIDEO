@@ -44,6 +44,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -1622,7 +1623,10 @@ private fun MediaScreen(
     onAddToQueue: (LocalMedia) -> Unit = {},
     onPlayNext: (LocalMedia) -> Unit = {},
     language: String = "en",
-    onNavigate: (String) -> Unit = {}
+    onNavigate: (String) -> Unit = {},
+    playlists: List<UserPlaylist> = emptyList(),
+    onAddToPlaylist: (String, LocalMedia) -> Unit = {},
+    onDelete: (List<LocalMedia>) -> Unit = {}
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val importPrefs = remember(context, type) { context.getSharedPreferences("viora_imports", android.content.Context.MODE_PRIVATE) }
@@ -1681,6 +1685,30 @@ private fun MediaScreen(
     var searchExpanded by remember(type) { mutableStateOf(false) }
     var sortMenuExpanded by remember { mutableStateOf(false) }
     var sortBy by remember { mutableStateOf("Default") }
+    var selectedKeys by remember(type) { mutableStateOf<Set<String>>(emptySet()) }
+    var playlistSelection by remember { mutableStateOf<List<LocalMedia>?>(null) }
+    val selectedItems = sortedMedia.filter { mediaKey(it) in selectedKeys }
+    fun toggleSelection(item: LocalMedia) {
+        val key = mediaKey(item)
+        selectedKeys = if (key in selectedKeys) selectedKeys - key else selectedKeys + key
+    }
+    fun shareItems(items: List<LocalMedia>) {
+        if (items.isEmpty()) return
+        val sendIntent = if (items.size == 1) {
+            Intent(Intent.ACTION_SEND).apply {
+                type = if (items.first().isVideo) "video/*" else "audio/*"
+                putExtra(Intent.EXTRA_STREAM, items.first().uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+        } else {
+            Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+                type = "*/*"
+                putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(items.map { it.uri }))
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+        }
+        runCatching { context.startActivity(Intent.createChooser(sendIntent, if (language == "ar") "مشاركة الوسائط" else "Share media")) }
+    }
     var mediaFilter by remember(type) { mutableStateOf(if (type == "Favorites") "Favorites" else "All") }
     var smartFolder by remember(type) { mutableStateOf("All") }
     val nowSeconds = System.currentTimeMillis() / 1000L
@@ -1867,7 +1895,11 @@ private fun MediaScreen(
                                     .clip(if (cardStyle == "square") RoundedCornerShape(8.dp) else RoundedCornerShape(22.dp))
                                     .background(Brush.linearGradient(listOf(CardBg, CardAlt.copy(alpha = 0.62f))))
                                     .border(1.dp, Color.White.copy(alpha = 0.055f), if (cardStyle == "square") RoundedCornerShape(8.dp) else RoundedCornerShape(22.dp))
-                                    .clickable { onPlay(item) }
+                                    .combinedClickable(
+                                        onClick = { if (selectedKeys.isNotEmpty()) toggleSelection(item) else onPlay(item) },
+                                        onLongClick = { toggleSelection(item) }
+                                    )
+                                    .background(if (mediaKey(item) in selectedKeys) Accent.copy(alpha = 0.10f) else Color.Transparent)
                                     .padding(if (compactCards) 8.dp else 10.dp)
                             ) {
                                 Box(
@@ -1936,7 +1968,11 @@ private fun MediaScreen(
                             Row(
                                 Modifier.fillMaxWidth()
                                     .clip(RoundedCornerShape(15.dp))
-                                    .clickable { onPlay(item) }
+                                    .combinedClickable(
+                                        onClick = { if (selectedKeys.isNotEmpty()) toggleSelection(item) else onPlay(item) },
+                                        onLongClick = { toggleSelection(item) }
+                                    )
+                                    .background(if (mediaKey(item) in selectedKeys) Accent.copy(alpha = 0.10f) else Color.Transparent)
                                     .padding(vertical = 7.dp, horizontal = 1.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
@@ -2001,6 +2037,49 @@ private fun MediaScreen(
             }
         }
     }
+        if (selectedItems.isNotEmpty()) {
+            Surface(color = CardBg, shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+                Column(Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(if (language == "ar") "تم تحديد ${selectedItems.size}" else "${selectedItems.size} selected", color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { selectedKeys = emptySet() }) { Text(if (language == "ar") "إلغاء" else "Clear") }
+                    }
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        TextButton(onClick = { selectedItems.forEach(onToggleFavorite); selectedKeys = emptySet() }) { Icon(Icons.Rounded.FavoriteBorder, null); Text(if (language == "ar") "المفضلة" else "Favorite") }
+                        TextButton(onClick = { selectedItems.forEach(onPlayNext); selectedKeys = emptySet() }) { Icon(Icons.Rounded.SkipNext, null); Text(if (language == "ar") "التالي" else "Play next") }
+                        TextButton(onClick = { selectedItems.forEach(onAddToQueue); selectedKeys = emptySet() }) { Icon(Icons.Rounded.QueueMusic, null); Text(if (language == "ar") "الطابور" else "Queue") }
+                        TextButton(onClick = { playlistSelection = selectedItems }) { Icon(Icons.Rounded.PlaylistAdd, null); Text(if (language == "ar") "قائمة" else "Playlist") }
+                        TextButton(onClick = { shareItems(selectedItems) }) { Icon(Icons.Rounded.Share, null); Text(if (language == "ar") "مشاركة" else "Share") }
+                        TextButton(onClick = { onDelete(selectedItems); selectedKeys = emptySet() }) { Icon(Icons.Rounded.DeleteOutline, null, tint = MaterialTheme.colorScheme.error); Text(if (language == "ar") "حذف" else "Delete") }
+                    }
+                }
+            }
+        }
+    playlistSelection?.let { itemsToAdd ->
+        AlertDialog(
+            onDismissRequest = { playlistSelection = null },
+            title = { Text(if (language == "ar") "إضافة إلى قائمة تشغيل" else "Add to playlist") },
+            text = {
+                if (playlists.isEmpty()) Text(if (language == "ar") "أنشئ قائمة تشغيل أولًا من قسم القوائم." else "Create a playlist first in the Playlists section.")
+                else Column(Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState())) {
+                    playlists.forEach { playlist ->
+                        TextButton(onClick = {
+                            itemsToAdd.forEach { onAddToPlaylist(playlist.name, it) }
+                            playlistSelection = null
+                            selectedKeys = emptySet()
+                        }, modifier = Modifier.fillMaxWidth()) {
+                            Icon(Icons.Rounded.QueueMusic, null)
+                            Spacer(Modifier.width(9.dp))
+                            Text(playlist.name, modifier = Modifier.weight(1f))
+                            Icon(Icons.Rounded.ChevronRight, null)
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { playlistSelection = null }) { Text(if (language == "ar") "إغلاق" else "Close") } }
+        )
+    }
+
 }
 
 internal fun formatDuration(duration: Long): String {
