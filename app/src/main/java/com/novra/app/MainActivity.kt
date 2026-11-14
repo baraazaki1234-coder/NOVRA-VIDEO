@@ -30,6 +30,11 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -97,12 +102,12 @@ private data class NovraPalette(
     val muted: Color, val accent: Color, val text: Color
 )
 private val DarkPalette = NovraPalette(
-    Color(0xFF080512), Color(0xE6171228), Color(0xF0231B3B),
-    Color(0xFFAAA0C2), Color(0xFFC18BFF), Color(0xFFF8F3FF)
+    Color(0xFF0B1211), Color(0xE615201D), Color(0xF01C2B26),
+    Color(0xFF9AAEA6), Color(0xFF78E0C0), Color(0xFFF2FBF6)
 )
 private val LightPalette = NovraPalette(
-    Color(0xFFF4F3FA), Color(0xEFFFFFFF), Color(0xFFF0EDFA),
-    Color(0xFF77748C), Color(0xFF7052D8), Color(0xFF201B32)
+    Color(0xFFF4F8F6), Color(0xEFFFFFFF), Color(0xFFE7F0EC),
+    Color(0xFF687B72), Color(0xFF087E68), Color(0xFF15241D)
 )
 private val LocalNovraPalette = staticCompositionLocalOf { DarkPalette }
 private val AppBg: Color @Composable get() = LocalNovraPalette.current.background
@@ -290,7 +295,7 @@ private fun NovraApp() {
     var themeMode by remember { mutableStateOf(prefs.getString("theme_mode", "dark") ?: "dark") }
     var pureBlack by remember { mutableStateOf(prefs.getBoolean("pure_black", false)) }
     var wallpaperDim by remember { mutableFloatStateOf(prefs.getFloat("wallpaper_dim", 0.22f)) }
-    var accentName by remember { mutableStateOf(prefs.getString("accent_name", "violet") ?: "violet") }
+    var accentName by remember { mutableStateOf(prefs.getString("accent_name", "mint") ?: "mint") }
     val isLightTheme = themeMode == "light"
     val chosenAccent = when (accentName) {
         "ocean" -> if (isLightTheme) Color(0xFF0369A1) else Color(0xFF7DD3FC)
@@ -301,7 +306,7 @@ private fun NovraApp() {
         "cyan" -> if (isLightTheme) Color(0xFF0E7490) else Color(0xFF67E8F9)
         "indigo" -> if (isLightTheme) Color(0xFF4338CA) else Color(0xFFA5B4FC)
         "orange" -> if (isLightTheme) Color(0xFFC2410C) else Color(0xFFFDBA74)
-        else -> if (isLightTheme) Color(0xFF7052D8) else Color(0xFFB9A5FF)
+        else -> if (isLightTheme) Color(0xFF087E68) else Color(0xFF78E0C0)
     }
     val basePalette = if (isLightTheme) LightPalette else DarkPalette
     val palette = if (!isLightTheme && pureBlack) {
@@ -380,6 +385,22 @@ private fun NovraApp() {
             }
         }
     }
+    val trackListenSeconds = remember {
+        mutableStateMapOf<String, Long>().apply {
+            prefs.all.forEach { (key, value) ->
+                if (value is Long && (key.startsWith("listened_seconds_audio_") || key.startsWith("listened_seconds_video_"))) {
+                    val kind = if (key.startsWith("listened_seconds_video_")) "v" else "a"
+                    put("$kind:${key.substringAfterLast('_')}", value)
+                }
+            }
+        }
+    }
+    fun recordPlay(item: LocalMedia) {
+        val key = "play_count_${if (item.isVideo) "video" else "audio"}_${item.id}"
+        val count = (playCounts[key] ?: prefs.getInt(key, 0)) + 1
+        prefs.edit().putInt(key, count).apply()
+        playCounts[key] = count
+    }
     var playQueue by remember { mutableStateOf<List<LocalMedia>>(emptyList()) }
     var showNowPlaying by remember { mutableStateOf(false) }
     fun navigateTo(destination: String) {
@@ -414,17 +435,33 @@ private fun NovraApp() {
             override fun onIsPlayingChanged(playing: Boolean) { isPlaying = playing }
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 val activeIndex = controller?.currentMediaItemIndex ?: -1
-                playQueue.getOrNull(activeIndex)?.let { selectedMedia = it }
+                playQueue.getOrNull(activeIndex)?.let { item ->
+                    selectedMedia = item
+                    if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO ||
+                        reason == Player.MEDIA_ITEM_TRANSITION_REASON_SEEK ||
+                        reason == Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT
+                    ) recordPlay(item)
+                }
             }
         }
         controller?.addListener(listener)
         onDispose { controller?.removeListener(listener) }
     }
     LaunchedEffect(isPlaying, selectedMedia) {
-        while (isPlaying && selectedMedia != null) {
+        val activeMedia = selectedMedia ?: return@LaunchedEffect
+        val activeKey = mediaKey(activeMedia)
+        val storageKey = "listened_seconds_${if (activeMedia.isVideo) "video" else "audio"}_${activeMedia.id}"
+        while (isPlaying && selectedMedia?.let(::mediaKey) == activeKey) {
             delay(1000)
             listenedSeconds += 1
-            if (listenedSeconds % 15L == 0L) prefs.edit().putLong("listened_seconds", listenedSeconds).apply()
+            val trackTotal = (trackListenSeconds[activeKey] ?: prefs.getLong(storageKey, 0L)) + 1L
+            trackListenSeconds[activeKey] = trackTotal
+            if (trackTotal % 5L == 0L || listenedSeconds % 15L == 0L) {
+                prefs.edit()
+                    .putLong("listened_seconds", listenedSeconds)
+                    .putLong(storageKey, trackTotal)
+                    .apply()
+            }
         }
     }
     fun updatePlaybackQueue(updated: List<LocalMedia>) {
@@ -495,10 +532,7 @@ private fun NovraApp() {
         playQueue = queue
         playbackRequestId += 1
         showNowPlaying = true
-        val key = "play_count_${if (item.isVideo) "video" else "audio"}_${item.id}"
-        val count = prefs.getInt(key, 0) + 1
-        prefs.edit().putInt(key, count).apply()
-        playCounts[key] = count
+        recordPlay(item)
     }
     fun enqueueMedia(item: LocalMedia) {
         val currentQueue = playQueue.ifEmpty { listOfNotNull(selectedMedia) }
@@ -795,7 +829,7 @@ private fun NovraApp() {
                                     } else {
                                         Box(
                                             Modifier.size(42.dp).clip(RoundedCornerShape(15.dp))
-                                                .background(Brush.linearGradient(listOf(Color(0xFF9B45F5), Color(0xFF4169E8), Color(0xFF31C9E8))))
+                                                .background(Brush.linearGradient(listOf(Color(0xFF238A78), Color(0xFF39BFA0), Color(0xFF8DE8C9))))
                                                 .border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(15.dp)),
                                             contentAlignment = Alignment.Center
                                         ) {
@@ -875,15 +909,25 @@ private fun NovraApp() {
                             }
                         }
                     ) { padding ->
-                        if (showNowPlaying && selectedMedia != null) {
+                        AnimatedContent(
+                            targetState = showNowPlaying to selected,
+                            transitionSpec = {
+                                (fadeIn(tween(220)) + slideInHorizontally { it / 18 }) togetherWith
+                                    (fadeOut(tween(150)) + slideOutHorizontally { -it / 18 })
+                            },
+                            label = "viora-screen-transition"
+                        ) { (playerVisible, destination) ->
+                        if (playerVisible && selectedMedia != null) {
                             NowPlayingScreen(
                                 Modifier.padding(padding), selectedMedia!!, controller, playQueue,
+                                playCount = playCounts["play_count_audio_${selectedMedia!!.id}"] ?: 0,
+                                trackListenSeconds = trackListenSeconds[mediaKey(selectedMedia!!)] ?: 0L,
                                 sleepTimerMinutes, onSleepTimerChange = { sleepTimerMinutes = it },
                                 onMoveQueueItem = ::moveQueueItem, onRemoveQueueItem = ::removeQueueItem,
                                 onClearQueue = ::clearUpcomingQueue,
                                 onBack = { showNowPlaying = false }, language = language
                             )
-                        } else when (selected) {
+                        } else when (destination) {
                             "Home" -> HomeScreen(
                                 Modifier.padding(padding), videos.size, tracks.size,
                                 tracks.map { track ->
@@ -970,6 +1014,7 @@ private fun NovraApp() {
                                  onWallpaperDimChange = { wallpaperDim = it; prefs.edit().putFloat("wallpaper_dim", it).apply() },
                                  audioOutputs = audioOutputs
                             )
+                        }
                         }
                     }
                 }
@@ -1446,7 +1491,7 @@ private fun HomeScreen(
                     Text("Viora", color = TextPrimary, fontSize = 30.sp, fontWeight = FontWeight.Black, letterSpacing = 1.2.sp)
                     Text(if (isArabic) "شغّل عالمك. واكتشف أكثر." else "Play your world. Discover more.", color = Muted, fontSize = 11.sp)
                 }
-                Box(Modifier.size(48.dp).clip(RoundedCornerShape(17.dp)).background(Brush.linearGradient(listOf(Color(0xFF9B45F5), Color(0xFF326CE4), Color(0xFF32C9E8)))).border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(17.dp)), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(48.dp).clip(RoundedCornerShape(17.dp)).background(Brush.linearGradient(listOf(Color(0xFF238A78), Color(0xFF39BFA0), Color(0xFF8DE8C9)))).border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(17.dp)), contentAlignment = Alignment.Center) {
                     Icon(Icons.Rounded.PlayArrow, null, tint = Color.White, modifier = Modifier.size(34.dp))
                 }
                 Spacer(Modifier.width(5.dp))
@@ -1477,15 +1522,15 @@ private fun HomeScreen(
             Spacer(Modifier.height(19.dp))
             Box(
                 Modifier.fillMaxWidth().height(232.dp).clip(RoundedCornerShape(27.dp))
-                    .background(Brush.linearGradient(listOf(Color(0xFF37156D), Color(0xFF152A59), Color(0xFF073B52))))
+                    .background(Brush.linearGradient(listOf(Color(0xFF103C35), Color(0xFF14505A), Color(0xFF102D36))))
                     .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(27.dp))
             ) {
-                Box(Modifier.align(Alignment.TopEnd).offset(x = 40.dp, y = (-60).dp).size(190.dp).blur(55.dp).background(Color(0xFFB34DFF).copy(alpha = 0.45f), CircleShape))
-                Box(Modifier.align(Alignment.BottomStart).offset(x = (-50).dp, y = 55.dp).size(170.dp).blur(55.dp).background(Color(0xFF24BFEA).copy(alpha = 0.25f), CircleShape))
+                Box(Modifier.align(Alignment.TopEnd).offset(x = 40.dp, y = (-60).dp).size(190.dp).blur(55.dp).background(Color(0xFF65E2BC).copy(alpha = 0.34f), CircleShape))
+                Box(Modifier.align(Alignment.BottomStart).offset(x = (-50).dp, y = 55.dp).size(170.dp).blur(55.dp).background(Color(0xFF4DCDBB).copy(alpha = 0.22f), CircleShape))
                 if (featured != null) {
                     MediaArtwork(featured, Modifier.align(Alignment.CenterEnd).padding(end = 14.dp).size(148.dp).clip(RoundedCornerShape(23.dp)).border(1.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(23.dp)))
                 } else {
-                    Box(Modifier.align(Alignment.CenterEnd).padding(end = 20.dp).size(140.dp).clip(RoundedCornerShape(26.dp)).background(Brush.linearGradient(listOf(Color(0xFFAA4DFF), Color(0xFF347DEB)))), contentAlignment = Alignment.Center) {
+                    Box(Modifier.align(Alignment.CenterEnd).padding(end = 20.dp).size(140.dp).clip(RoundedCornerShape(26.dp)).background(Brush.linearGradient(listOf(Color(0xFF238A78), Color(0xFF45C7A5)))), contentAlignment = Alignment.Center) {
                         Icon(Icons.Rounded.GraphicEq, null, tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(78.dp))
                     }
                 }
@@ -1504,9 +1549,9 @@ private fun HomeScreen(
                         Modifier.clip(CircleShape).background(Color.White).clickable { if (featured != null) onPlay(featured) else navigate("Music") }.padding(horizontal = 13.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Rounded.PlayArrow, null, tint = Color(0xFF28104D), modifier = Modifier.size(16.dp))
+                        Icon(Icons.Rounded.PlayArrow, null, tint = Color(0xFF10372F), modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(4.dp))
-                        Text(if (isArabic) "ابدأ الاستماع" else "Start listening", color = Color(0xFF28104D), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text(if (isArabic) "ابدأ الاستماع" else "Start listening", color = Color(0xFF10372F), fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -1887,7 +1932,8 @@ private fun MediaScreen(
                                     )
                                     Spacer(Modifier.height(5.dp))
                                     Text(
-                                        formatDuration(item.durationMs),
+                                        if (language == "ar") "${formatDuration(item.durationMs)} · ${playCounts["play_count_audio_${item.id}"] ?: 0} تشغيل"
+                                        else "${formatDuration(item.durationMs)} · ${playCounts["play_count_audio_${item.id}"] ?: 0} plays",
                                         color = Muted.copy(alpha = 0.78f),
                                         fontSize = 10.sp
                                     )
@@ -2034,6 +2080,7 @@ private fun MediaArtwork(media: LocalMedia, modifier: Modifier = Modifier) {
 @Composable
 private fun NowPlayingScreen(
     modifier: Modifier, media: LocalMedia, controller: MediaController?, queue: List<LocalMedia>,
+    playCount: Int, trackListenSeconds: Long,
     sleepTimerMinutes: Int, onSleepTimerChange: (Int) -> Unit,
     onMoveQueueItem: (Int, Int) -> Unit, onRemoveQueueItem: (Int) -> Unit,
     onClearQueue: () -> Unit, onBack: () -> Unit, language: String = "en"
@@ -2049,10 +2096,6 @@ private fun NowPlayingScreen(
     var activePanel by remember { mutableStateOf("none") }
     var showRingtoneCutter by remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
-    val statsPrefs = remember(context) { context.getSharedPreferences("novra_preferences", android.content.Context.MODE_PRIVATE) }
-    val trackPlayCount = remember(media.id) {
-        statsPrefs.getInt("play_count_audio_${media.id}", 0)
-    }
     val lyricPrefs = remember(context) { context.getSharedPreferences("novra_lyrics", android.content.Context.MODE_PRIVATE) }
     var lyricsUri by remember(media.id) { mutableStateOf(lyricPrefs.getString("audio_${media.id}", null)?.let(Uri::parse)) }
     var lyricLines by remember(media.id) { mutableStateOf<List<LyricLine>>(emptyList()) }
@@ -2169,8 +2212,8 @@ private fun NowPlayingScreen(
                     Text(media.artist.ifBlank { if (language == "ar") "فنان غير معروف" else "Unknown artist" }, color = Color.White.copy(alpha = 0.68f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Spacer(Modifier.height(5.dp))
                     Text(
-                        if (language == "ar") "استمعتها $trackPlayCount مرة · المدة ${formatDuration(media.durationMs)}"
-                        else "Played $trackPlayCount times · ${formatDuration(media.durationMs)}",
+                        if (language == "ar") "استمعتها $playCount مرة · سمعت منها ${formatDuration(trackListenSeconds * 1000L)}"
+                        else "Played $playCount times · Listened ${formatDuration(trackListenSeconds * 1000L)}",
                         color = Color.White.copy(alpha = 0.58f), fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis
                     )
                 }
@@ -2371,10 +2414,31 @@ private fun SettingsScreen(
     wallpaperDim: Float, onWallpaperDimChange: (Float) -> Unit,
     audioOutputs: List<String>
 ) {
+    var settingsCategory by remember { mutableStateOf("Appearance") }
+    val settingsCategories = listOf("Appearance", "Audio", "Privacy", "Language", "Stats", "All")
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
         Spacer(Modifier.height(8.dp))
-        Text(if (language == "ar") "خصص Viora بالشكل اللي يناسبك." else "Make Viora feel like yours.", color = Muted, fontSize = 13.sp)
-        Spacer(Modifier.height(18.dp))
+        Text(if (language == "ar") "كل إعداد في مكانه. اختر القسم الذي تريد تخصيصه." else "Everything has its place. Choose what you want to customize.", color = Muted, fontSize = 13.sp)
+        Spacer(Modifier.height(13.dp))
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            settingsCategories.forEach { category ->
+                val label = if (language == "ar") when (category) {
+                    "Appearance" -> "المظهر"
+                    "Audio" -> "الصوت"
+                    "Privacy" -> "الخصوصية"
+                    "Language" -> "اللغة"
+                    "Stats" -> "الإحصائيات"
+                    else -> "الكل"
+                } else category
+                FilterChip(
+                    selected = settingsCategory == category,
+                    onClick = { settingsCategory = category },
+                    label = { Text(label, fontSize = 11.sp) }
+                )
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+        if (settingsCategory == "All" || settingsCategory == "Privacy") {
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Brush.linearGradient(listOf(CardBg, CardAlt.copy(alpha = 0.48f)))).border(1.dp, Color.White.copy(alpha = 0.055f), RoundedCornerShape(22.dp)).padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Rounded.Lock, null, tint = Accent, modifier = Modifier.size(22.dp))
@@ -2394,6 +2458,8 @@ private fun SettingsScreen(
                 TextButton(onClick = onChangePin) { Text(if (language == "ar") "تغيير الرمز" else "Change PIN") }
             }
         }
+        }
+        if (settingsCategory == "All" || settingsCategory == "Language") {
         Spacer(Modifier.height(24.dp))
         Text(if (language == "ar") "اللغة" else "LANGUAGE", color = Accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
         Spacer(Modifier.height(10.dp))
@@ -2404,6 +2470,8 @@ private fun SettingsScreen(
                 FilterChip(selected = language == "ar", onClick = { onLanguageChange("ar") }, label = { Text("العربية") })
             }
         }
+        }
+        if (settingsCategory == "All" || settingsCategory == "Audio") {
         Spacer(Modifier.height(18.dp))
         Text(if (language == "ar") "الصوت والأجهزة" else "AUDIO & DEVICES", color = Accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
         Spacer(Modifier.height(10.dp))
@@ -2437,6 +2505,8 @@ private fun SettingsScreen(
                 }
             }
         }
+        }
+        if (settingsCategory == "All" || settingsCategory == "Appearance") {
         Spacer(Modifier.height(18.dp))
         Text(if (language == "ar") "المظهر" else "APPEARANCE", color = Accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
         Spacer(Modifier.height(10.dp))
@@ -2501,6 +2571,8 @@ private fun SettingsScreen(
                 FilterChip(selected = cardStyle == "square", onClick = { onCardStyleChange("square") }, label = { Text(if (language == "ar") "مربع" else "Square") })
             }
         }
+        }
+        if (settingsCategory == "All" || settingsCategory == "Stats") {
         Spacer(Modifier.height(12.dp))
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(CardBg).padding(15.dp)) {
             Text(if (language == "ar") "إجمالي وقت التشغيل" else "Total playback time", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
@@ -2512,6 +2584,7 @@ private fun SettingsScreen(
                 else "Video picture-in-picture is available while music continues in the background.",
                 color = Muted, fontSize = 11.sp
             )
+        }
         }
         Spacer(Modifier.height(18.dp))
         Text(
