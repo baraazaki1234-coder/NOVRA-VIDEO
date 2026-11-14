@@ -1687,7 +1687,6 @@ private fun MediaScreen(
     var sortBy by remember { mutableStateOf("Default") }
     var selectedKeys by remember(type) { mutableStateOf<Set<String>>(emptySet()) }
     var playlistSelection by remember { mutableStateOf<List<LocalMedia>?>(null) }
-    val selectedItems = sortedMedia.filter { mediaKey(it) in selectedKeys }
     fun toggleSelection(item: LocalMedia) {
         val key = mediaKey(item)
         selectedKeys = if (key in selectedKeys) selectedKeys - key else selectedKeys + key
@@ -1737,6 +1736,7 @@ private fun MediaScreen(
                 .thenByDescending { playCounts["play_count_${if (it.first.isVideo) "video" else "audio"}_${it.first.id}"] ?: 0 }
         ).map { it.first }
     }
+    val selectedItems = sortedMedia.filter { mediaKey(it) in selectedKeys }
     Column(modifier.fillMaxSize().padding(horizontal = 18.dp)) {
         Spacer(Modifier.height(22.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -2036,7 +2036,6 @@ private fun MediaScreen(
                 }
             }
         }
-    }
         if (selectedItems.isNotEmpty()) {
             Surface(color = CardBg, shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
                 Column(Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
@@ -2055,6 +2054,7 @@ private fun MediaScreen(
                 }
             }
         }
+    }
     playlistSelection?.let { itemsToAdd ->
         AlertDialog(
             onDismissRequest = { playlistSelection = null },
