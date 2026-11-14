@@ -2147,27 +2147,6 @@ private fun NowPlayingScreen(
                 Text("-${formatDuration((playbackDuration-playbackPosition).toLong().coerceAtLeast(0L))}", color = Color.White.copy(alpha = 0.7f), fontSize = 10.sp)
             }
             Spacer(Modifier.height(12.dp))
-            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Color.White.copy(alpha = 0.085f)).border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(20.dp)).padding(horizontal = 15.dp, vertical = 12.dp)) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(if (language == "ar") "كلمات الأغنية" else "LYRICS", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
-                        Text(if (lyricLines.isEmpty()) { if (language == "ar") "أضف ملف كلمات LRC متزامن" else "Add a synced LRC lyrics file" } else "${lyricLines.size} lines", color = Color.White.copy(alpha = 0.58f), fontSize = 10.sp)
-                    }
-                    TextButton(onClick = { lyricsPicker.launch(arrayOf("text/plain", "application/octet-stream", "*/*")) }) {
-                        Icon(Icons.Rounded.Subtitles, null, tint = Color.White); Spacer(Modifier.width(4.dp))
-                        Text(if (language == "ar") "استيراد" else "Import", color = Color.White, fontSize = 11.sp)
-                    }
-                }
-                if (lyricLines.isNotEmpty()) {
-                    val active = lyricLines.indexOfLast { it.timeMs <= playbackPosition.toLong() }.coerceAtLeast(0)
-                    lyricLines.slice(maxOf(0, active-1)..minOf(lyricLines.lastIndex, active+2)).forEachIndexed { i, line ->
-                        val index = maxOf(0, active-1)+i
-                        Text(line.text, color = if (index == active) Color.White else Color.White.copy(alpha = 0.52f),
-                            fontSize = if (index == active) 16.sp else 13.sp, fontWeight = if (index == active) FontWeight.Bold else FontWeight.Medium,
-                            modifier = Modifier.fillMaxWidth().clickable { controller?.seekTo(line.timeMs) }.padding(vertical = 5.dp))
-                    }
-                } else Text(if (language == "ar") "الكلمات المتزامنة هتظهر هنا أثناء التشغيل." else "Synced lyrics appear here while the song plays.", color = Color.White.copy(alpha = 0.48f), fontSize = 11.sp, modifier = Modifier.padding(top = 7.dp))
-            }
             Spacer(Modifier.height(18.dp))
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
