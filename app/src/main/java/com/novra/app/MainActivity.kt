@@ -13,6 +13,7 @@ import android.database.ContentObserver
 import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
+import android.provider.OpenableColumns
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.webkit.WebChromeClient
@@ -1623,6 +1624,59 @@ private fun MediaScreen(
     language: String = "en",
     onNavigate: (String) -> Unit = {}
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val importPrefs = remember(context, type) { context.getSharedPreferences("viora_imports", android.content.Context.MODE_PRIVATE) }
+    fun importedItem(uri: Uri): LocalMedia {
+        val isVideoFile = type == "Videos"
+        val retriever = MediaMetadataRetriever()
+        val metadata = runCatching {
+            retriever.setDataSource(context, uri)
+            Triple(
+                retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE).orEmpty(),
+                retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST).orEmpty(),
+                retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+            )
+        }.getOrDefault(Triple("", "", 0L))
+        runCatching { retriever.release() }
+        val displayNameAndSize = runCatching {
+            context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
+                    (if (nameIndex >= 0) cursor.getString(nameIndex).orEmpty() else "") to
+                        (if (sizeIndex >= 0 && !cursor.isNull(sizeIndex)) cursor.getLong(sizeIndex) else 0L)
+                } else "" to 0L
+            } ?: ("" to 0L)
+        }.getOrDefault("" to 0L)
+        val fallbackName = displayNameAndSize.first.substringBeforeLast('.').ifBlank { if (language == "ar") "ملف مستورد" else "Imported media" }
+        val stableId = -((uri.toString().hashCode().toLong() and 0x7fffffffL) + 1L)
+        return LocalMedia(
+            id = stableId, uri = uri,
+            title = metadata.first.ifBlank { fallbackName },
+            artist = metadata.second,
+            durationMs = metadata.third,
+            sizeBytes = displayNameAndSize.second,
+            isVideo = isVideoFile,
+            dateAddedSeconds = System.currentTimeMillis() / 1000L
+        )
+    }
+    var importedMedia by remember(type) {
+        mutableStateOf(
+            importPrefs.getStringSet("uris_$type", emptySet()).orEmpty().mapNotNull { value ->
+                runCatching { importedItem(Uri.parse(value)) }.getOrNull()
+            }
+        )
+    }
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        if (uris.isNotEmpty()) {
+            uris.forEach { uri ->
+                runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+            }
+            importedMedia = (importedMedia + uris.map(::importedItem)).distinctBy { it.uri.toString() }
+            importPrefs.edit().putStringSet("uris_$type", importedMedia.map { it.uri.toString() }.toSet()).apply()
+        }
+    }
+    val allMedia = remember(media, importedMedia) { (media + importedMedia).distinctBy { mediaKey(it) } }
     var query by remember { mutableStateOf("") }
     var searchExpanded by remember(type) { mutableStateOf(false) }
     var sortMenuExpanded by remember { mutableStateOf(false) }
@@ -1630,7 +1684,7 @@ private fun MediaScreen(
     var mediaFilter by remember(type) { mutableStateOf(if (type == "Favorites") "Favorites" else "All") }
     var smartFolder by remember(type) { mutableStateOf("All") }
     val nowSeconds = System.currentTimeMillis() / 1000L
-    val ranked = media.mapNotNull { item ->
+    val ranked = allMedia.mapNotNull { item ->
         mediaSearchScore(item, query)?.let { item to it }
     }.filter { mediaFilter != "Favorites" || mediaKey(it.first) in favorites }
         .filter { pair ->
@@ -1662,6 +1716,11 @@ private fun MediaScreen(
             if (type == "Music") {
                 IconButton(onClick = { searchExpanded = !searchExpanded; if (!searchExpanded) query = "" }) {
                     Icon(if (searchExpanded) Icons.Rounded.Close else Icons.Rounded.Search, if (language == "ar") "بحث" else "Search", tint = TextPrimary)
+                }
+            }
+            if (type == "Music" || type == "Videos") {
+                IconButton(onClick = { importLauncher.launch(arrayOf(if (type == "Music") "audio/*" else "video/*")) }) {
+                    Icon(Icons.Rounded.Add, if (language == "ar") "استيراد ملفات" else "Import files", tint = Accent)
                 }
             }
             Box {
