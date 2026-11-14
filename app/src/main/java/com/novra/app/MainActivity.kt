@@ -1010,7 +1010,7 @@ private fun NovraApp() {
                                     track to (playCounts[key] ?: 0)
                                 }.filter { it.second > 0 }.sortedByDescending { it.second }.take(5),
                                 navigate = ::navigateTo,
-                                onPlay = { startMedia(it, tracks) }, language = language
+                                onPlay = { startMedia(it, (tracks + importedTracks).distinctBy { mediaKey(it) }) }, language = language
                             )
                             "Videos" -> MediaScreen(
                                 Modifier.padding(padding), "Videos", (videos + importedVideos).distinctBy { mediaKey(it) }, loading, hasVideoAccess,
