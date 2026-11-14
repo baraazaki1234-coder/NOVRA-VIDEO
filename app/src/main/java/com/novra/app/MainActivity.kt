@@ -1392,7 +1392,12 @@ private fun VideoNowPlayingScreen(
                 val rebuiltItems = activeQueue.mapIndexed { index, entry ->
                     val builder = MediaItem.Builder()
                         .setUri(entry.uri)
-                        .setMediaMetadata(MediaMetadata.Builder().setTitle(entry.title).setDisplayTitle(entry.title).setArtist(entry.artist).setDurationMs(entry.durationMs.coerceAtLeast(0L)).apply { if (!entry.isVideo && entry.albumId >= 0L) setArtworkUri(Uri.parse("content://media/external/audio/albumart/${entry.albumId}")) }.build())
+                        .setMediaMetadata(MediaMetadata.Builder().setTitle(entry.title).setDisplayTitle(entry.title).setArtist(entry.artist).setDurationMs(entry.durationMs.coerceAtLeast(0L)).apply {
+                            if (!entry.isVideo) {
+                                if (entry.artworkUri != null) setArtworkUri(entry.artworkUri)
+                                else if (entry.albumId >= 0L) setArtworkUri(Uri.parse("content://media/external/audio/albumart/${entry.albumId}"))
+                            }
+                        }.build())
                     if (index == activeIndex) builder.setSubtitleConfigurations(listOf(subtitle))
                     builder.build()
                 }
