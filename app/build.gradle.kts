@@ -1,3 +1,8 @@
+val releaseStoreFile = System.getenv("VIORA_KEYSTORE")
+val releaseStorePassword = System.getenv("VIORA_STORE_PASSWORD")
+val releaseKeyAlias = System.getenv("VIORA_KEY_ALIAS")
+val releaseKeyPassword = System.getenv("VIORA_KEY_PASSWORD")
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -12,8 +17,28 @@ android {
         applicationId = "com.novra.media"
         minSdk = 26
         targetSdk = 36
-        versionCode = 10
-        versionName = "1.0.10"
+        versionCode = 11
+        versionName = "1.0.11"
+    }
+
+    signingConfigs {
+        create("release") {
+            if (!releaseStoreFile.isNullOrBlank()) {
+                storeFile = file(releaseStoreFile)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
+    buildTypes {
+        getByName("release") {
+            isMinifyEnabled = false
+            if (!releaseStoreFile.isNullOrBlank()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
     }
 
     buildFeatures { compose = true }
