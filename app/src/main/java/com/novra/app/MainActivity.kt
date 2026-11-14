@@ -815,6 +815,7 @@ private fun NovraApp() {
                     Scaffold(
                         containerColor = if (wallpaperUri != null) Color.Transparent else AppBg,
                         topBar = {
+                            if (!showNowPlaying) {
                             Column(
                                 Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(CardBg.copy(alpha = 0.94f), AppBg.copy(alpha = 0.90f))))
                             ) {
@@ -868,6 +869,7 @@ private fun NovraApp() {
                                     }
                                 }
 
+                            }
                             }
                         },
                         bottomBar = {
@@ -1683,9 +1685,6 @@ private fun MediaScreen(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(if (language == "ar") when (type) { "Videos" -> "الفيديوهات"; "Music" -> "الأغاني"; else -> "المفضلة" } else if (type == "Music") "Songs" else type, color = TextPrimary, fontSize = 27.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
             if (type == "Music") {
-                IconButton(onClick = { onNavigate("Settings") }) {
-                    Icon(Icons.Rounded.Settings, if (language == "ar") "الإعدادات" else "Settings", tint = Muted)
-                }
                 IconButton(onClick = { searchExpanded = !searchExpanded; if (!searchExpanded) query = "" }) {
                     Icon(if (searchExpanded) Icons.Rounded.Close else Icons.Rounded.Search, if (language == "ar") "بحث" else "Search", tint = TextPrimary)
                 }
@@ -2144,18 +2143,17 @@ private fun NowPlayingScreen(
                 modifier = Modifier.fillMaxSize().graphicsLayer(scaleX = 1.16f, scaleY = 1.16f).blur(58.dp), contentScale = ContentScale.Crop)
         } else Box(Modifier.fillMaxSize().background(artworkTint.copy(alpha = 0.35f)))
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.50f), Color.Black.copy(alpha = 0.83f), Color.Black.copy(alpha = 0.96f)))))
-        Box(Modifier.align(Alignment.TopCenter).offset(y = (-70).dp).size(330.dp).blur(90.dp).background(artworkTint.copy(alpha = 0.42f), CircleShape))
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
-            Spacer(Modifier.height(2.dp))
+            Spacer(Modifier.height(0.dp))
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onBack) { Icon(Icons.Rounded.KeyboardArrowDown, "Back", tint = Color.White, modifier = Modifier.size(30.dp)) }
+                IconButton(onClick = onBack) { Icon(Icons.Rounded.ArrowBack, "Back", tint = Color.White, modifier = Modifier.size(24.dp)) }
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(if (language == "ar") "يعمل الآن" else "NOW PLAYING", color = Color.White.copy(alpha = 0.8f), fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
                     Text(if (language == "ar") "من مكتبتك" else "FROM YOUR LIBRARY", color = Color.White.copy(alpha = 0.55f), fontSize = 9.sp)
                 }
                 Spacer(Modifier.width(48.dp))
             }
-            Spacer(Modifier.height(7.dp))
+            Spacer(Modifier.height(1.dp))
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Box(
                     Modifier.fillMaxWidth(0.82f).aspectRatio(1f)
@@ -2205,7 +2203,7 @@ private fun NowPlayingScreen(
                     MediaArtwork(media, Modifier.fillMaxSize().clip(RoundedCornerShape(26.dp)))
                 }
             }
-            Spacer(Modifier.height(22.dp))
+            Spacer(Modifier.height(15.dp))
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(media.title, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -2256,18 +2254,6 @@ private fun NowPlayingScreen(
                 Row(Modifier.fillMaxWidth().padding(top = 5.dp), verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = { activePanel = "tools" }) {
                         Icon(Icons.Rounded.Tune, if (language == "ar") "إعدادات الصوت" else "Audio settings", tint = Color.White.copy(alpha = 0.72f))
-                    }
-                    Spacer(Modifier.weight(1f))
-                    Surface(
-                        color = Color.White.copy(alpha = 0.10f),
-                        shape = CircleShape,
-                        modifier = Modifier.clickable { activePanel = "queue" }
-                    ) {
-                        Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Rounded.QueueMusic, null, tint = Color.White, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text(if (language == "ar") "قائمة التشغيل" else "UP NEXT", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-                        }
                     }
                     Spacer(Modifier.weight(1f))
                     IconButton(onClick = { activePanel = "lyrics" }) {
