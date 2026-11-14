@@ -13,10 +13,6 @@ import android.database.ContentObserver
 import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
-import android.provider.OpenableColumns
-import android.webkit.WebView
-import android.webkit.WebViewClient
-import android.webkit.WebChromeClient
 import android.media.MediaMetadataRetriever
 import android.media.AudioManager
 import android.media.AudioDeviceCallback
