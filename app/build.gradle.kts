@@ -1,13 +1,14 @@
-val releaseStoreFile = System.getenv("VIORA_KEYSTORE")
-val releaseStorePassword = System.getenv("VIORA_STORE_PASSWORD")
-val releaseKeyAlias = System.getenv("VIORA_KEY_ALIAS")
-val releaseKeyPassword = System.getenv("VIORA_KEY_PASSWORD")
-
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
+
+val releaseStoreFile = System.getenv("VIORA_KEYSTORE")
+val releaseStorePassword = System.getenv("VIORA_STORE_PASSWORD")
+val releaseKeyAlias = System.getenv("VIORA_KEY_ALIAS")
+val releaseKeyPassword = System.getenv("VIORA_KEY_PASSWORD")
+
 
 android {
     namespace = "com.novra.app"
