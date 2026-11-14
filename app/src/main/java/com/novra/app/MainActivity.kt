@@ -1734,7 +1734,7 @@ private fun MediaScreen(
     language: String = "en",
     onNavigate: (String) -> Unit = {},
     playlists: List<UserPlaylist> = emptyList(),
-    onAddToPlaylist: (String, LocalMedia) -> Unit = {},
+    onAddToPlaylist: (String, LocalMedia) -> Unit = { _, _ -> },
     onDelete: (List<LocalMedia>) -> Unit = {},
     hiddenKeys: Set<String> = emptySet(),
     onHide: (List<LocalMedia>) -> Unit = {},
@@ -1757,13 +1757,13 @@ private fun MediaScreen(
         if (items.isEmpty()) return
         val sendIntent = if (items.size == 1) {
             Intent(Intent.ACTION_SEND).apply {
-                type = if (items.first().isVideo) "video/*" else "audio/*"
+                setType(if (items.first().isVideo) "video/*" else "audio/*")
                 putExtra(Intent.EXTRA_STREAM, items.first().uri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
         } else {
             Intent(Intent.ACTION_SEND_MULTIPLE).apply {
-                type = "*/*"
+                setType("*/*")
                 putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(items.map { it.uri }))
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
@@ -2532,7 +2532,6 @@ private fun NowPlayingScreen(
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 listOf(15,30,45,60).forEach { m -> FilterChip(selected = sleepTimerMinutes == m, onClick = { onSleepTimerChange(m) }, label = { Text("${m}m") }) }
             }
-            if (controller != null) { Spacer(Modifier.height(16.dp)); EqualizerPanel(controller = controller, language = language) }
             OutlinedButton(onClick = { showRingtoneCutter = true }, modifier = Modifier.fillMaxWidth()) {
                 Icon(Icons.Rounded.ContentCut, null)
                 Spacer(Modifier.width(8.dp))
