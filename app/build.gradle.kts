@@ -12,8 +12,8 @@ android {
         applicationId = "com.novra.media"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4
-        versionName = "1.0.4"
+        versionCode = 5
+        versionName = "1.0.5"
     }
 
     buildFeatures { compose = true }
