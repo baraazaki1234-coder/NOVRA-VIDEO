@@ -388,6 +388,17 @@ private fun NovraApp() {
     var favorites by remember {
         mutableStateOf(prefs.getStringSet("favorite_media", emptySet())?.toSet() ?: emptySet())
     }
+    var hiddenMediaKeys by remember {
+        mutableStateOf(prefs.getStringSet("hidden_media_keys", emptySet())?.toSet() ?: emptySet())
+    }
+    fun hideMedia(items: List<LocalMedia>) {
+        hiddenMediaKeys = hiddenMediaKeys + items.map(::mediaKey)
+        prefs.edit().putStringSet("hidden_media_keys", hiddenMediaKeys).apply()
+    }
+    fun restoreHiddenMedia() {
+        hiddenMediaKeys = emptySet()
+        prefs.edit().remove("hidden_media_keys").apply()
+    }
     fun toggleFavorite(item: LocalMedia) {
         val key = mediaKey(item)
         favorites = if (key in favorites) favorites - key else favorites + key
@@ -992,7 +1003,9 @@ private fun NovraApp() {
                                         else playlist
                                     })
                                 },
-                                onDelete = ::requestMediaDelete
+                                onDelete = ::requestMediaDelete,
+                                hiddenKeys = hiddenMediaKeys,
+                                onHide = ::hideMedia
                             )
                             "Music" -> MediaScreen(
                                 Modifier.padding(padding), "Music", tracks, loading, hasAudioAccess,
@@ -1079,7 +1092,9 @@ private fun NovraApp() {
                                  onLanguageChange = { language = it; prefs.edit().putString("language", it).apply() },
                                  wallpaperDim = wallpaperDim,
                                  onWallpaperDimChange = { wallpaperDim = it; prefs.edit().putFloat("wallpaper_dim", it).apply() },
-                                 audioOutputs = audioOutputs
+                                 audioOutputs = audioOutputs,
+                                 hiddenMediaCount = hiddenMediaKeys.size,
+                                 onRestoreHidden = ::restoreHiddenMedia
                             )
                         }
                         }
@@ -1679,7 +1694,9 @@ private fun MediaScreen(
     onNavigate: (String) -> Unit = {},
     playlists: List<UserPlaylist> = emptyList(),
     onAddToPlaylist: (String, LocalMedia) -> Unit = {},
-    onDelete: (List<LocalMedia>) -> Unit = {}
+    onDelete: (List<LocalMedia>) -> Unit = {},
+    hiddenKeys: Set<String> = emptySet(),
+    onHide: (List<LocalMedia>) -> Unit = {}
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val importPrefs = remember(context, type) { context.getSharedPreferences("viora_imports", android.content.Context.MODE_PRIVATE) }
@@ -1766,7 +1783,8 @@ private fun MediaScreen(
     val nowSeconds = System.currentTimeMillis() / 1000L
     val ranked = allMedia.mapNotNull { item ->
         mediaSearchScore(item, query)?.let { item to it }
-    }.filter { mediaFilter != "Favorites" || mediaKey(it.first) in favorites }
+    }.filter { mediaKey(it.first) !in hiddenKeys }
+        .filter { mediaFilter != "Favorites" || mediaKey(it.first) in favorites }
         .filter { pair ->
             val item = pair.first
             when (smartFolder) {
@@ -2102,7 +2120,17 @@ private fun MediaScreen(
                         TextButton(onClick = { selectedItems.forEach(onAddToQueue); selectedKeys = emptySet() }) { Icon(Icons.Rounded.QueueMusic, null); Text(if (language == "ar") "الطابور" else "Queue") }
                         TextButton(onClick = { playlistSelection = selectedItems }) { Icon(Icons.Rounded.PlaylistAdd, null); Text(if (language == "ar") "قائمة" else "Playlist") }
                         TextButton(onClick = { shareItems(selectedItems) }) { Icon(Icons.Rounded.Share, null); Text(if (language == "ar") "مشاركة" else "Share") }
-                        TextButton(onClick = { onDelete(selectedItems); selectedKeys = emptySet() }) { Icon(Icons.Rounded.DeleteOutline, null, tint = MaterialTheme.colorScheme.error); Text(if (language == "ar") "حذف" else "Delete") }
+                        TextButton(onClick = {
+                            val deviceMedia = selectedItems.filter { it.uri.authority == "media" }
+                            val importedUris = selectedItems.filterNot { it.uri.authority == "media" }.map { it.uri.toString() }.toSet()
+                            if (deviceMedia.isNotEmpty()) onDelete(deviceMedia)
+                            if (importedUris.isNotEmpty()) {
+                                importedMedia = importedMedia.filterNot { it.uri.toString() in importedUris }
+                                importPrefs.edit().putStringSet("uris_$type", importedMedia.map { it.uri.toString() }.toSet()).apply()
+                            }
+                            selectedKeys = emptySet()
+                        }) { Icon(Icons.Rounded.DeleteOutline, null, tint = MaterialTheme.colorScheme.error); Text(if (language == "ar") "حذف" else "Delete") }
+                        TextButton(onClick = { onHide(selectedItems); selectedKeys = emptySet() }) { Icon(Icons.Rounded.VisibilityOff, null); Text(if (language == "ar") "إخفاء" else "Hide") }
                     }
                 }
             }
@@ -2568,11 +2596,13 @@ private fun SettingsScreen(
     pinEnabled: Boolean, onEnablePin: () -> Unit, onChangePin: () -> Unit, onDisablePin: () -> Unit,
     language: String, onLanguageChange: (String) -> Unit,
     wallpaperDim: Float, onWallpaperDimChange: (Float) -> Unit,
-    audioOutputs: List<String>
+    audioOutputs: List<String>,
+    hiddenMediaCount: Int = 0,
+    onRestoreHidden: () -> Unit = {}
 ) {
     var settingsCategory by remember { mutableStateOf("All") }
     var showAccentPicker by remember { mutableStateOf(false) }
-    val settingsCategories = listOf("Appearance", "Audio", "Privacy", "Language", "Stats", "All")
+    val settingsCategories = listOf("All", "Appearance", "Audio", "Privacy", "Language", "Stats")
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
         Spacer(Modifier.height(8.dp))
         Text(if (language == "ar") "كل إعداد في مكانه. اختر القسم الذي تريد تخصيصه." else "Everything has its place. Choose what you want to customize.", color = Muted, fontSize = 13.sp)
@@ -2613,6 +2643,16 @@ private fun SettingsScreen(
             }
             if (pinEnabled) {
                 TextButton(onClick = onChangePin) { Text(if (language == "ar") "تغيير الرمز" else "Change PIN") }
+            }
+            if (hiddenMediaCount > 0) {
+                HorizontalDivider(color = CardAlt)
+                Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(if (language == "ar") "الوسائط المخفية" else "Hidden media", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Text(if (language == "ar") "$hiddenMediaCount عنصر مخفي" else "$hiddenMediaCount hidden items", color = Muted, fontSize = 10.sp)
+                    }
+                    TextButton(onClick = onRestoreHidden) { Text(if (language == "ar") "إظهار الكل" else "Restore all") }
+                }
             }
         }
         }
