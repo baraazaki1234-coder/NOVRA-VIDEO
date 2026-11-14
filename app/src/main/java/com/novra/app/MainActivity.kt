@@ -827,14 +827,14 @@ private fun NovraApp() {
                                         IconButton(onClick = { showNowPlaying = false }) {
                                             Icon(Icons.Rounded.ArrowBack, contentDescription = "Back", tint = TextPrimary)
                                         }
-                                    } else {
+                                    } else if (selected == "Home") {
                                         Box(
-                                            Modifier.size(42.dp).clip(RoundedCornerShape(15.dp))
+                                            Modifier.size(34.dp).clip(RoundedCornerShape(12.dp))
                                                 .background(Brush.linearGradient(listOf(Color(0xFF238A78), Color(0xFF39BFA0), Color(0xFF8DE8C9))))
-                                                .border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(15.dp)),
+                                                .border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(12.dp)),
                                             contentAlignment = Alignment.Center
                                         ) {
-                                            Text("V", color = Color.White, fontSize = 27.sp, fontWeight = FontWeight.Black, letterSpacing = (-2).sp)
+                                            Text("V", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Black, letterSpacing = (-2).sp)
                                             Icon(Icons.Rounded.PlayArrow, contentDescription = "Viora", tint = Color.White.copy(alpha = 0.95f), modifier = Modifier.size(15.dp).align(Alignment.BottomEnd).padding(end = 3.dp, bottom = 3.dp))
                                         }
                                     }
@@ -1491,39 +1491,12 @@ private fun HomeScreen(
             Spacer(Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(if (isArabic) "أهلاً بك في" else "WELCOME TO", color = Muted, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
-                    Text("Viora", color = TextPrimary, fontSize = 30.sp, fontWeight = FontWeight.Black, letterSpacing = 1.2.sp)
-                    Text(if (isArabic) "شغّل عالمك. واكتشف أكثر." else "Play your world. Discover more.", color = Muted, fontSize = 11.sp)
+                    Text(if (isArabic) "أهلاً بك في Viora" else "WELCOME TO VIORA", color = TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.2.sp)
                 }
-                Box(Modifier.size(48.dp).clip(RoundedCornerShape(17.dp)).background(Brush.linearGradient(listOf(Color(0xFF238A78), Color(0xFF39BFA0), Color(0xFF8DE8C9)))).border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(17.dp)), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Rounded.PlayArrow, null, tint = Color.White, modifier = Modifier.size(34.dp))
-                }
-                Spacer(Modifier.width(5.dp))
                 IconButton(onClick = { navigate("Settings") }) { Icon(Icons.Rounded.Settings, if (isArabic) "الإعدادات" else "Settings", tint = Muted) }
                 IconButton(onClick = { navigate("Explore") }) { Icon(Icons.Rounded.Search, if (isArabic) "بحث" else "Search", tint = TextPrimary) }
             }
-            Spacer(Modifier.height(18.dp))
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(
-                    Triple("Home", if (isArabic) "الكل" else "For you", Icons.Rounded.AutoAwesome),
-                    Triple("Music", if (isArabic) "موسيقى" else "Music", Icons.Rounded.MusicNote),
-                    Triple("Videos", if (isArabic) "فيديو" else "Videos", Icons.Rounded.OndemandVideo),
-                    Triple("Playlists", if (isArabic) "قوائم التشغيل" else "Playlists", Icons.Rounded.QueueMusic)
-                ).forEach { item ->
-                    Surface(
-                        color = if (item.first == "Home") Accent else CardBg,
-                        shape = CircleShape,
-                        modifier = Modifier.clickable { if (item.first != "Home") navigate(item.first) }
-                    ) {
-                        Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(item.third, null, tint = if (item.first == "Home") AppBg else Muted, modifier = Modifier.size(15.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text(item.second, color = if (item.first == "Home") AppBg else TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                        }
-                    }
-                }
-            }
-            Spacer(Modifier.height(19.dp))
+            Spacer(Modifier.height(13.dp))
             Box(
                 Modifier.fillMaxWidth().height(232.dp).clip(RoundedCornerShape(27.dp))
                     .background(Brush.linearGradient(listOf(Color(0xFF103C35), Color(0xFF14505A), Color(0xFF102D36))))
@@ -2402,7 +2375,8 @@ private fun SettingsScreen(
     wallpaperDim: Float, onWallpaperDimChange: (Float) -> Unit,
     audioOutputs: List<String>
 ) {
-    var settingsCategory by remember { mutableStateOf("Appearance") }
+    var settingsCategory by remember { mutableStateOf("All") }
+    var showAccentPicker by remember { mutableStateOf(false) }
     val settingsCategories = listOf("Appearance", "Audio", "Privacy", "Language", "Stats", "All")
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
         Spacer(Modifier.height(8.dp))
@@ -2516,9 +2490,31 @@ private fun SettingsScreen(
             HorizontalDivider(color = CardAlt)
             Text(if (language == "ar") "اللون الأساسي" else "Accent color", color = TextPrimary, fontSize = 13.sp)
             Spacer(Modifier.height(6.dp))
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                listOf("mint" to "Mint", "ocean" to "Ocean", "violet" to "Violet", "rose" to "Rose", "amber" to "Amber", "cyan" to "Cyan", "indigo" to "Indigo", "orange" to "Orange").forEach { (key, label) ->
-                    FilterChip(selected = accentName == key, onClick = { onAccentChange(key) }, label = { Text(label, fontSize = 10.sp) })
+            val accentChoices = listOf(
+                "mint" to ("Mint" to Color(0xFF6EE7B7)),
+                "ocean" to ("Ocean" to Color(0xFF7DD3FC)),
+                "violet" to ("Violet" to Color(0xFFC18BFF)),
+                "rose" to ("Rose" to Color(0xFFFDA4AF)),
+                "amber" to ("Amber" to Color(0xFFFCD34D)),
+                "cyan" to ("Cyan" to Color(0xFF67E8F9)),
+                "indigo" to ("Indigo" to Color(0xFFA5B4FC)),
+                "orange" to ("Orange" to Color(0xFFFDBA74))
+            )
+            Surface(
+                onClick = { showAccentPicker = true },
+                shape = RoundedCornerShape(14.dp),
+                color = CardAlt,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(Modifier.padding(13.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(25.dp).clip(CircleShape).background(accentChoices.firstOrNull { it.first == accentName }?.second?.second ?: Accent))
+                    Spacer(Modifier.width(11.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(if (language == "ar") "اللون الحالي" else "Current accent", color = Muted, fontSize = 10.sp)
+                        Text(accentChoices.firstOrNull { it.first == accentName }?.second?.first ?: "Mint", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                    Icon(Icons.Rounded.Palette, null, tint = Accent)
+                    Icon(Icons.Rounded.ChevronRight, null, tint = Muted)
                 }
             }
         }
@@ -2576,12 +2572,45 @@ private fun SettingsScreen(
         }
         Spacer(Modifier.height(18.dp))
         Text(
-            if (language == "ar") "Viora — صوتك، على طريقتك." else "Viora — your sound, your way.",
+            if (language == "ar") "تم تصميم وتطوير التطبيق من قبل فريق Novra" else "Designed and developed by the Novra team",
             color = Muted.copy(alpha = 0.72f), fontSize = 10.sp,
             modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
             textAlign = androidx.compose.ui.text.style.TextAlign.Center
         )
         Spacer(Modifier.height(20.dp))
+    }
+    if (showAccentPicker) {
+        AlertDialog(
+            onDismissRequest = { showAccentPicker = false },
+            title = { Text(if (language == "ar") "اختر اللون الأساسي" else "Choose accent color") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    accentChoices.chunked(2).forEach { pair ->
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            pair.forEach { (key, choice) ->
+                                val (label, color) = choice
+                                Surface(
+                                    onClick = { onAccentChange(key); showAccentPicker = false },
+                                    shape = RoundedCornerShape(13.dp),
+                                    color = if (accentName == key) color.copy(alpha = 0.20f) else CardAlt,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Row(Modifier.padding(11.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Box(Modifier.size(22.dp).clip(CircleShape).background(color))
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(if (language == "ar") when(key) { "mint" -> "نعناعي"; "ocean" -> "محيطي"; "violet" -> "بنفسجي"; "rose" -> "وردي"; "amber" -> "عنبر"; "cyan" -> "سماوي"; "indigo" -> "نيلي"; else -> "برتقالي" } else label, color = TextPrimary, fontSize = 11.sp, fontWeight = if (accentName == key) FontWeight.Bold else FontWeight.Medium)
+                                        if (accentName == key) Spacer(Modifier.weight(1f))
+                                        if (accentName == key) Icon(Icons.Rounded.Check, null, tint = Accent, modifier = Modifier.size(16.dp))
+                                    }
+                                }
+                            }
+                            if (pair.size == 1) Spacer(Modifier.weight(1f))
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { showAccentPicker = false }) { Text(if (language == "ar") "إغلاق" else "Close") } }
+        )
     }
 }
 
