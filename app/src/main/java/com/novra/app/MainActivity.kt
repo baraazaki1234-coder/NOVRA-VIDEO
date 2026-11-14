@@ -2386,7 +2386,7 @@ private fun NowPlayingScreen(
 }
 
 private fun dominantArtworkColor(bitmap: Bitmap?): Color {
-    if (bitmap == null || bitmap.width == 0 || bitmap.height == 0) return Color(0xFF7663B5)
+    if (bitmap == null || bitmap.width == 0 || bitmap.height == 0) return Color(0xFF2E9C83)
     var r = 0L; var g = 0L; var b = 0L; var count = 0L
     val sx = (bitmap.width / 28).coerceAtLeast(1); val sy = (bitmap.height / 28).coerceAtLeast(1)
     for (y in 0 until bitmap.height step sy) for (x in 0 until bitmap.width step sx) {
@@ -2397,7 +2397,7 @@ private fun dominantArtworkColor(bitmap: Bitmap?): Color {
         if (hsv[1] < 0.18f || hsv[2] < 0.16f || hsv[2] > 0.96f) continue
         r += rr; g += gg; b += bb; count++
     }
-    if (count == 0L) return Color(0xFF7663B5)
+    if (count == 0L) return Color(0xFF2E9C83)
     val hsv = FloatArray(3)
     android.graphics.Color.RGBToHSV((r/count).toInt(),(g/count).toInt(),(b/count).toInt(),hsv)
     hsv[1] = (hsv[1]*1.16f).coerceIn(0.25f,0.78f); hsv[2] = (hsv[2]*0.78f).coerceIn(0.28f,0.72f)
@@ -2588,7 +2588,7 @@ private fun SettingsScreen(
         }
         Spacer(Modifier.height(18.dp))
         Text(
-            if (language == "ar") "تم التصميم والتطوير بواسطة فريق Novra" else "Designed and developed by the Novra team",
+            if (language == "ar") "Viora — صوتك، على طريقتك." else "Viora — your sound, your way.",
             color = Muted.copy(alpha = 0.72f), fontSize = 10.sp,
             modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
             textAlign = androidx.compose.ui.text.style.TextAlign.Center
