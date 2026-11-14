@@ -908,7 +908,8 @@ private fun NovraApp() {
                                 onPlay = { item -> startMedia(item, tracks) },
                                 onAddToQueue = ::enqueueMedia,
                                 onPlayNext = ::playNextMedia,
-                                language = language
+                                language = language,
+                                onNavigate = ::navigateTo
                             )
                             "Explore" -> OnlineSearchScreen(language = language)
                             "Favorites" -> MediaScreen(
@@ -1592,7 +1593,8 @@ private fun MediaScreen(
     onToggleFavorite: (LocalMedia) -> Unit, onPlay: (LocalMedia) -> Unit,
     onAddToQueue: (LocalMedia) -> Unit = {},
     onPlayNext: (LocalMedia) -> Unit = {},
-    language: String = "en"
+    language: String = "en",
+    onNavigate: (String) -> Unit = {}
 ) {
     var query by remember { mutableStateOf("") }
     var sortMenuExpanded by remember { mutableStateOf(false) }
@@ -1648,7 +1650,31 @@ private fun MediaScreen(
             },
             color = Muted, fontSize = 12.sp
         )
-        Spacer(Modifier.height(17.dp))
+        if (type == "Music") {
+            Spacer(Modifier.height(15.dp))
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(
+                    Triple("Videos", if (language == "ar") "فيديوهات" else "Videos", Icons.Rounded.OndemandVideo),
+                    Triple("Music", if (language == "ar") "أغاني" else "Songs", Icons.Rounded.MusicNote),
+                    Triple("Playlists", if (language == "ar") "قوائم التشغيل" else "Playlists", Icons.Rounded.QueueMusic),
+                    Triple("Favorites", if (language == "ar") "المفضلة" else "Favorites", Icons.Rounded.Favorite)
+                ).forEach { tab ->
+                    val active = tab.first == "Music"
+                    Surface(
+                        color = if (active) Accent else CardBg,
+                        shape = CircleShape,
+                        modifier = Modifier.clickable { if (!active) onNavigate(tab.first) }
+                    ) {
+                        Row(Modifier.padding(horizontal = 15.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(tab.third, null, tint = if (active) AppBg else Muted, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(tab.second, color = if (active) AppBg else TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(14.dp))
         OutlinedTextField(
             value = query, onValueChange = { query = it },
             modifier = Modifier.fillMaxWidth(),
@@ -1794,55 +1820,68 @@ private fun MediaScreen(
                             )
                         }
                         items(sortedMedia, key = { mediaKey(it) }) { item ->
-                            val countKey = "play_count_audio_${item.id}"
+                            var menuExpanded by remember(item.id) { mutableStateOf(false) }
                             Row(
                                 Modifier.fillMaxWidth()
-                                    .clip(if (cardStyle == "square") RoundedCornerShape(7.dp) else RoundedCornerShape(19.dp))
-                                    .background(Brush.linearGradient(listOf(CardBg, CardAlt.copy(alpha = 0.62f))))
-                                    .border(1.dp, Color.White.copy(alpha = 0.055f), if (cardStyle == "square") RoundedCornerShape(7.dp) else RoundedCornerShape(19.dp))
+                                    .clip(RoundedCornerShape(15.dp))
                                     .clickable { onPlay(item) }
-                                    .padding(if (compactCards) 8.dp else 11.dp),
+                                    .padding(vertical = 7.dp, horizontal = 1.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Box(
-                                    Modifier.size(if (compactCards) 46.dp else 56.dp)
-                                        .clip(if (cardStyle == "square") RoundedCornerShape(5.dp) else RoundedCornerShape(11.dp))
-                                        .background(CardAlt),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    MediaArtwork(item, Modifier.fillMaxSize())
-                                }
-                                Spacer(Modifier.width(12.dp))
+                                MediaArtwork(
+                                    item,
+                                    Modifier.size(74.dp).clip(RoundedCornerShape(13.dp))
+                                )
+                                Spacer(Modifier.width(13.dp))
                                 Column(Modifier.weight(1f)) {
-                                    Text(item.title, color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    Spacer(Modifier.height(4.dp))
+                                    Text(
+                                        item.title,
+                                        color = TextPrimary,
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Spacer(Modifier.height(5.dp))
                                     Text(
                                         item.artist.ifBlank { if (language == "ar") "فنان غير معروف" else "Unknown artist" },
-                                        color = Muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis
+                                        color = Muted,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
-                                    Spacer(Modifier.height(3.dp))
+                                    Spacer(Modifier.height(5.dp))
                                     Text(
-                                        "${formatDuration(item.durationMs)}  ·  ${playCounts[countKey] ?: 0} plays",
-                                        color = Muted.copy(alpha = 0.8f), fontSize = 9.sp, maxLines = 1
+                                        formatDuration(item.durationMs),
+                                        color = Muted.copy(alpha = 0.78f),
+                                        fontSize = 10.sp
                                     )
                                 }
-                                IconButton(onClick = { onPlayNext(item) }) {
-                                    Icon(Icons.Rounded.SkipNext, if (language == "ar") "تشغيل بعد المقطع الحالي" else "Play next", tint = Accent)
-                                }
-                                IconButton(onClick = { onAddToQueue(item) }) {
-                                    Icon(Icons.Rounded.QueueMusic, if (language == "ar") "إضافة إلى آخر الطابور" else "Add to queue", tint = Muted)
-                                }
-                                IconButton(onClick = { onToggleFavorite(item) }) {
-                                    Icon(
-                                        if (mediaKey(item) in favorites) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                                        if (mediaKey(item) in favorites) "Remove from favorites" else "Add to favorites",
-                                        tint = if (mediaKey(item) in favorites) Accent else Muted
-                                    )
-                                }
-                                IconButton(onClick = { onPlay(item) }) {
-                                    Icon(Icons.Rounded.PlayArrow, if (language == "ar") "تشغيل" else "Play", tint = Accent)
+                                Box {
+                                    IconButton(onClick = { menuExpanded = true }) {
+                                        Icon(Icons.Rounded.MoreVert, if (language == "ar") "المزيد" else "More", tint = Muted)
+                                    }
+                                    DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                                        DropdownMenuItem(
+                                            text = { Text(if (language == "ar") "تشغيل بعد الحالي" else "Play next") },
+                                            leadingIcon = { Icon(Icons.Rounded.SkipNext, null) },
+                                            onClick = { menuExpanded = false; onPlayNext(item) }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text(if (language == "ar") "إضافة إلى قائمة التشغيل" else "Add to queue") },
+                                            leadingIcon = { Icon(Icons.Rounded.QueueMusic, null) },
+                                            onClick = { menuExpanded = false; onAddToQueue(item) }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text(if (mediaKey(item) in favorites) { if (language == "ar") "إزالة من المفضلة" else "Remove from favorites" } else { if (language == "ar") "إضافة للمفضلة" else "Add to favorites" }) },
+                                            leadingIcon = { Icon(if (mediaKey(item) in favorites) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, null) },
+                                            onClick = { menuExpanded = false; onToggleFavorite(item) }
+                                        )
+                                    }
                                 }
                             }
+                            HorizontalDivider(color = CardAlt.copy(alpha = 0.55f), thickness = 0.6.dp)
                         }
                     }
                 }
