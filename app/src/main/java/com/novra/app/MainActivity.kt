@@ -30,6 +30,11 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -1698,7 +1703,12 @@ private fun MediaScreen(
             }
         }
         Spacer(Modifier.height(14.dp))
-        if (type != "Music" || searchExpanded) OutlinedTextField(
+        AnimatedVisibility(
+            visible = type != "Music" || searchExpanded,
+            enter = fadeIn() + slideInVertically { -it / 4 },
+            exit = fadeOut() + slideOutVertically { -it / 4 }
+        ) {
+            OutlinedTextField(
             value = query, onValueChange = { query = it },
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
             placeholder = { Text(if (language == "ar") "ابحث في ${when (type) { "Music" -> "الأغاني"; "Videos" -> "الفيديوهات"; else -> "الوسائط" }}" else "Search $type", color = Muted) },
@@ -1710,7 +1720,8 @@ private fun MediaScreen(
                 focusedTextColor = TextPrimary, unfocusedTextColor = TextPrimary,
                 cursorColor = Accent
             )
-        )
+            )
+        }
         Spacer(Modifier.height(12.dp))
         if (type != "Music") Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf("All" to if (language == "ar") "الكل" else "All", "Favorites" to if (language == "ar") "المفضلة" else "Favorites").forEach { (key, label) ->
