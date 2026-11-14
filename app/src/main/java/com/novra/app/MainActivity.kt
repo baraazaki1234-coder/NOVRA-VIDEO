@@ -1855,30 +1855,7 @@ private fun MediaScreen(
             },
             color = Muted, fontSize = 12.sp
         )
-        if (type == "Music") {
-            Spacer(Modifier.height(15.dp))
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(
-                    Triple("Videos", if (language == "ar") "فيديوهات" else "Videos", Icons.Rounded.OndemandVideo),
-                    Triple("Music", if (language == "ar") "أغاني" else "Songs", Icons.Rounded.MusicNote),
-                    Triple("Playlists", if (language == "ar") "قوائم التشغيل" else "Playlists", Icons.Rounded.QueueMusic),
-                    Triple("Favorites", if (language == "ar") "المفضلة" else "Favorites", Icons.Rounded.Favorite)
-                ).forEach { tab ->
-                    val active = tab.first == "Music"
-                    Surface(
-                        color = if (active) Accent else CardBg,
-                        shape = CircleShape,
-                        modifier = Modifier.clickable { if (!active) onNavigate(tab.first) }
-                    ) {
-                        Row(Modifier.padding(horizontal = 15.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(tab.third, null, tint = if (active) AppBg else Muted, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text(tab.second, color = if (active) AppBg else TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                        }
-                    }
-                }
-            }
-        }
+        if (type == "Music") Spacer(Modifier.height(6.dp))
         Spacer(Modifier.height(14.dp))
         AnimatedVisibility(
             visible = type != "Music" || searchExpanded,
@@ -2336,7 +2313,9 @@ private fun NowPlayingScreen(
         return
     }
     Box(modifier.fillMaxSize()) {
-        if (artworkBitmap != null) {
+        if (media.artworkUri != null) {
+            AsyncImage(model = media.artworkUri, contentDescription = null, modifier = Modifier.fillMaxSize().graphicsLayer(scaleX = 1.16f, scaleY = 1.16f).blur(58.dp), contentScale = ContentScale.Crop)
+        } else if (artworkBitmap != null) {
             androidx.compose.foundation.Image(bitmap = artworkBitmap!!.asImageBitmap(), contentDescription = null,
                 modifier = Modifier.fillMaxSize().graphicsLayer(scaleX = 1.16f, scaleY = 1.16f).blur(58.dp), contentScale = ContentScale.Crop)
         } else Box(Modifier.fillMaxSize().background(artworkTint.copy(alpha = 0.35f)))
@@ -2354,7 +2333,7 @@ private fun NowPlayingScreen(
             Spacer(Modifier.height(1.dp))
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Box(
-                    Modifier.fillMaxWidth(0.82f).aspectRatio(1f)
+                    Modifier.fillMaxWidth(0.90f).aspectRatio(1f)
                         .graphicsLayer {
                             translationX = artworkDragOffset
                             rotationZ = (artworkDragOffset / 85f).coerceIn(-8f, 8f)
@@ -2422,8 +2401,7 @@ private fun NowPlayingScreen(
                 Text(formatDuration(playbackPosition.toLong()), color = Color.White.copy(alpha = 0.7f), fontSize = 10.sp)
                 Text("-${formatDuration((playbackDuration-playbackPosition).toLong().coerceAtLeast(0L))}", color = Color.White.copy(alpha = 0.7f), fontSize = 10.sp)
             }
-            Spacer(Modifier.height(12.dp))
-            Spacer(Modifier.height(18.dp))
+            Spacer(Modifier.height(13.dp))
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                     IconButton(onClick = { shuffle = !shuffle; controller?.shuffleModeEnabled = shuffle }) {
@@ -2458,8 +2436,28 @@ private fun NowPlayingScreen(
                         Icon(Icons.Rounded.Subtitles, if (language == "ar") "كلمات الأغنية" else "Lyrics", tint = Color.White.copy(alpha = 0.72f))
                     }
                 }
+                val nextTrack = queue.getOrNull(currentQueueIndex + 1)
+                if (nextTrack != null) {
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+                            .background(Color.White.copy(alpha = 0.09f))
+                            .clickable { controller?.seekToNextMediaItem() }
+                            .padding(9.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        MediaArtwork(nextTrack, Modifier.size(43.dp).clip(RoundedCornerShape(9.dp)))
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(if (language == "ar") "التالي في الطابور" else "UP NEXT", color = Color.White.copy(alpha = 0.58f), fontSize = 8.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                            Text(nextTrack.title, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(nextTrack.artist.ifBlank { if (language == "ar") "فنان غير معروف" else "Unknown artist" }, color = Color.White.copy(alpha = 0.65f), fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        Icon(Icons.Rounded.PlayArrow, null, tint = Color.White.copy(alpha = 0.8f))
+                    }
+                }
             }
-            Spacer(Modifier.height(25.dp))
+            Spacer(Modifier.height(12.dp))
         }
     }
     if (activePanel == "lyrics") ModalBottomSheet(
