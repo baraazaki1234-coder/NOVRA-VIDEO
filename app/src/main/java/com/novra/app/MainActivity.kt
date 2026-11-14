@@ -1026,7 +1026,9 @@ private fun NovraApp() {
                                         else playlist
                                     })
                                 },
-                                onDelete = ::requestMediaDelete
+                                onDelete = ::requestMediaDelete,
+                                hiddenKeys = hiddenMediaKeys,
+                                onHide = ::hideMedia
                             )
                             "Explore" -> OnlineSearchScreen(
                                 language = language,
