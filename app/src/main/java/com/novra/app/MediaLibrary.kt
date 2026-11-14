@@ -14,7 +14,8 @@ data class LocalMedia(
     val sizeBytes: Long,
     val isVideo: Boolean,
     val dateAddedSeconds: Long = 0L,
-    val albumId: Long = -1L
+    val albumId: Long = -1L,
+    val artworkUri: Uri? = null
 )
 
 object MediaLibrary {
