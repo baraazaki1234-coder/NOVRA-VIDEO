@@ -2062,7 +2062,7 @@ private fun MediaScreen(
                                             onClick = { menuExpanded = false; onPlayNext(item) }
                                         )
                                         DropdownMenuItem(
-                                            text = { Text(if (language == "ar") "إضافة إلى قائمة التشغيل" else "Add to queue") },
+                                            text = { Text(if (language == "ar") "إضافة إلى الطابور" else "Add to queue") },
                                             leadingIcon = { Icon(Icons.Rounded.QueueMusic, null) },
                                             onClick = { menuExpanded = false; onAddToQueue(item) }
                                         )
@@ -2085,6 +2085,7 @@ private fun MediaScreen(
                 Column(Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(if (language == "ar") "تم تحديد ${selectedItems.size}" else "${selectedItems.size} selected", color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { selectedKeys = sortedMedia.map { mediaKey(it) }.toSet() }) { Text(if (language == "ar") "تحديد الكل" else "Select all") }
                         TextButton(onClick = { selectedKeys = emptySet() }) { Text(if (language == "ar") "إلغاء" else "Clear") }
                     }
                     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
