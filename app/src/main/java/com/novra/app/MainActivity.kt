@@ -647,6 +647,32 @@ private fun NovraApp() {
     }
     var videos by remember { mutableStateOf<List<LocalMedia>>(emptyList()) }
     var tracks by remember { mutableStateOf<List<LocalMedia>>(emptyList()) }
+    val importedPrefs = remember(context) { context.getSharedPreferences("viora_imports", android.content.Context.MODE_PRIVATE) }
+    var importedVideos by remember { mutableStateOf(loadImportedMedia(context, "Videos")) }
+    var importedTracks by remember { mutableStateOf(loadImportedMedia(context, "Music")) }
+    val videoImportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        if (uris.isNotEmpty()) {
+            uris.forEach { uri -> runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) } }
+            importedVideos = (importedVideos + uris.map { importedMediaFromUri(context, it, true) }).distinctBy { it.uri.toString() }
+            importedPrefs.edit().putStringSet("uris_Videos", importedVideos.map { it.uri.toString() }.toSet()).apply()
+        }
+    }
+    val musicImportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        if (uris.isNotEmpty()) {
+            uris.forEach { uri -> runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) } }
+            importedTracks = (importedTracks + uris.map { importedMediaFromUri(context, it, false) }).distinctBy { it.uri.toString() }
+            importedPrefs.edit().putStringSet("uris_Music", importedTracks.map { it.uri.toString() }.toSet()).apply()
+        }
+    }
+    fun removeImportedMedia(items: List<LocalMedia>) {
+        val removed = items.map { it.uri.toString() }.toSet()
+        importedVideos = importedVideos.filterNot { it.uri.toString() in removed }
+        importedTracks = importedTracks.filterNot { it.uri.toString() in removed }
+        importedPrefs.edit()
+            .putStringSet("uris_Videos", importedVideos.map { it.uri.toString() }.toSet())
+            .putStringSet("uris_Music", importedTracks.map { it.uri.toString() }.toSet())
+            .apply()
+    }
     var hasPermission by remember {
         mutableStateOf(hasMediaPermissions(context))
     }
@@ -982,8 +1008,8 @@ private fun NovraApp() {
                             )
                         } else when (destination) {
                             "Home" -> HomeScreen(
-                                Modifier.padding(padding), videos.size, tracks.size,
-                                tracks.map { track ->
+                                Modifier.padding(padding), videos.size + importedVideos.size, tracks.size + importedTracks.size,
+                                (tracks + importedTracks).map { track ->
                                     val key = "play_count_audio_${track.id}"
                                     track to (playCounts[key] ?: 0)
                                 }.filter { it.second > 0 }.sortedByDescending { it.second }.take(5),
@@ -991,12 +1017,12 @@ private fun NovraApp() {
                                 onPlay = { startMedia(it, tracks) }, language = language
                             )
                             "Videos" -> MediaScreen(
-                                Modifier.padding(padding), "Videos", videos, loading, hasVideoAccess,
+                                Modifier.padding(padding), "Videos", (videos + importedVideos).distinctBy { mediaKey(it) }, loading, hasVideoAccess,
                                 onGrant = { permissionLauncher.launch(mediaPermissions()) },
                                 compactCards = compactCards, cardStyle = cardStyle,
                                 playCounts = playCounts, favorites = favorites,
                                 onToggleFavorite = ::toggleFavorite,
-                                onPlay = { item -> startMedia(item, (videos + item).distinctBy { mediaKey(it) }) },
+                                onPlay = { item -> startMedia(item, (videos + importedVideos + item).distinctBy { mediaKey(it) }) },
                                 onAddToQueue = ::enqueueMedia,
                                 onPlayNext = ::playNextMedia,
                                 language = language,
@@ -1010,15 +1036,17 @@ private fun NovraApp() {
                                 },
                                 onDelete = ::requestMediaDelete,
                                 hiddenKeys = hiddenMediaKeys,
-                                onHide = ::hideMedia
+                                onHide = ::hideMedia,
+                                onImportFiles = { videoImportLauncher.launch(arrayOf("video/*")) },
+                                onRemoveImported = ::removeImportedMedia
                             )
                             "Music" -> MediaScreen(
-                                Modifier.padding(padding), "Music", tracks, loading, hasAudioAccess,
+                                Modifier.padding(padding), "Music", (tracks + importedTracks).distinctBy { mediaKey(it) }, loading, hasAudioAccess,
                                 onGrant = { permissionLauncher.launch(mediaPermissions()) },
                                 compactCards = compactCards, cardStyle = cardStyle,
                                 playCounts = playCounts, favorites = favorites,
                                 onToggleFavorite = ::toggleFavorite,
-                                onPlay = { item -> startMedia(item, (tracks + item).distinctBy { mediaKey(it) }) },
+                                onPlay = { item -> startMedia(item, (tracks + importedTracks + item).distinctBy { mediaKey(it) }) },
                                 onAddToQueue = ::enqueueMedia,
                                 onPlayNext = ::playNextMedia,
                                 language = language,
@@ -1033,19 +1061,21 @@ private fun NovraApp() {
                                 },
                                 onDelete = ::requestMediaDelete,
                                 hiddenKeys = hiddenMediaKeys,
-                                onHide = ::hideMedia
+                                onHide = ::hideMedia,
+                                onImportFiles = { musicImportLauncher.launch(arrayOf("audio/*")) },
+                                onRemoveImported = ::removeImportedMedia
                             )
                             "Explore" -> OnlineSearchScreen(
                                 language = language,
                                 onPlayPreview = { item -> startMedia(item, listOf(item)) }
                             )
                             "Favorites" -> MediaScreen(
-                                Modifier.padding(padding), "Favorites", (videos + tracks).distinctBy { mediaKey(it) }, loading, hasPermission,
+                                Modifier.padding(padding), "Favorites", (videos + importedVideos + tracks + importedTracks).distinctBy { mediaKey(it) }, loading, hasPermission,
                                 onGrant = { permissionLauncher.launch(mediaPermissions()) },
                                 compactCards = compactCards, cardStyle = cardStyle,
                                 playCounts = playCounts, favorites = favorites,
                                 onToggleFavorite = ::toggleFavorite,
-                                onPlay = { item -> startMedia(item, (videos + tracks + item).distinctBy { mediaKey(it) }) },
+                                onPlay = { item -> startMedia(item, (videos + importedVideos + tracks + importedTracks + item).distinctBy { mediaKey(it) }) },
                                 onAddToQueue = ::enqueueMedia,
                                 onPlayNext = ::playNextMedia,
                                 language = language,
@@ -1059,10 +1089,11 @@ private fun NovraApp() {
                                 },
                                 onDelete = ::requestMediaDelete,
                                 hiddenKeys = hiddenMediaKeys,
-                                onHide = ::hideMedia
+                                onHide = ::hideMedia,
+                                onRemoveImported = ::removeImportedMedia
                             )
                             "Playlists" -> PlaylistsScreen(
-                                Modifier.padding(padding), playlists, (videos + tracks).distinctBy { mediaKey(it) },
+                                Modifier.padding(padding), playlists, (videos + importedVideos + tracks + importedTracks).distinctBy { mediaKey(it) },
                                 onCreate = { name -> savePlaylists(playlists + UserPlaylist(name, emptyList())) },
                                 onAdd = { playlistName, item ->
                                     savePlaylists(playlists.map { playlist ->
@@ -1710,61 +1741,12 @@ private fun MediaScreen(
     onAddToPlaylist: (String, LocalMedia) -> Unit = {},
     onDelete: (List<LocalMedia>) -> Unit = {},
     hiddenKeys: Set<String> = emptySet(),
-    onHide: (List<LocalMedia>) -> Unit = {}
+    onHide: (List<LocalMedia>) -> Unit = {},
+    onImportFiles: () -> Unit = {},
+    onRemoveImported: (List<LocalMedia>) -> Unit = {}
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    val importPrefs = remember(context, type) { context.getSharedPreferences("viora_imports", android.content.Context.MODE_PRIVATE) }
-    fun importedItem(uri: Uri): LocalMedia {
-        val isVideoFile = type == "Videos"
-        val retriever = MediaMetadataRetriever()
-        val metadata = runCatching {
-            retriever.setDataSource(context, uri)
-            Triple(
-                retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE).orEmpty(),
-                retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST).orEmpty(),
-                retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
-            )
-        }.getOrDefault(Triple("", "", 0L))
-        runCatching { retriever.release() }
-        val displayNameAndSize = runCatching {
-            context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)?.use { cursor ->
-                if (cursor.moveToFirst()) {
-                    val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                    val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
-                    (if (nameIndex >= 0) cursor.getString(nameIndex).orEmpty() else "") to
-                        (if (sizeIndex >= 0 && !cursor.isNull(sizeIndex)) cursor.getLong(sizeIndex) else 0L)
-                } else "" to 0L
-            } ?: ("" to 0L)
-        }.getOrDefault("" to 0L)
-        val fallbackName = displayNameAndSize.first.substringBeforeLast('.').ifBlank { if (language == "ar") "ملف مستورد" else "Imported media" }
-        val stableId = -((uri.toString().hashCode().toLong() and 0x7fffffffL) + 1L)
-        return LocalMedia(
-            id = stableId, uri = uri,
-            title = metadata.first.ifBlank { fallbackName },
-            artist = metadata.second,
-            durationMs = metadata.third,
-            sizeBytes = displayNameAndSize.second,
-            isVideo = isVideoFile,
-            dateAddedSeconds = System.currentTimeMillis() / 1000L
-        )
-    }
-    var importedMedia by remember(type) {
-        mutableStateOf(
-            importPrefs.getStringSet("uris_$type", emptySet()).orEmpty().mapNotNull { value ->
-                runCatching { importedItem(Uri.parse(value)) }.getOrNull()
-            }
-        )
-    }
-    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
-        if (uris.isNotEmpty()) {
-            uris.forEach { uri ->
-                runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
-            }
-            importedMedia = (importedMedia + uris.map(::importedItem)).distinctBy { it.uri.toString() }
-            importPrefs.edit().putStringSet("uris_$type", importedMedia.map { it.uri.toString() }.toSet()).apply()
-        }
-    }
-    val allMedia = remember(media, importedMedia) { (media + importedMedia).distinctBy { mediaKey(it) } }
+    val allMedia = remember(media) { media.distinctBy { mediaKey(it) } }
     var query by remember { mutableStateOf("") }
     var searchExpanded by remember(type) { mutableStateOf(false) }
     var sortMenuExpanded by remember { mutableStateOf(false) }
@@ -1832,7 +1814,7 @@ private fun MediaScreen(
                 }
             }
             if (type == "Music" || type == "Videos") {
-                IconButton(onClick = { importLauncher.launch(arrayOf(if (type == "Music") "audio/*" else "video/*")) }) {
+                IconButton(onClick = onImportFiles) {
                     Icon(Icons.Rounded.Add, if (language == "ar") "استيراد ملفات" else "Import files", tint = Accent)
                 }
             }
@@ -1922,7 +1904,7 @@ private fun MediaScreen(
         }
         Spacer(Modifier.height(if (type == "Music") 4.dp else 14.dp))
         when {
-            !hasPermission -> Column(Modifier.weight(1f).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            !hasPermission && allMedia.isEmpty() -> Column(Modifier.weight(1f).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                 Icon(Icons.Rounded.FolderOpen, null, tint = Accent, modifier = Modifier.size(45.dp))
                 Spacer(Modifier.height(14.dp))
                 Text(if (language == "ar") "اسمح بالوصول إلى الوسائط" else "Allow media access", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
@@ -2116,8 +2098,7 @@ private fun MediaScreen(
                             val importedUris = selectedItems.filterNot { it.uri.authority == "media" }.map { it.uri.toString() }.toSet()
                             if (deviceMedia.isNotEmpty()) onDelete(deviceMedia)
                             if (importedUris.isNotEmpty()) {
-                                importedMedia = importedMedia.filterNot { it.uri.toString() in importedUris }
-                                importPrefs.edit().putStringSet("uris_$type", importedMedia.map { it.uri.toString() }.toSet()).apply()
+                                onRemoveImported(selectedItems.filterNot { it.uri.authority == "media" })
                             }
                             selectedKeys = emptySet()
                         }) { Icon(Icons.Rounded.DeleteOutline, null, tint = MaterialTheme.colorScheme.error); Text(if (language == "ar") "حذف" else "Delete") }
