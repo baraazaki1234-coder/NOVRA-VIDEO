@@ -1597,6 +1597,7 @@ private fun MediaScreen(
     onNavigate: (String) -> Unit = {}
 ) {
     var query by remember { mutableStateOf("") }
+    var searchExpanded by remember(type) { mutableStateOf(false) }
     var sortMenuExpanded by remember { mutableStateOf(false) }
     var sortBy by remember { mutableStateOf("Default") }
     var mediaFilter by remember(type) { mutableStateOf(if (type == "Favorites") "Favorites" else "All") }
@@ -1628,7 +1629,12 @@ private fun MediaScreen(
     Column(modifier.fillMaxSize().padding(horizontal = 18.dp)) {
         Spacer(Modifier.height(22.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(if (language == "ar") when (type) { "Videos" -> "الفيديوهات"; "Music" -> "الأغاني"; else -> "المفضلة" } else type, color = TextPrimary, fontSize = 29.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            Text(if (language == "ar") when (type) { "Videos" -> "الفيديوهات"; "Music" -> "الأغاني"; else -> "المفضلة" } else if (type == "Music") "Songs" else type, color = TextPrimary, fontSize = 27.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            if (type == "Music") {
+                IconButton(onClick = { searchExpanded = !searchExpanded; if (!searchExpanded) query = "" }) {
+                    Icon(if (searchExpanded) Icons.Rounded.Close else Icons.Rounded.Search, if (language == "ar") "بحث" else "Search", tint = TextPrimary)
+                }
+            }
             Box {
                 IconButton(onClick = { sortMenuExpanded = true }) { Icon(Icons.Rounded.Sort, "Sort", tint = TextPrimary) }
                 DropdownMenu(expanded = sortMenuExpanded, onDismissRequest = { sortMenuExpanded = false }) {
@@ -1642,10 +1648,9 @@ private fun MediaScreen(
                 }
             }
         }
-        Text(
+        if (type != "Music") Text(
             when (type) {
                 "Videos" -> if (language == "ar") "مجموعتك من الفيديوهات" else "Your video collection"
-                "Music" -> if (language == "ar") "مجموعتك الموسيقية" else "Your music collection"
                 else -> if (language == "ar") "كل الوسائط المحفوظة" else "Everything you saved"
             },
             color = Muted, fontSize = 12.sp
@@ -1675,9 +1680,9 @@ private fun MediaScreen(
             }
         }
         Spacer(Modifier.height(14.dp))
-        OutlinedTextField(
+        if (type != "Music" || searchExpanded) OutlinedTextField(
             value = query, onValueChange = { query = it },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
             placeholder = { Text(if (language == "ar") "ابحث في ${when (type) { "Music" -> "الأغاني"; "Videos" -> "الفيديوهات"; else -> "الوسائط" }}" else "Search $type", color = Muted) },
             leadingIcon = { Icon(Icons.Rounded.Search, null, tint = Muted) },
             singleLine = true,
@@ -1689,7 +1694,7 @@ private fun MediaScreen(
             )
         )
         Spacer(Modifier.height(12.dp))
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (type != "Music") Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf("All" to if (language == "ar") "الكل" else "All", "Favorites" to if (language == "ar") "المفضلة" else "Favorites").forEach { (key, label) ->
                 Surface(
                     color = if (mediaFilter == key) Accent else CardBg,
@@ -1706,7 +1711,7 @@ private fun MediaScreen(
             }
         }
         Spacer(Modifier.height(8.dp))
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+        if (type != "Music") Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
             val folders = buildList {
                 add("All" to if (language == "ar") "الكل" else "All")
                 add("Recent" to if (language == "ar") "أُضيف حديثًا" else "Recent")
@@ -1718,7 +1723,7 @@ private fun MediaScreen(
             }
             Text("Sort: $sortBy", color = Muted, fontSize = 10.sp, modifier = Modifier.align(Alignment.CenterVertically))
         }
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(if (type == "Music") 4.dp else 14.dp))
         when {
             !hasPermission -> Column(Modifier.weight(1f).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                 Icon(Icons.Rounded.FolderOpen, null, tint = Accent, modifier = Modifier.size(45.dp))
@@ -2165,36 +2170,51 @@ private fun NowPlayingScreen(
             }
             Spacer(Modifier.height(18.dp))
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { activePanel = "tools" }, modifier = Modifier.size(42.dp)) {
-                    Icon(Icons.Rounded.Tune, if (language == "ar") "إعدادات الصوت" else "Audio settings", tint = Color.White.copy(alpha = 0.85f), modifier = Modifier.size(23.dp))
-                }
-                Spacer(Modifier.weight(1f))
-                IconButton(onClick = { controller?.let { if (it.currentPosition > 3000L) it.seekTo(0L) else it.seekToPreviousMediaItem() } }) {
-                    Icon(Icons.Rounded.SkipPrevious, "Previous", tint = Color.White, modifier = Modifier.size(32.dp))
-                }
-                Box(Modifier.padding(horizontal = 7.dp).size(66.dp).clip(CircleShape)
-                    .background(Brush.linearGradient(listOf(artworkTint, artworkTint.copy(alpha = 0.72f), Color.White.copy(alpha = 0.2f))))
-                    .border(1.dp, Color.White.copy(alpha = 0.25f), CircleShape)
-                    .clickable { controller?.let { if (it.isPlaying) it.pause() else it.play() } }, contentAlignment = Alignment.Center) {
-                    Icon(if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, null, tint = Color.White, modifier = Modifier.size(35.dp))
-                }
-                IconButton(onClick = { controller?.seekToNextMediaItem() }) { Icon(Icons.Rounded.SkipNext, "Next", tint = Color.White, modifier = Modifier.size(32.dp)) }
-                Spacer(Modifier.weight(1f))
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    IconButton(onClick = { shuffle = !shuffle; controller?.shuffleModeEnabled = shuffle }, modifier = Modifier.size(36.dp)) {
-                        Icon(Icons.Rounded.Shuffle, "Shuffle", tint = if (shuffle) Color.White else Color.White.copy(alpha = 0.48f), modifier = Modifier.size(19.dp))
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                    IconButton(onClick = { shuffle = !shuffle; controller?.shuffleModeEnabled = shuffle }) {
+                        Icon(Icons.Rounded.Shuffle, "Shuffle", tint = if (shuffle) Accent else Color.White.copy(alpha = 0.58f), modifier = Modifier.size(23.dp))
+                    }
+                    IconButton(onClick = { controller?.let { if (it.currentPosition > 3000L) it.seekTo(0L) else it.seekToPreviousMediaItem() } }) {
+                        Icon(Icons.Rounded.SkipPrevious, "Previous", tint = Color.White, modifier = Modifier.size(34.dp))
+                    }
+                    Box(Modifier.size(72.dp).clip(CircleShape)
+                        .background(Brush.linearGradient(listOf(artworkTint, artworkTint.copy(alpha = 0.72f), Color.White.copy(alpha = 0.2f))))
+                        .border(1.dp, Color.White.copy(alpha = 0.25f), CircleShape)
+                        .clickable { controller?.let { if (it.isPlaying) it.pause() else it.play() } }, contentAlignment = Alignment.Center) {
+                        Icon(if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, null, tint = Color.White, modifier = Modifier.size(39.dp))
+                    }
+                    IconButton(onClick = { controller?.seekToNextMediaItem() }) {
+                        Icon(Icons.Rounded.SkipNext, "Next", tint = Color.White, modifier = Modifier.size(34.dp))
                     }
                     IconButton(onClick = {
                         repeatMode = when (repeatMode) { Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL; Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE; else -> Player.REPEAT_MODE_OFF }
                         controller?.repeatMode = repeatMode
-                    }, modifier = Modifier.size(36.dp)) {
-                        Icon(if (repeatMode == Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat, "Repeat",
-                            tint = if (repeatMode == Player.REPEAT_MODE_OFF) Color.White.copy(alpha = 0.48f) else Color.White, modifier = Modifier.size(19.dp))
+                    }) {
+                        Icon(if (repeatMode == Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
+                            "Repeat", tint = if (repeatMode == Player.REPEAT_MODE_OFF) Color.White.copy(alpha = 0.58f) else Accent, modifier = Modifier.size(23.dp))
                     }
-                    IconButton(onClick = { activePanel = "queue" }, modifier = Modifier.size(36.dp)) { Icon(Icons.Rounded.QueueMusic, "Queue", tint = Color.White.copy(alpha = 0.85f), modifier = Modifier.size(19.dp)) }
                 }
-            }
+                Row(Modifier.fillMaxWidth().padding(top = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { activePanel = "tools" }) {
+                        Icon(Icons.Rounded.Tune, if (language == "ar") "إعدادات الصوت" else "Audio settings", tint = Color.White.copy(alpha = 0.72f))
+                    }
+                    Spacer(Modifier.weight(1f))
+                    Surface(
+                        color = Color.White.copy(alpha = 0.10f),
+                        shape = CircleShape,
+                        modifier = Modifier.clickable { activePanel = "queue" }
+                    ) {
+                        Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Rounded.QueueMusic, null, tint = Color.White, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(if (language == "ar") "قائمة التشغيل" else "UP NEXT", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                        }
+                    }
+                    Spacer(Modifier.weight(1f))
+                    IconButton(onClick = { activePanel = "lyrics" }) {
+                        Icon(Icons.Rounded.Subtitles, if (language == "ar") "كلمات الأغنية" else "Lyrics", tint = Color.White.copy(alpha = 0.72f))
+                    }
+                }
             }
             Spacer(Modifier.height(25.dp))
         }
