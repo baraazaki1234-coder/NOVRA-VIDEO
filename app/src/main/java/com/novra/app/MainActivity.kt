@@ -2067,6 +2067,21 @@ private fun MediaScreen(
                                             leadingIcon = { Icon(if (mediaKey(item) in favorites) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, null) },
                                             onClick = { menuExpanded = false; onToggleFavorite(item) }
                                         )
+                                        DropdownMenuItem(
+                                            text = { Text(if (language == "ar") "إضافة إلى قائمة تشغيل" else "Add to playlist") },
+                                            leadingIcon = { Icon(Icons.Rounded.PlaylistAdd, null) },
+                                            onClick = { menuExpanded = false; playlistSelection = listOf(item) }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text(if (language == "ar") "مشاركة" else "Share") },
+                                            leadingIcon = { Icon(Icons.Rounded.Share, null) },
+                                            onClick = { menuExpanded = false; shareItems(listOf(item)) }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text(if (language == "ar") "إخفاء من المكتبة" else "Hide from library") },
+                                            leadingIcon = { Icon(Icons.Rounded.VisibilityOff, null) },
+                                            onClick = { menuExpanded = false; onHide(listOf(item)) }
+                                        )
                                     }
                                 }
                             }
@@ -2086,7 +2101,7 @@ private fun MediaScreen(
                     }
                     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                         TextButton(onClick = { selectedItems.forEach(onToggleFavorite); selectedKeys = emptySet() }) { Icon(Icons.Rounded.FavoriteBorder, null); Text(if (language == "ar") "المفضلة" else "Favorite") }
-                        TextButton(onClick = { selectedItems.forEach(onPlayNext); selectedKeys = emptySet() }) { Icon(Icons.Rounded.SkipNext, null); Text(if (language == "ar") "التالي" else "Play next") }
+                        TextButton(onClick = { selectedItems.asReversed().forEach(onPlayNext); selectedKeys = emptySet() }) { Icon(Icons.Rounded.SkipNext, null); Text(if (language == "ar") "التالي" else "Play next") }
                         TextButton(onClick = { selectedItems.forEach(onAddToQueue); selectedKeys = emptySet() }) { Icon(Icons.Rounded.QueueMusic, null); Text(if (language == "ar") "الطابور" else "Queue") }
                         TextButton(onClick = { playlistSelection = selectedItems }) { Icon(Icons.Rounded.PlaylistAdd, null); Text(if (language == "ar") "قائمة" else "Playlist") }
                         TextButton(onClick = { shareItems(selectedItems) }) { Icon(Icons.Rounded.Share, null); Text(if (language == "ar") "مشاركة" else "Share") }
