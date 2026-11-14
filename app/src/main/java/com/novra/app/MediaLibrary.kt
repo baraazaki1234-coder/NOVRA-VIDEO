@@ -68,3 +68,54 @@ object MediaLibrary {
         return result
     }
 }
+
+
+fun importedMediaFromUri(context: Context, uri: Uri, isVideo: Boolean): LocalMedia {
+    val retriever = android.media.MediaMetadataRetriever()
+    val metadata = runCatching {
+        retriever.setDataSource(context, uri)
+        Triple(
+            retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_TITLE).orEmpty(),
+            retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_ARTIST).orEmpty(),
+            retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+        )
+    }.getOrDefault(Triple("", "", 0L))
+    runCatching { retriever.release() }
+    val nameAndSize = runCatching {
+        context.contentResolver.query(
+            uri,
+            arrayOf(android.provider.OpenableColumns.DISPLAY_NAME, android.provider.OpenableColumns.SIZE),
+            null, null, null
+        )?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                val sizeIndex = cursor.getColumnIndex(android.provider.OpenableColumns.SIZE)
+                (if (nameIndex >= 0) cursor.getString(nameIndex).orEmpty() else "") to
+                    (if (sizeIndex >= 0 && !cursor.isNull(sizeIndex)) cursor.getLong(sizeIndex) else 0L)
+            } else "" to 0L
+        } ?: ("" to 0L)
+    }.getOrDefault("" to 0L)
+    val fallbackName = nameAndSize.first.substringBeforeLast('.').ifBlank { "Imported media" }
+    val stableId = -((uri.toString().hashCode().toLong() and 0x7fffffffL) + 1L)
+    return LocalMedia(
+        id = stableId,
+        uri = uri,
+        title = metadata.first.ifBlank { fallbackName },
+        artist = metadata.second,
+        durationMs = metadata.third,
+        sizeBytes = nameAndSize.second,
+        isVideo = isVideo,
+        dateAddedSeconds = System.currentTimeMillis() / 1000L
+    )
+}
+
+fun loadImportedMedia(context: Context, type: String): List<LocalMedia> {
+    val prefs = context.getSharedPreferences("viora_imports", Context.MODE_PRIVATE)
+    val isVideo = type == "Videos"
+    return prefs.getStringSet("uris_$type", emptySet()).orEmpty().mapNotNull { value ->
+        runCatching {
+            val uri = Uri.parse(value)
+            importedMediaFromUri(context, uri, isVideo)
+        }.getOrNull()
+    }
+}
