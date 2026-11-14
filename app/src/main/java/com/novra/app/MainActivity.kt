@@ -873,6 +873,7 @@ private fun NovraApp() {
                             }
                         },
                         bottomBar = {
+                            if (!showNowPlaying) {
                             Column(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color.Transparent, AppBg.copy(alpha = 0.96f)))).padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 5.dp)) {
                                 if (selectedMedia != null && !showNowPlaying) {
                                     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Brush.linearGradient(listOf(CardAlt.copy(alpha = 0.98f), CardBg.copy(alpha = 0.96f)))).padding(start = 10.dp, end = 5.dp, top = 7.dp, bottom = 7.dp).clickable { showNowPlaying = true }, verticalAlignment = Alignment.CenterVertically) {
@@ -908,6 +909,7 @@ private fun NovraApp() {
                                         }
                                     }
                                 }
+                            }
                             }
                         }
                     ) { padding ->
