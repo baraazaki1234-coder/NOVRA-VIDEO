@@ -1445,8 +1445,8 @@ private fun HomeScreen(
                     Icon(Icons.Rounded.PlayArrow, null, tint = Color.White, modifier = Modifier.size(34.dp))
                 }
                 Spacer(Modifier.width(5.dp))
-                IconButton(onClick = { navigate("Explore") }) { Icon(Icons.Rounded.Search, if (isArabic) "بحث" else "Search", tint = TextPrimary) }
                 IconButton(onClick = { navigate("Settings") }) { Icon(Icons.Rounded.Settings, if (isArabic) "الإعدادات" else "Settings", tint = Muted) }
+                IconButton(onClick = { navigate("Explore") }) { Icon(Icons.Rounded.Search, if (isArabic) "بحث" else "Search", tint = TextPrimary) }
             }
             Spacer(Modifier.height(18.dp))
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1471,7 +1471,7 @@ private fun HomeScreen(
             }
             Spacer(Modifier.height(19.dp))
             Box(
-                Modifier.fillMaxWidth().height(218.dp).clip(RoundedCornerShape(27.dp))
+                Modifier.fillMaxWidth().height(232.dp).clip(RoundedCornerShape(27.dp))
                     .background(Brush.linearGradient(listOf(Color(0xFF37156D), Color(0xFF152A59), Color(0xFF073B52))))
                     .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(27.dp))
             ) {
@@ -1501,7 +1501,7 @@ private fun HomeScreen(
                     ) {
                         Icon(Icons.Rounded.PlayArrow, null, tint = Color(0xFF28104D), modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(4.dp))
-                        Text(if (isArabic) "ابدأ الاستماع" else "Start listening", color = Color(0xFF28104D), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        Text(if (isArabic) "ابدأ الاستماع" else "Start listening", color = Color(0xFF28104D), fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -1617,6 +1617,8 @@ private fun MediaScreen(
         }
     val sortedMedia = when (sortBy) {
         "Name" -> ranked.sortedBy { it.first.title.lowercase() }.map { it.first }
+        "Oldest" -> ranked.sortedBy { it.first.dateAddedSeconds }.map { it.first }
+        "Newest" -> ranked.sortedByDescending { it.first.dateAddedSeconds }.map { it.first }
         "Duration" -> ranked.sortedByDescending { it.first.durationMs }.map { it.first }
         "Most played" -> ranked.sortedByDescending {
             playCounts["play_count_${if (it.first.isVideo) "video" else "audio"}_${it.first.id}"] ?: 0
@@ -1631,6 +1633,9 @@ private fun MediaScreen(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(if (language == "ar") when (type) { "Videos" -> "الفيديوهات"; "Music" -> "الأغاني"; else -> "المفضلة" } else if (type == "Music") "Songs" else type, color = TextPrimary, fontSize = 27.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
             if (type == "Music") {
+                IconButton(onClick = { onNavigate("Settings") }) {
+                    Icon(Icons.Rounded.Settings, if (language == "ar") "الإعدادات" else "Settings", tint = Muted)
+                }
                 IconButton(onClick = { searchExpanded = !searchExpanded; if (!searchExpanded) query = "" }) {
                     Icon(if (searchExpanded) Icons.Rounded.Close else Icons.Rounded.Search, if (language == "ar") "بحث" else "Search", tint = TextPrimary)
                 }
@@ -1638,9 +1643,22 @@ private fun MediaScreen(
             Box {
                 IconButton(onClick = { sortMenuExpanded = true }) { Icon(Icons.Rounded.Sort, "Sort", tint = TextPrimary) }
                 DropdownMenu(expanded = sortMenuExpanded, onDismissRequest = { sortMenuExpanded = false }) {
-                    listOf("Default", "Name", "Duration", "Most played").forEach { option ->
+                    listOf("Default", "Name", "Oldest", "Newest", "Duration", "Most played").forEach { option ->
                         DropdownMenuItem(
-                            text = { Text(option) },
+                            text = { Text(if (language == "ar") when (option) {
+                                "Default" -> "الترتيب الافتراضي"
+                                "Name" -> "أبجديًا"
+                                "Oldest" -> "من الأقدم"
+                                "Newest" -> "من الأحدث"
+                                "Duration" -> "حسب المدة"
+                                else -> "الأكثر استماعًا"
+                            } else when (option) {
+                                "Name" -> "Alphabetical"
+                                "Oldest" -> "Oldest first"
+                                "Newest" -> "Newest first"
+                                "Most played" -> "Most played"
+                                else -> option
+                            }) },
                             onClick = { sortBy = option; sortMenuExpanded = false },
                             trailingIcon = { if (sortBy == option) Icon(Icons.Rounded.Check, null, tint = Accent) }
                         )
@@ -2020,6 +2038,10 @@ private fun NowPlayingScreen(
     var activePanel by remember { mutableStateOf("none") }
     var showRingtoneCutter by remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
+    val statsPrefs = remember(context) { context.getSharedPreferences("novra_preferences", android.content.Context.MODE_PRIVATE) }
+    val trackPlayCount = remember(media.id) {
+        statsPrefs.getInt("play_count_audio_${media.id}", 0)
+    }
     val lyricPrefs = remember(context) { context.getSharedPreferences("novra_lyrics", android.content.Context.MODE_PRIVATE) }
     var lyricsUri by remember(media.id) { mutableStateOf(lyricPrefs.getString("audio_${media.id}", null)?.let(Uri::parse)) }
     var lyricLines by remember(media.id) { mutableStateOf<List<LyricLine>>(emptyList()) }
@@ -2070,18 +2092,17 @@ private fun NowPlayingScreen(
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.50f), Color.Black.copy(alpha = 0.83f), Color.Black.copy(alpha = 0.96f)))))
         Box(Modifier.align(Alignment.TopCenter).offset(y = (-70).dp).size(330.dp).blur(90.dp).background(artworkTint.copy(alpha = 0.42f), CircleShape))
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(2.dp))
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onBack) { Icon(Icons.Rounded.KeyboardArrowDown, "Back", tint = Color.White, modifier = Modifier.size(30.dp)) }
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(if (language == "ar") "يعمل الآن" else "NOW PLAYING", color = Color.White.copy(alpha = 0.8f), fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
                     Text(if (language == "ar") "من مكتبتك" else "FROM YOUR LIBRARY", color = Color.White.copy(alpha = 0.55f), fontSize = 9.sp)
                 }
-                IconButton(onClick = { activePanel = "queue" }) { Icon(Icons.Rounded.QueueMusic, "Queue", tint = Color.White) }
+                Spacer(Modifier.width(48.dp))
             }
-            Spacer(Modifier.height(15.dp))
+            Spacer(Modifier.height(7.dp))
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Box(Modifier.fillMaxWidth(0.88f).aspectRatio(1f).blur(42.dp).background(artworkTint.copy(alpha = 0.58f), RoundedCornerShape(34.dp)))
                 Box(
                     Modifier.fillMaxWidth(0.82f).aspectRatio(1f)
                         .graphicsLayer {
@@ -2127,8 +2148,7 @@ private fun NowPlayingScreen(
                             )
                         }
                 ) {
-                    MediaArtwork(media, Modifier.fillMaxSize().clip(RoundedCornerShape(26.dp))
-                        .border(1.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(26.dp)))
+                    MediaArtwork(media, Modifier.fillMaxSize().clip(RoundedCornerShape(26.dp)))
                 }
             }
             Spacer(Modifier.height(22.dp))
@@ -2136,6 +2156,12 @@ private fun NowPlayingScreen(
                 Column(Modifier.weight(1f)) {
                     Text(media.title, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     Text(media.artist.ifBlank { if (language == "ar") "فنان غير معروف" else "Unknown artist" }, color = Color.White.copy(alpha = 0.68f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Spacer(Modifier.height(5.dp))
+                    Text(
+                        if (language == "ar") "استمعتها $trackPlayCount مرة · المدة ${formatDuration(media.durationMs)}"
+                        else "Played $trackPlayCount times · ${formatDuration(media.durationMs)}",
+                        color = Color.White.copy(alpha = 0.58f), fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
             Spacer(Modifier.height(8.dp))
