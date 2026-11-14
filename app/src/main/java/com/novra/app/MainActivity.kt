@@ -2601,6 +2601,16 @@ private fun SettingsScreen(
     var settingsCategory by remember { mutableStateOf("All") }
     var showAccentPicker by remember { mutableStateOf(false) }
     val settingsCategories = listOf("All", "Appearance", "Audio", "Privacy", "Language", "Stats")
+    val accentChoices = listOf(
+        "mint" to ("Mint" to Color(0xFF6EE7B7)),
+        "ocean" to ("Ocean" to Color(0xFF7DD3FC)),
+        "violet" to ("Violet" to Color(0xFFC18BFF)),
+        "rose" to ("Rose" to Color(0xFFFDA4AF)),
+        "amber" to ("Amber" to Color(0xFFFCD34D)),
+        "cyan" to ("Cyan" to Color(0xFF67E8F9)),
+        "indigo" to ("Indigo" to Color(0xFFA5B4FC)),
+        "orange" to ("Orange" to Color(0xFFFDBA74))
+    )
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
         Spacer(Modifier.height(8.dp))
         Text(if (language == "ar") "كل إعداد في مكانه. اختر القسم الذي تريد تخصيصه." else "Everything has its place. Choose what you want to customize.", color = Muted, fontSize = 13.sp)
@@ -2723,17 +2733,7 @@ private fun SettingsScreen(
             HorizontalDivider(color = CardAlt)
             Text(if (language == "ar") "اللون الأساسي" else "Accent color", color = TextPrimary, fontSize = 13.sp)
             Spacer(Modifier.height(6.dp))
-            val accentChoices = listOf(
-                "mint" to ("Mint" to Color(0xFF6EE7B7)),
-                "ocean" to ("Ocean" to Color(0xFF7DD3FC)),
-                "violet" to ("Violet" to Color(0xFFC18BFF)),
-                "rose" to ("Rose" to Color(0xFFFDA4AF)),
-                "amber" to ("Amber" to Color(0xFFFCD34D)),
-                "cyan" to ("Cyan" to Color(0xFF67E8F9)),
-                "indigo" to ("Indigo" to Color(0xFFA5B4FC)),
-                "orange" to ("Orange" to Color(0xFFFDBA74))
-            )
-            Surface(
+        Surface(
                 onClick = { showAccentPicker = true },
                 shape = RoundedCornerShape(14.dp),
                 color = CardAlt,
