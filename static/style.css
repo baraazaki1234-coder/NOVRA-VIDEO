@@ -4564,3 +4564,24 @@ button,a,.thumb{-webkit-tap-highlight-color:transparent}button:focus-visible,a:f
 /* Single-column hero layout after removing decorative artwork */
 .main-content>.hero{display:flex;align-items:center;justify-content:flex-start;grid-template-columns:minmax(0,1fr)}
 .main-content>.hero .hero-copy{width:100%;max-width:760px}
+
+/* Viora listening insights and personal wallpaper */
+body::before{display:block!important;content:"";position:fixed;inset:0;z-index:0;pointer-events:none;background-image:var(--viora-wallpaper),radial-gradient(ellipse at 12% 15%,#49247730,transparent 34%),radial-gradient(ellipse at 88% 35%,#174c8730,transparent 36%);background-size:cover,auto,auto;background-position:center;background-attachment:fixed;background-repeat:no-repeat;opacity:.30}.app-shell{position:relative;z-index:1}
+body::after{backdrop-filter:blur(0);}
+.listening-stat{grid-column:span 1}
+.track-play-count{color:#b8a3ff;font-weight:700}
+@media(max-width:600px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.listening-stat{grid-column:span 2}}
+
+/* Native-feeling Viora navigation glyphs */
+.brand-mark-viora{width:38px;height:38px;display:grid;place-items:center;border-radius:13px;background:linear-gradient(145deg,#8ce7ca,#36ad8d);color:#08251d;font-size:22px;font-weight:950;box-shadow:0 7px 18px rgba(54,173,141,.2)}
+.brand-title{font-weight:850;letter-spacing:-.6px}
+.icon-btn svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;display:block;margin:auto}
+.nav-symbol svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;display:block}
+.sidebar-link{transition:background .16s ease,color .16s ease,transform .16s ease}
+.sidebar-link:active{transform:scale(.96)}
+@media(max-width:850px){.brand-mark-viora{width:34px;height:34px;border-radius:11px}.space-sidebar{padding-bottom:max(6px,env(safe-area-inset-bottom));height:calc(66px + env(safe-area-inset-bottom));bottom:0;left:0;right:0;border-radius:20px 20px 0 0;border-left:0;border-right:0;border-bottom:0}.sidebar-link{font-size:10px}.nav-symbol svg{width:22px;height:22px}}
+
+.archive-result-actions{display:flex;flex-direction:column;gap:6px;align-items:stretch}.archive-download{font:inherit;font-size:10px;white-space:nowrap;padding:8px 10px;border-radius:9px;border:1px solid rgba(98,214,176,.2);background:var(--accent-soft);color:var(--accent)}.archive-download:disabled{opacity:.6;cursor:wait}.track-play-count{display:inline-flex;align-items:center;gap:4px;margin-top:4px}
+
+/* Native Android media session status */
+.music-output-status{display:block;margin-top:5px;font-size:10px;color:var(--accent)!important;opacity:.9}

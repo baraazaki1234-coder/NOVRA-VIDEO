@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#101114">
-  <meta name="description" content="مكتبة وسائطك الشخصية للفيديو والموسيقى.">
+  <meta name="description" content="Viora — مكتبة الفيديو والموسيقى في تجربة واحدة.">
   <link rel="manifest" href="/manifest.json">
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/icon.svg">
-  <link rel="stylesheet" href="/style.css?v=27">
-  <title>مكتبة الوسائط</title>
+  <link rel="stylesheet" href="/style.css?v=28">
+  <title>Viora — الفيديو والموسيقى</title>
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -17,34 +17,34 @@
 <body>
   <div class="app-shell">
     <header class="topbar">
-      <a class="brand" href="#/home" aria-label="الرئيسية"><span class="brand-title">مكتبتك</span></a>
+      <a class="brand" href="#/home" aria-label="Viora الرئيسية"><span class="brand-mark-viora" aria-hidden="true">V</span><span class="brand-title">Viora</span></a>
       <div class="top-actions">
-        <button class="icon-btn" id="settingsBtn" type="button" title="الإعدادات" aria-label="الإعدادات">⚙</button></div>
+        <button class="icon-btn" id="settingsBtn" type="button" title="الإعدادات" aria-label="الإعدادات"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.2a3.8 3.8 0 1 0 0 7.6 3.8 3.8 0 0 0 0-7.6Z"/><path d="m19.4 13.5 1.1.9-1.4 2.4-1.4-.5a7.8 7.8 0 0 1-1.5.9l-.2 1.5h-2.8l-.3-1.5a7.8 7.8 0 0 1-1.6-.9l-1.4.5-1.4-2.4 1.2-.9a7.2 7.2 0 0 1 0-1.8l-1.2-.9 1.4-2.4 1.4.5a7.8 7.8 0 0 1 1.6-.9l.3-1.5H16l.2 1.5a7.8 7.8 0 0 1 1.5.9l1.4-.5 1.4 2.4-1.1.9a7.2 7.2 0 0 1 0 1.8Z"/></svg></button></div>
     </header>
 
     <!-- NOVRA WORKSPACE LAYOUT V2 -->
     <div class="workspace">
       <aside class="space-sidebar" aria-label="التنقل الرئيسي">
         <div class="sidebar-heading">
-          <span class="sidebar-orbit" aria-hidden="true">▣</span><div><strong>مكتبتك</strong><small>فيديوهات وموسيقى</small></div>
+          <span class="sidebar-orbit" aria-hidden="true">V</span><div><strong>Viora</strong><small>فيديوهات وموسيقى</small></div>
         </div>
 
         <p class="sidebar-label">التصفح</p>
         <nav class="sidebar-nav">
           <a class="sidebar-link active" href="#/home" data-page="home">
-            <span class="nav-symbol">⌂</span>
+            <span class="nav-symbol" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z"/></svg></span>
             <span>الرئيسية</span>
           </a>
           <a class="sidebar-link" href="#/videos" data-page="videos">
-            <span class="nav-symbol">▦</span>
+            <span class="nav-symbol" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m10 8 6 4-6 4Z"/></svg></span>
             <span>الفيديوهات</span>
           </a>
           <a class="sidebar-link" href="#/playlists" data-page="playlists">
-            <span class="nav-symbol">☷</span>
+            <span class="nav-symbol" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg></span>
             <span>قوائمي</span>
           </a>
           <a class="sidebar-link" href="#/music" data-page="music">
-            <span class="nav-symbol">♫</span>
+            <span class="nav-symbol" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span>
             <span>الموسيقى</span>
           </a>
         </nav>
@@ -74,7 +74,7 @@
         <div class="stat"><span class="stat-icon">▣</span><div><strong id="videoCount">0</strong><small>فيديو في مكتبتك</small></div></div>
         <div class="stat"><span class="stat-icon">◷</span><div><strong id="watchedCount">0</strong><small>بدأت مشاهدته</small></div></div>
         <div class="stat"><span class="stat-icon">⌁</span><div><strong id="storageUsed">0 MB</strong><small>حجم ملفات المكتبة (بما فيها الخزنة)</small></div></div>
-      <div class="stat"><span class="stat-icon">♫</span><div><strong id="audioCount">0</strong><small>ملفات موسيقى وصوت</small></div></div></section>
+      <div class="stat"><span class="stat-icon">♫</span><div><strong id="audioCount">0</strong><small>ملفات موسيقى وصوت</small></div></div><div class="stat listening-stat"><span class="stat-icon">◷</span><div><strong id="listeningTimeValue">0 ث</strong><small>إجمالي وقت الاستماع</small></div></div></section>
 
       </section>
 
@@ -89,7 +89,7 @@
           <button id="onlineVideoSearchBtn" class="secondary-btn" type="button" style="min-height:43px;padding:0 12px">استكشاف فيديوهات</button>
           <button id="scanDeviceBtn" class="scan-device-btn" style="min-height:43px;padding:0 12px;border:1px solid #54d9ed55;border-radius:12px;color:#eaf5ff;background:#24234a;font:inherit;font-size:12px" type="button" hidden>مزامنة الجهاز</button>
           <select id="sortSelect" aria-label="ترتيب الفيديوهات">
-            <option value="newest">الأحدث</option><option value="oldest">الأقدم</option><option value="name">الاسم</option><option value="largest">الحجم</option>
+            <option value="newest">الأحدث</option><option value="oldest">الأقدم</option><option value="name">الاسم</option><option value="largest">الحجم</option><option value="mostPlayed">الأكثر استماعًا</option>
           </select>
         </div>
       </section>
@@ -107,6 +107,7 @@
           <div>
             <strong>الموسيقى</strong>
             <small id="musicNowPlaying">اختر أغنية لبدء التشغيل</small>
+            <small id="musicOutputStatus" class="music-output-status">مخرج الصوت حسب إعدادات Android</small>
           </div>
         </div>
         <div class="music-buttons">
@@ -147,6 +148,7 @@
   <input id="fileInput" type="file" accept="video/*,.mp3" multiple hidden>
   <input id="galleryInput" type="file" accept="video/*" multiple hidden>
   <input id="posterInput" type="file" accept="image/*" hidden>
+  <input id="wallpaperInput" type="file" accept="image/*" hidden>
 
   <div class="modal-backdrop" id="addModal" hidden>
     <section class="modal">
@@ -221,7 +223,7 @@
     </section>
   </div>
 
-  <div class="modal-backdrop" id="vaultModal" hidden><section class="modal"><button class="close-btn" data-close="vaultModal" aria-label="إغلاق">×</button><p class="eyebrow">PRIVATE SPACE</p><h2 id="vaultTitle">فتح الخزنة</h2><p class="muted" id="vaultMessage">أدخل كلمة مرور الخزنة للمتابعة.</p><label for="vaultPassword">كلمة المرور</label><input id="vaultPassword" type="password" autocomplete="current-password" placeholder="كلمة مرور الخزنة"><div id="vaultConfirmWrap" hidden><label for="vaultPasswordConfirm">تأكيد كلمة المرور</label><input id="vaultPasswordConfirm" type="password" autocomplete="new-password" placeholder="أعد كتابة كلمة المرور"></div><button class="primary-btn full" id="vaultSubmit" type="button">متابعة</button><p class="tiny-note">تنبيه: الخزنة تخفي الملفات داخل واجهة الموقع فقط، ولا توفر تشفيرًا فعليًا لمحتوى الملفات.</p></section></div><div class="modal-backdrop" id="settingsModal" hidden><section class="modal"><button class="close-btn" data-close="settingsModal" aria-label="إغلاق">×</button><p class="eyebrow">التفضيلات والتحكم</p><h2>الإعدادات</h2><div class="settings-group"><h3>المظهر والتشغيل</h3><label class="setting-row"><span><b>المظهر</b><small>التبديل بين الوضع الداكن والفاتح</small></span><select id="themeSetting"><option value="dark">داكن</option><option value="light">فاتح</option></select></label><label class="setting-row"><span><b>سرعة تشغيل الفيديو</b><small>السرعة الافتراضية للمشغل</small></span><select id="defaultSpeedSetting"><option value="0.5">0.5×</option><option value="0.75">0.75×</option><option value="1">1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="1.75">1.75×</option><option value="2">2×</option></select></label></div><div class="settings-group"><h3>مكتبة الجهاز</h3><p class="muted">اسمح بالوصول مرة واحدة لاكتشاف الملفات الموجودة والجديدة. لن نحذف الملفات الأصلية من هاتفك.</p><button class="secondary-btn full" id="settingsScanVideo" type="button">مزامنة فيديوهات الجهاز</button><button class="secondary-btn full" id="settingsScanAudio" type="button">مزامنة موسيقى الجهاز</button><button class="secondary-btn full" id="settingsStorageBtn" type="button">إدارة التخزين والنسخ الاحتياطي</button><button class="secondary-btn full" id="settingsExportBtn" type="button">تصدير نسخة احتياطية</button></div><div class="settings-group"><h3>حول التطبيق</h3><p class="muted">مصمم للاستماع والمشاهدة وإدارة مكتبتك الشخصية على جهازك.</p><div class="developer-credit">صُنع وطُوّر هذا التطبيق بواسطة فريق NOVRA</div></div></section></div><div class="modal-backdrop" id="playlistPickerModal" hidden>
+  <div class="modal-backdrop" id="vaultModal" hidden><section class="modal"><button class="close-btn" data-close="vaultModal" aria-label="إغلاق">×</button><p class="eyebrow">PRIVATE SPACE</p><h2 id="vaultTitle">فتح الخزنة</h2><p class="muted" id="vaultMessage">أدخل كلمة مرور الخزنة للمتابعة.</p><label for="vaultPassword">كلمة المرور</label><input id="vaultPassword" type="password" autocomplete="current-password" placeholder="كلمة مرور الخزنة"><div id="vaultConfirmWrap" hidden><label for="vaultPasswordConfirm">تأكيد كلمة المرور</label><input id="vaultPasswordConfirm" type="password" autocomplete="new-password" placeholder="أعد كتابة كلمة المرور"></div><button class="primary-btn full" id="vaultSubmit" type="button">متابعة</button><p class="tiny-note">تنبيه: الخزنة تخفي الملفات داخل واجهة الموقع فقط، ولا توفر تشفيرًا فعليًا لمحتوى الملفات.</p></section></div><div class="modal-backdrop" id="settingsModal" hidden><section class="modal"><button class="close-btn" data-close="settingsModal" aria-label="إغلاق">×</button><p class="eyebrow">التفضيلات والتحكم</p><h2>الإعدادات</h2><div class="settings-group"><h3>المظهر والتشغيل</h3><label class="setting-row"><span><b>المظهر</b><small>التبديل بين الوضع الداكن والفاتح</small></span><select id="themeSetting"><option value="dark">داكن</option><option value="light">فاتح</option></select></label><div class="settings-group"><h3>الخلفية الشخصية</h3><p class="muted">اختر صورة من هاتفك لتصبح خلفية التطبيق، وسيتم ضغطها تلقائيًا لتقليل المساحة.</p><button class="secondary-btn full" id="chooseWallpaperBtn" type="button">اختيار خلفية من الجهاز</button><button class="secondary-btn full" id="clearWallpaperBtn" type="button">استعادة الخلفية الافتراضية</button></div><label class="setting-row"><span><b>سرعة تشغيل الفيديو</b><small>السرعة الافتراضية للمشغل</small></span><select id="defaultSpeedSetting"><option value="0.5">0.5×</option><option value="0.75">0.75×</option><option value="1">1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="1.75">1.75×</option><option value="2">2×</option></select></label></div><div class="settings-group"><h3>مكتبة الجهاز</h3><p class="muted">اسمح بالوصول مرة واحدة لاكتشاف الملفات الموجودة والجديدة. لن نحذف الملفات الأصلية من هاتفك.</p><button class="secondary-btn full" id="settingsScanVideo" type="button">مزامنة فيديوهات الجهاز</button><button class="secondary-btn full" id="settingsScanAudio" type="button">مزامنة موسيقى الجهاز</button><button class="secondary-btn full" id="settingsStorageBtn" type="button">إدارة التخزين والنسخ الاحتياطي</button><button class="secondary-btn full" id="settingsExportBtn" type="button">تصدير نسخة احتياطية</button></div><div class="settings-group"><h3>حول التطبيق</h3><p class="muted">مصمم للاستماع والمشاهدة وإدارة مكتبتك الشخصية على جهازك.</p><div class="developer-credit">صُنع وطُوّر هذا التطبيق بواسطة فريق NOVRA</div></div></section></div><div class="modal-backdrop" id="playlistPickerModal" hidden>
     <section class="modal">
       <button class="close-btn" data-close="playlistPickerModal" aria-label="إغلاق">×</button>
       <p class="eyebrow">YOUR PLAYLISTS</p>
@@ -242,6 +244,6 @@
       document.head.appendChild(bridge);
     });
   </script>
-  <script src="/app.js?v=27"></script>
+  <script src="/app.js?v=28"></script>
 </body>
 </html>

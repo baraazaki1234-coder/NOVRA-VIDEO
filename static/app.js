@@ -19,6 +19,9 @@ let musicQueueSignature = "";
 let musicShuffleEnabled = false;
 let musicRepeatMode = "off"; // off | all | one
 let currentAudioId = null;
+let listeningTick = null;
+let listeningLastTick = 0;
+let listeningPersistAt = 0;
 let musicBrowseMode = "tracks";
 let musicGroupFilter = null;
 let currentMusicVideo = false;
@@ -30,6 +33,8 @@ let vaultSetupMode = false;
 let pendingVaultResolve = null;
 let vaultPurpose = "browse";
 let nativeMediaPlugin = null;
+let nativeBackgroundPlayback = false;
+let nativeBackgroundPlaying = false;
 const nativeThumbnailCache = new Map();
 const nativeThumbnailPending = new Set();
 const DEVICE_MEDIA_EXCLUSIONS_KEY = "novra-device-media-hidden-v1";
@@ -2054,9 +2059,10 @@ function updateMusicControls() {
 
   const hasQueue = musicQueue.length > 0;
   const hasPlayback = !!currentAudioId &&
-    (!!currentAudio || currentMusicVideo);
-  const isPlaying = currentMusicVideo
-    ? !$("#videoPlayer").paused
+    (!!currentAudio || currentMusicVideo || nativeBackgroundPlayback);
+  const isPlaying = nativeBackgroundPlayback
+    ? nativeBackgroundPlaying
+    : currentMusicVideo ? !$("#videoPlayer").paused
     : !!currentAudio && !currentAudio.paused;
 
   $("#musicPrevBtn").disabled = !hasQueue;
@@ -2158,7 +2164,31 @@ function syncMusicQueue(items) {
   updateMusicControls();
 }
 
+async function writeBlobForNativePlayback(blob, track) {
+  if (!nativeMediaPlugin?.writePlaybackChunk || !nativeMediaPlugin?.finishPlaybackImport) return null;
+  const token = globalThis.crypto?.randomUUID?.() || ("viora" + Date.now().toString(36) + Math.random().toString(36).slice(2));
+  const chunkSize = 384 * 1024;
+  try {
+    for (let offset = 0; offset < blob.size; offset += chunkSize) {
+      const bytes = new Uint8Array(await blob.slice(offset, Math.min(blob.size, offset + chunkSize)).arrayBuffer());
+      let binary = "";
+      for (let i = 0; i < bytes.length; i += 0x8000) {
+        binary += String.fromCharCode(...bytes.subarray(i, Math.min(bytes.length, i + 0x8000)));
+      }
+      await nativeMediaPlugin.writePlaybackChunk({token,data:btoa(binary),first:offset === 0});
+    }
+    const rawName = String(track.filename || track.name || "");
+    const extension = rawName.includes(".") ? rawName.split(".").pop().toLowerCase().replace(/[^a-z0-9]/g, "") : "media";
+    const ready = await nativeMediaPlugin.finishPlaybackImport({token,extension});
+    return ready.path;
+  } catch (error) {
+    await nativeMediaPlugin.abortPlaybackImport?.({token}).catch(() => {});
+    throw error;
+  }
+}
+
 async function playMusicTrack(id) {
+  stopListeningTracker();
   const token = ++musicLoadToken;
 
   try {
@@ -2168,6 +2198,11 @@ async function playMusicTrack(id) {
     if (!track || track.kind !== "audio" || isVaultItem(track)) {
       toast("الملف غير متاح في قائمة الموسيقى.");
       return;
+    }
+    if (nativeBackgroundPlayback) {
+      await nativeMediaPlugin?.controlBackgroundPlayback?.({command:"stop"}).catch(() => {});
+      nativeBackgroundPlayback = false;
+      nativeBackgroundPlaying = false;
     }
 
     if (!musicBaseQueue.includes(id)) {
@@ -2180,6 +2215,9 @@ async function playMusicTrack(id) {
 
     musicQueueIndex = musicQueue.indexOf(id);
     currentAudioId = id;
+    track.playCount = (Number(track.playCount) || 0) + 1;
+    track.lastPlayed = Date.now();
+    await dbRequest("readwrite", "put", track);
     currentMusicTitle = track.name || "بدون اسم";
     currentMusicTrack = track;
     fetchTrackLyrics(track);
@@ -2187,6 +2225,11 @@ async function playMusicTrack(id) {
     const actualKind = mediaKind(track.type, track.filename);
 
     if (actualKind === "video") {
+      if (nativeBackgroundPlayback) {
+        await nativeMediaPlugin?.controlBackgroundPlayback?.({command:"stop"}).catch(() => {});
+        nativeBackgroundPlayback = false;
+        nativeBackgroundPlaying = false;
+      }
       currentMusicVideo = true;
 
       if (currentAudio) {
@@ -2232,10 +2275,33 @@ async function playMusicTrack(id) {
     await releaseCurrentNativePlayback();
 
     let playbackSource;
+    if (!track.nativeUri && nativeMediaPlugin?.writePlaybackChunk && nativeMediaPlugin?.playInBackground) {
+      const nativePath = await writeBlobForNativePlayback(file, track);
+      if (!nativePath) throw new Error("تعذر تجهيز الملف للتشغيل الأصلي.");
+      currentNativePlaybackPath = nativePath;
+      await nativeMediaPlugin.playInBackground({path:nativePath,title:currentMusicTitle,artist:track.artist || ""});
+      currentAudio = null;
+      currentMusicVideo = false;
+      nativeBackgroundPlayback = true;
+      nativeBackgroundPlaying = true;
+      startListeningTracker();
+      updateMusicControls();
+      return;
+    }
     if (track.nativeUri) {
       if (!nativeMediaPlugin?.preparePlayback) throw new Error("تشغيل ملفات الجهاز يحتاج إصدار Android المحدث.");
       const prepared = await nativeMediaPlugin.preparePlayback({uri:track.nativeUri});
       currentNativePlaybackPath = prepared.path;
+      if (nativeMediaPlugin.playInBackground) {
+        await nativeMediaPlugin.playInBackground({path:prepared.path,title:currentMusicTitle,artist:track.artist || ""});
+        currentAudio = null;
+        nativeBackgroundPlayback = true;
+        nativeBackgroundPlaying = true;
+        currentMusicVideo = false;
+        startListeningTracker();
+        updateMusicControls();
+        return;
+      }
       playbackSource = window.Capacitor?.convertFileSrc?.(prepared.path);
       if (!playbackSource) throw new Error("تعذر تجهيز مسار تشغيل الملف.");
     } else {
@@ -2247,10 +2313,10 @@ async function playMusicTrack(id) {
 
     currentAudio.pause();
     currentAudio.src = playbackSource;
-    currentAudio.onended = handleMusicEnded;
+    currentAudio.onended = () => { stopListeningTracker(); handleMusicEnded(); };
 
     currentAudio.onplay = () => updateMusicControls();
-    currentAudio.onpause = () => updateMusicControls();
+    currentAudio.onpause = () => { stopListeningTracker(); updateMusicControls(); };
     currentAudio.onloadedmetadata = () => {
       syncMusicMediaSession();
       updateMusicMediaPosition();
@@ -2266,6 +2332,7 @@ async function playMusicTrack(id) {
     updateMusicControls();
 
     await currentAudio.play();
+    startListeningTracker();
     updateMusicControls();
   } catch (error) {
     if (token === musicLoadToken) {
@@ -2283,7 +2350,11 @@ async function advanceMusic(direction) {
 
   const activePlayer = currentMusicVideo
     ? $("#videoPlayer")
-    : currentAudio;
+    : nativeBackgroundPlayback ? null : currentAudio;
+  if (nativeBackgroundPlayback && direction < 0) {
+    nativeMediaPlugin?.controlBackgroundPlayback?.({command:"seek",position:0}).catch(() => {});
+    return;
+  }
 
   // Previous button restarts the current track if it has played for 3 seconds.
   if (direction < 0 && activePlayer && activePlayer.currentTime > 3) {
@@ -2296,7 +2367,13 @@ async function advanceMusic(direction) {
 
   if (nextIndex < 0 || nextIndex >= musicQueue.length) {
     if (musicRepeatMode !== "all") {
-      if (direction > 0 && activePlayer) {
+      if (direction > 0 && nativeBackgroundPlayback) {
+        nativeMediaPlugin?.controlBackgroundPlayback?.({command:"stop"}).catch(() => {});
+        nativeBackgroundPlayback = false;
+        nativeBackgroundPlaying = false;
+        stopListeningTracker();
+        updateMusicControls();
+      } else if (direction > 0 && activePlayer) {
         activePlayer.pause();
         updateMusicControls();
       }
@@ -2377,6 +2454,13 @@ function cycleMusicRepeat() {
 }
 
 function toggleMusicPlayPause() {
+  if (nativeBackgroundPlayback && nativeMediaPlugin?.controlBackgroundPlayback) {
+    nativeBackgroundPlaying = !nativeBackgroundPlaying;
+    nativeMediaPlugin.controlBackgroundPlayback({command:nativeBackgroundPlaying ? "resume" : "pause"}).catch(error => { console.warn(error); nativeBackgroundPlaying = !nativeBackgroundPlaying; });
+    if (nativeBackgroundPlaying) startListeningTracker(); else stopListeningTracker();
+    updateMusicControls();
+    return;
+  }
   if (!currentAudioId || (!currentAudio && !currentMusicVideo)) {
     if (musicQueue.length) playMusicTrack(musicQueue[0]);
     return;
@@ -2468,6 +2552,9 @@ async function render() {
     currentCategory === "playlists" ? (selectedPlaylist ? (selectedPlaylist.mediaIds || []).length : allPlaylists.length) :
     videosOnly.length;
   $("#watchedCount").textContent = videosOnly.filter(v => v.position > 5).length;
+  const totalListeningSeconds = audioOnly.reduce((sum, track) => sum + Math.max(0, Number(track.listenedSeconds) || 0), 0);
+  const listeningStat = $("#listeningTimeValue");
+  if (listeningStat) listeningStat.textContent = formatListeningTime(totalListeningSeconds);
   $("#storageUsed").textContent = formatBytes(all.reduce((n,v)=>n+(v.nativeUri?0:(Number(v.size)||0)),0));
 
   let items = currentCategory === "vault"
@@ -2494,9 +2581,11 @@ async function render() {
   if (filter === "favorites") items = items.filter(v => v.favorite);
 
   if (!(currentCategory === "playlists" && selectedPlaylist)) {
-    items.sort((a,b) => sort === "oldest" ? a.created-b.created :
-      sort === "name" ? a.name.localeCompare(b.name) :
-      sort === "largest" ? b.size-a.size : b.created-a.created);
+    items.sort((a,b) => sort === "mostPlayed" && currentCategory === "audio"
+      ? (Number(b.playCount)||0) - (Number(a.playCount)||0) || (Number(b.listenedSeconds)||0) - (Number(a.listenedSeconds)||0)
+      : sort === "oldest" ? a.created-b.created
+      : sort === "name" ? a.name.localeCompare(b.name)
+      : sort === "largest" ? b.size-a.size : b.created-a.created);
   }
 
   syncMusicQueue(items);
@@ -2667,6 +2756,12 @@ async function render() {
       trackInfo.textContent = [v.artist, v.album].filter(Boolean).join(" • ");
       trackInfo.style.cssText = "flex-basis:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap";
       meta.append(trackInfo);
+    }
+    if (kind === "audio") {
+      const plays = document.createElement("span");
+      plays.className = "track-play-count";
+      plays.textContent = `▶ ${Number(v.playCount) || 0} مرة تشغيل`;
+      meta.append(plays);
     }
 
     const actions = document.createElement("div");
@@ -3507,8 +3602,8 @@ function setupDiscoveryExperience() {
     <div id="onlineMusicResults" class="online-music-results"></div>
     <p class="online-disclaimer">معاينة ترويجية من Apple قد تصل إلى 30 ثانية، وبجوارها رابط Apple Music للمحتوى الكامل.</p>`;
   panel.insertAdjacentHTML("beforeend", '<div class="licensed-audio-block"><div class="licensed-audio-heading"><strong>موسيقى مجانية بترخيص معلن</strong><button id="licensedAudioSearch" class="secondary-btn" type="button">بحث في Internet Archive</button></div><div id="licensedAudioStatus" class="online-status">ابحث عن تسجيلات وأعمال منشورة بتراخيص مفتوحة.</div><div id="licensedAudioResults" class="archive-results"></div></div>');
-  $("#licensedAudioSearch").addEventListener("click", () => searchLicensedArchive($("#onlineMusicQuery").value, "audio"));
   tabs.after(panel);
+  $("#licensedAudioSearch")?.addEventListener("click", () => searchLicensedArchive($("#onlineMusicQuery")?.value || "", "audio"));
   const browsePanel = document.createElement("section");
   browsePanel.id = "musicBrowsePanel";
   browsePanel.className = "music-browse-panel";
@@ -3540,6 +3635,54 @@ function setupDiscoveryExperience() {
   });
 }
 
+async function downloadLicensedArchive(item, mediaType, button) {
+  const license = String(item?.licenseurl || "");
+  let licenseHost = "";
+  try { licenseHost = new URL(license).hostname.toLowerCase(); } catch {}
+  if (!["creativecommons.org","www.creativecommons.org","publicdomain.org","www.publicdomain.org"].includes(licenseHost)) {
+    toast("لم يتم تنزيل الملف لأن الترخيص لم يمكن التحقق منه.");
+    return;
+  }
+  if (!item?.identifier) return;
+  const originalLabel = button?.textContent || "تنزيل";
+  if (button) { button.disabled = true; button.textContent = "جارٍ التجهيز…"; }
+  try {
+    const metadataResponse = await fetch("https://archive.org/metadata/" + encodeURIComponent(item.identifier));
+    if (!metadataResponse.ok) throw new Error("metadata");
+    const metadata = await metadataResponse.json();
+    const files = Array.isArray(metadata.files) ? metadata.files : [];
+    const allowedFormats = mediaType === "audio"
+      ? ["VBR MP3","MP3","Ogg Vorbis","FLAC","WAVE","MPEG4 Audio"]
+      : ["MPEG4","MPEG4 Movie","h.264","MPEG2"];
+    const candidate = files
+      .filter(file => file && file.name && allowedFormats.includes(String(file.format || "")))
+      .filter(file => !file.source || file.source === "original")
+      .filter(file => Number(file.size) > 0 && Number(file.size) <= 250 * 1024 * 1024)
+      .sort((a,b) => Number(a.size)-Number(b.size))[0];
+    if (!candidate) throw new Error("no-compatible-file");
+    const downloadUrl = "https://archive.org/download/" + encodeURIComponent(item.identifier) + "/" + candidate.name.split("/").map(encodeURIComponent).join("/");
+    const response = await fetch(downloadUrl);
+    if (!response.ok) throw new Error("download");
+    const blob = await response.blob();
+    if (!blob.size || blob.size > 250 * 1024 * 1024) throw new Error("size");
+    const filename = candidate.name.split("/").pop() || (mediaType === "audio" ? "licensed-audio.mp3" : "licensed-video.mp4");
+    const file = new File([blob], filename, {type:blob.type || (mediaType === "audio" ? "audio/mpeg" : "video/mp4"),lastModified:Date.now()});
+    const destination = $("#importDestination");
+    const previousDestination = destination?.value;
+    if (destination) destination.value = mediaType === "audio" ? "audio" : "video";
+    try { await importLocal(file); }
+    finally { if (destination && previousDestination) destination.value = previousDestination; }
+    toast("تم تنزيل المحتوى المرخّص وإضافته إلى مكتبتك.");
+  } catch (error) {
+    console.warn("Licensed Archive download failed:", error);
+    toast(error.message === "no-compatible-file"
+      ? "لم نعثر على صيغة متوافقة بحجم أقل من 250 ميجابايت."
+      : "تعذر التنزيل من المصدر. يمكنك فتح صفحة العمل ومراجعة خيارات التنزيل.");
+  } finally {
+    if (button) { button.disabled = false; button.textContent = originalLabel; }
+  }
+}
+
 async function searchLicensedArchive(query, mediaType) {
   const term = String(query || "").trim();
   const isAudio = mediaType === "audio";
@@ -3567,8 +3710,15 @@ async function searchLicensedArchive(query, mediaType) {
       const creator = document.createElement("small"); creator.textContent = item.creator || "صاحب العمل غير محدد";
       const license = document.createElement("a"); license.href = String(item.licenseurl); license.target = "_blank"; license.rel = "noopener noreferrer"; license.textContent = "عرض الترخيص";
       info.append(title,creator,license);
+      const actions = document.createElement("div");
+      actions.className = "archive-result-actions";
       const source = document.createElement("a"); source.className = "archive-open"; source.href = "https://archive.org/details/" + encodeURIComponent(item.identifier); source.target = "_blank"; source.rel = "noopener noreferrer"; source.textContent = "فتح المصدر";
-      card.append(cover,info,source); fragment.append(card);
+      const download = document.createElement("button");
+      download.type = "button"; download.className = "archive-download";
+      download.textContent = isAudio ? "تنزيل الأغنية" : "تنزيل الفيديو";
+      download.addEventListener("click", () => downloadLicensedArchive(item, mediaType, download));
+      actions.append(source,download);
+      card.append(cover,info,actions); fragment.append(card);
     }
     results.append(fragment);
   } catch (error) { console.warn("Open archive search failed:",error); status.textContent = "تعذر الاتصال بمكتبة المحتوى المفتوح. تحقق من الإنترنت وحاول لاحقًا."; }
@@ -3669,6 +3819,25 @@ function setupSettingsExperience() {
   document.documentElement.dataset.theme = theme;
   const themeSelect = $("#themeSetting");
   const speedSelect = $("#defaultSpeedSetting");
+  applySavedWallpaper();
+  const wallpaperInput = $("#wallpaperInput");
+  $("#chooseWallpaperBtn")?.addEventListener("click", () => wallpaperInput?.click());
+  wallpaperInput?.addEventListener("change", async () => {
+    const file = wallpaperInput.files?.[0];
+    if (!file || !file.type.startsWith("image/")) return;
+    try {
+      const image = await compressWallpaper(file);
+      localStorage.setItem("vioraCustomWallpaper", image);
+      applySavedWallpaper();
+      toast("تم تطبيق الخلفية الجديدة.");
+    } catch (error) { console.error(error); toast("تعذر تطبيق الصورة كخلفية."); }
+    wallpaperInput.value = "";
+  });
+  $("#clearWallpaperBtn")?.addEventListener("click", () => {
+    localStorage.removeItem("vioraCustomWallpaper");
+    applySavedWallpaper();
+    toast("تمت استعادة الخلفية الافتراضية.");
+  });
   if (themeSelect) {
     themeSelect.value = theme;
     themeSelect.addEventListener("change", () => {
@@ -3687,6 +3856,77 @@ function setupSettingsExperience() {
   $("#settingsScanVideo")?.addEventListener("click", () => syncDeviceMedia("video"));
   $("#settingsScanAudio")?.addEventListener("click", () => syncDeviceMedia("audio"));
   $("#settingsExportBtn")?.addEventListener("click", exportData);
+}
+
+function formatListeningTime(seconds) {
+  const total = Math.max(0, Math.floor(Number(seconds) || 0));
+  const hours = Math.floor(total / 3600), minutes = Math.floor((total % 3600) / 60);
+  if (hours) return `${hours} س ${minutes} د`;
+  if (minutes) return `${minutes} دقيقة`;
+  return `${total} ث`;
+}
+
+let listeningPendingSeconds = 0;
+async function persistListeningTime() {
+  if (!currentAudioId || !listeningPendingSeconds) return;
+  const amount = listeningPendingSeconds;
+  listeningPendingSeconds = 0;
+  const track = await dbRequest("readonly", "get", currentAudioId).catch(() => null);
+  if (!track) return;
+  track.listenedSeconds = (Number(track.listenedSeconds) || 0) + amount;
+  await dbRequest("readwrite", "put", track);
+  const stat = $("#listeningTimeValue");
+  if (stat) {
+    const all = await dbRequest("readonly", "all");
+    stat.textContent = formatListeningTime(all.filter(x => x.kind === "audio" && !isVaultItem(x)).reduce((sum,x) => sum + (Number(x.listenedSeconds)||0), 0));
+  }
+}
+
+function startListeningTracker() {
+  stopListeningTracker();
+  listeningLastTick = Date.now();
+  listeningPersistAt = listeningLastTick;
+  listeningTick = setInterval(() => {
+    if ((!nativeBackgroundPlayback && (!currentAudio || currentAudio.paused)) || (nativeBackgroundPlayback && !nativeBackgroundPlaying) || !currentAudioId || currentMusicVideo) return;
+    const now = Date.now();
+    const elapsed = Math.min(3, Math.max(0, Math.floor((now - listeningLastTick) / 1000)));
+    listeningLastTick = now;
+    if (!elapsed) return;
+    listeningPendingSeconds += elapsed;
+    if (now - listeningPersistAt >= 10000) {
+      listeningPersistAt = now;
+      persistListeningTime().catch(error => console.warn("Listening stats save failed:", error));
+    }
+  }, 1000);
+}
+
+function stopListeningTracker() {
+  if (listeningTick) clearInterval(listeningTick);
+  listeningTick = null;
+  listeningLastTick = 0;
+  persistListeningTime().catch(error => console.warn("Listening stats save failed:", error));
+}
+
+function compressWallpaper(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file), image = new Image();
+    image.onload = () => {
+      const scale = Math.min(1, 1920 / Math.max(image.width, image.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(image.width * scale));
+      canvas.height = Math.max(1, Math.round(image.height * scale));
+      canvas.getContext("2d").drawImage(image, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      try { resolve(canvas.toDataURL("image/jpeg", 0.78)); } catch (error) { reject(error); }
+    };
+    image.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Invalid image")); };
+    image.src = url;
+  });
+}
+
+function applySavedWallpaper() {
+  const image = localStorage.getItem("vioraCustomWallpaper");
+  document.documentElement.style.setProperty("--viora-wallpaper", image ? `url("${image}")` : "none");
 }
 
 function setupPageRouter() {
@@ -3749,6 +3989,44 @@ async function init() {
       document.addEventListener("visibilitychange", () => {
         if (!document.hidden && db) refreshNativeMediaIfAllowed();
       });
+      if (typeof nativeMediaPlugin.addListener === "function") {
+        nativeMediaPlugin.addListener("nativePlaybackState", state => {
+          if (!nativeBackgroundPlayback) return;
+          const wasPlaying = nativeBackgroundPlaying;
+          nativeBackgroundPlaying = !!state?.playing;
+          if (nativeBackgroundPlaying && !wasPlaying) startListeningTracker();
+          if (!nativeBackgroundPlaying && wasPlaying) stopListeningTracker();
+          if (state?.ended) {
+            nativeBackgroundPlaying = false;
+            stopListeningTracker();
+            if (musicRepeatMode === "one") {
+              nativeMediaPlugin.controlBackgroundPlayback({command:"seek",position:0})
+                .then(() => nativeMediaPlugin.controlBackgroundPlayback({command:"resume"}))
+                .catch(() => {});
+            } else {
+              advanceMusic(1);
+            }
+          }
+          updateMusicControls();
+        }).catch(error => console.debug("Native playback state listener unavailable:", error));
+      }
+      if (nativeMediaPlugin.getAudioOutputs) {
+        const refreshAudioOutputs = async () => {
+          try {
+            const result = await nativeMediaPlugin.getAudioOutputs();
+            const outputs = result?.outputs || [];
+            const bluetooth = outputs.find(item => String(item.type || "").startsWith("bluetooth"));
+            const wired = outputs.find(item => String(item.type || "").startsWith("wired"));
+            const label = bluetooth ? "Bluetooth متصل" : wired ? "سماعة سلكية متصلة" : outputs.some(item => item.type === "speaker") ? "مكبر صوت الهاتف" : "مخرج الصوت حسب إعدادات Android";
+            const status = $("#musicOutputStatus");
+            if (status) status.textContent = label;
+          } catch (error) { console.debug("Audio output query unavailable:", error); }
+        };
+        refreshAudioOutputs();
+        if (typeof nativeMediaPlugin.addListener === "function") {
+          nativeMediaPlugin.addListener("audioOutputsChanged", refreshAudioOutputs).catch(() => {});
+        }
+      }
       if (typeof nativeMediaPlugin.addListener === "function") {
         let lastMediaEventAt = 0;
         Promise.resolve(nativeMediaPlugin.addListener("mediaChanged", () => {
@@ -4012,6 +4290,7 @@ async function init() {
 
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) return;
+    if (currentAudio && !currentAudio.paused) { /* keep listening while audio is playing */ }
 
     const vaultVideo = currentVideo && isVaultItem(currentVideo);
     const vaultAudio = currentCategory === "vault" && currentAudio;

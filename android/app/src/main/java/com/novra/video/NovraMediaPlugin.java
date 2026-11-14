@@ -1,6 +1,12 @@
 package com.novra.video;
 
 import android.Manifest;
+import android.content.Context;
+import android.content.BroadcastReceiver;
+import android.content.IntentFilter;
+import android.media.AudioManager;
+import android.media.AudioDeviceInfo;
+import android.media.AudioDeviceCallback;
 import android.graphics.Bitmap;
 import android.media.MediaMetadataRetriever;
 import android.util.Base64;
@@ -44,11 +50,42 @@ import com.getcapacitor.annotation.PermissionCallback;
 })
 public class NovraMediaPlugin extends Plugin {
   private ContentObserver mediaObserver;
+  private AudioDeviceCallback audioDeviceCallback;
+  private BroadcastReceiver playbackStateReceiver;
 
   @Override
   public void load() {
     super.load();
     Handler handler = new Handler(Looper.getMainLooper());
+    playbackStateReceiver = new BroadcastReceiver() {
+      @Override public void onReceive(Context context, Intent intent) {
+        if (intent == null || !"com.novra.video.PLAYBACK_STATE".equals(intent.getAction())) return;
+        JSObject state = new JSObject();
+        state.put("playing", intent.getBooleanExtra("playing", false));
+        state.put("ended", intent.getBooleanExtra("ended", false));
+        state.put("position", intent.getLongExtra("position", 0L));
+        state.put("duration", intent.getLongExtra("duration", 0L));
+        notifyListeners("nativePlaybackState", state);
+      }
+    };
+    IntentFilter playbackFilter = new IntentFilter("com.novra.video.PLAYBACK_STATE");
+    if (Build.VERSION.SDK_INT >= 33) {
+      getContext().registerReceiver(playbackStateReceiver, playbackFilter, Context.RECEIVER_NOT_EXPORTED);
+    } else {
+      getContext().registerReceiver(playbackStateReceiver, playbackFilter);
+    }
+    AudioManager audioManager = (AudioManager) getContext().getSystemService(Context.AUDIO_SERVICE);
+    if (Build.VERSION.SDK_INT >= 23 && audioManager != null) {
+      audioDeviceCallback = new AudioDeviceCallback() {
+        @Override public void onAudioDevicesAdded(AudioDeviceInfo[] added) {
+          notifyListeners("audioOutputsChanged", new JSObject());
+        }
+        @Override public void onAudioDevicesRemoved(AudioDeviceInfo[] removed) {
+          notifyListeners("audioOutputsChanged", new JSObject());
+        }
+      };
+      audioManager.registerAudioDeviceCallback(audioDeviceCallback, handler);
+    }
     mediaObserver = new ContentObserver(handler) {
       @Override
       public void onChange(boolean selfChange, Uri uri) {
@@ -64,6 +101,121 @@ public class NovraMediaPlugin extends Plugin {
       MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, true, mediaObserver
     );
   }
+  @PluginMethod
+  public void playInBackground(PluginCall call) {
+    String path = call.getString("path");
+    if (path == null || path.trim().isEmpty()) { call.reject("Missing playback file path."); return; }
+    try {
+      File source = new File(path).getCanonicalFile();
+      File cache = new File(getContext().getCacheDir(), "novra-playback").getCanonicalFile();
+      if (!source.isFile() || !cache.equals(source.getParentFile())) { call.reject("Invalid playback file path."); return; }
+      Intent intent = new Intent(getContext(), VioraPlaybackService.class);
+      intent.setAction(VioraPlaybackService.ACTION_PLAY);
+      intent.putExtra(VioraPlaybackService.EXTRA_URI, Uri.fromFile(source).toString());
+      intent.putExtra(VioraPlaybackService.EXTRA_TITLE, call.getString("title", "Viora"));
+      intent.putExtra(VioraPlaybackService.EXTRA_ARTIST, call.getString("artist", ""));
+      ContextCompat.startForegroundService(getContext(), intent);
+      JSObject result = new JSObject(); result.put("started", true); call.resolve(result);
+    } catch (Exception error) { call.reject("تعذر بدء مشغل أندرويد.", null, error); }
+  }
+
+  @PluginMethod
+  public void writePlaybackChunk(PluginCall call) {
+    String token = call.getString("token", "");
+    String encoded = call.getString("data", "");
+    boolean first = call.getBoolean("first", false);
+    if (!token.matches("[A-Za-z0-9_-]{16,80}") || encoded.isEmpty()) { call.reject("Invalid playback chunk."); return; }
+    File directory = new File(getContext().getCacheDir(), "novra-playback");
+    if (!directory.exists() && !directory.mkdirs()) { call.reject("Could not create playback cache."); return; }
+    File target = new File(directory, "web-" + token + ".part");
+    try {
+      byte[] bytes = Base64.decode(encoded, Base64.DEFAULT);
+      if (bytes.length == 0 || bytes.length > 1024 * 1024) { call.reject("Playback chunk is too large."); return; }
+      try (FileOutputStream output = new FileOutputStream(target, !first)) {
+        output.write(bytes);
+        output.getFD().sync();
+      }
+      JSObject result = new JSObject(); result.put("written", bytes.length); call.resolve(result);
+    } catch (Exception error) { call.reject("تعذر تجهيز ملف الصوت للتشغيل.", null, error); }
+  }
+
+  @PluginMethod
+  public void abortPlaybackImport(PluginCall call) {
+    String token = call.getString("token", "");
+    if (!token.matches("[A-Za-z0-9_-]{16,80}")) { call.reject("Invalid playback token."); return; }
+    File directory = new File(getContext().getCacheDir(), "novra-playback");
+    File partial = new File(directory, "web-" + token + ".part");
+    try {
+      if (directory.getCanonicalFile().equals(partial.getCanonicalFile().getParentFile())) partial.delete();
+      call.resolve();
+    } catch (Exception error) { call.reject("Could not clean incomplete playback cache.", null, error); }
+  }
+
+  @PluginMethod
+  public void finishPlaybackImport(PluginCall call) {
+    String token = call.getString("token", "");
+    String extension = call.getString("extension", "media").toLowerCase().replaceAll("[^a-z0-9]", "");
+    if (!token.matches("[A-Za-z0-9_-]{16,80}")) { call.reject("Invalid playback token."); return; }
+    File directory;
+    try {
+      directory = new File(getContext().getCacheDir(), "novra-playback").getCanonicalFile();
+      File partial = new File(directory, "web-" + token + ".part").getCanonicalFile();
+      if (!directory.equals(partial.getParentFile()) || !partial.isFile() || partial.length() == 0) { call.reject("Playback file is incomplete."); return; }
+      File ready = new File(directory, "web-" + token + "." + (extension.isEmpty() ? "media" : extension)).getCanonicalFile();
+      if (!directory.equals(ready.getParentFile()) || !partial.renameTo(ready)) { call.reject("Could not finalize playback file."); return; }
+      JSObject result = new JSObject(); result.put("path", ready.getAbsolutePath()); result.put("size", ready.length()); call.resolve(result);
+    } catch (Exception error) { call.reject("تعذر إنهاء تجهيز ملف الصوت.", null, error); }
+  }
+
+  @PluginMethod
+  public void controlBackgroundPlayback(PluginCall call) {
+    String command = call.getString("command", "");
+    String action;
+    if ("pause".equals(command)) action = VioraPlaybackService.ACTION_PAUSE;
+    else if ("resume".equals(command)) action = VioraPlaybackService.ACTION_RESUME;
+    else if ("stop".equals(command)) action = VioraPlaybackService.ACTION_STOP;
+    else if ("seek".equals(command)) action = VioraPlaybackService.ACTION_SEEK;
+    else { call.reject("Unsupported playback command."); return; }
+    Intent intent = new Intent(getContext(), VioraPlaybackService.class);
+    intent.setAction(action);
+    if ("seek".equals(command)) intent.putExtra(VioraPlaybackService.EXTRA_POSITION, call.getLong("position", 0L));
+    try { getContext().startService(intent); call.resolve(); }
+    catch (Exception error) { call.reject("تعذر التحكم في التشغيل.", null, error); }
+  }
+
+  @PluginMethod
+  public void getAudioOutputs(PluginCall call) {
+    AudioManager manager = (AudioManager) getContext().getSystemService(Context.AUDIO_SERVICE);
+    JSArray outputs = new JSArray();
+    if (Build.VERSION.SDK_INT >= 23 && manager != null) {
+      for (AudioDeviceInfo device : manager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)) {
+        JSObject item = new JSObject();
+        item.put("id", device.getId());
+        item.put("type", audioDeviceType(device.getType()));
+        item.put("name", device.getProductName() == null ? "Audio device" : device.getProductName().toString());
+        item.put("connected", true);
+        outputs.put(item);
+      }
+    }
+    JSObject result = new JSObject(); result.put("outputs", outputs);
+    result.put("routingManagedByAndroid", true); call.resolve(result);
+  }
+
+  private String audioDeviceType(int type) {
+    switch (type) {
+      case AudioDeviceInfo.TYPE_BUILTIN_SPEAKER: return "speaker";
+      case AudioDeviceInfo.TYPE_BUILTIN_EARPIECE: return "earpiece";
+      case AudioDeviceInfo.TYPE_WIRED_HEADPHONES: return "wired-headphones";
+      case AudioDeviceInfo.TYPE_WIRED_HEADSET: return "wired-headset";
+      case AudioDeviceInfo.TYPE_BLUETOOTH_A2DP: return "bluetooth";
+      case AudioDeviceInfo.TYPE_BLUETOOTH_SCO: return "bluetooth-call";
+      case AudioDeviceInfo.TYPE_BLE_HEADSET: return "bluetooth-le";
+      case AudioDeviceInfo.TYPE_USB_HEADSET: return "usb-headset";
+      case AudioDeviceInfo.TYPE_HDMI: return "hdmi";
+      default: return "other";
+    }
+  }
+
   @PluginMethod
   public void requestAccess(PluginCall call) {
     String kind=call.getString("kind","video");

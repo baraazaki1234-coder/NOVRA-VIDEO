@@ -1,10 +1,10 @@
 {
-  "name": "novra-video",
+  "name": "viora-android",
   "version": "1.0.0",
-  "description": "مكتبة فيديوهات محلية تعمل من خلال متصفح الهاتف وخادم محلي بسيط.",
+  "description": "Viora — Android-first personal video and music library",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --check static/app.js"
   },
   "keywords": [],
   "author": "",
