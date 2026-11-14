@@ -1,8 +1,17 @@
 name: Viora Android build
-run-name: Viora validation and APK build
+run-name: Viora native validation and APK build
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - release/novra-android-next
+    paths:
+      - 'app/**'
+      - 'build.gradle.kts'
+      - 'settings.gradle.kts'
+      - 'gradle.properties'
+      - '.github/workflows/viora-android.yml'
 
 permissions:
   contents: read
@@ -13,52 +22,51 @@ concurrency:
 
 jobs:
   build:
-    name: Validate and build Android APK
+    name: Validate and build Viora 1.0.7 APK
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
-      - name: Set up Java 21
+      - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: '17'
 
-      - name: Install web dependencies
-        run: npm ci
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
 
-      - name: Check JavaScript syntax
-        run: npm test
+      - name: Install Android SDK components
+        run: sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
 
-      - name: Sync Android project
-        run: npx cap sync android
+      - name: Set up Gradle 8.13
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
 
-      - name: Create Android debug signing key
+      - name: Verify toolchain
         run: |
-          mkdir -p "$HOME/.android"
-          keytool -genkeypair -v \
-            -keystore "$HOME/.android/debug.keystore" \
-            -storepass android \
-            -alias androiddebugkey \
-            -keypass android \
-            -dname "CN=Android Debug,O=Android,C=US" \
-            -keyalg RSA -keysize 2048 -validity 10000
+          java -version
+          gradle --version
+          sdkmanager --list_installed
 
-      - name: Build installable debug APK
-        working-directory: android
-        run: ./gradlew --no-daemon assembleDebug
+      - name: Build native Android application
+        run: gradle --no-daemon --stacktrace --console=plain assembleDebug
 
-      - name: Upload APK
+      - name: Verify APK package and checksum
+        run: |
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$APK" | head -n 10
+          sha256sum "$APK" | tee app-debug.apk.sha256
+
+      - name: Upload Viora APK
         uses: actions/upload-artifact@v4
         with:
-          name: Viora-Android-debug-${{ github.run_number }}
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: Viora-1.0.7-debug-${{ github.run_number }}
+          path: |
+            app/build/outputs/apk/debug/app-debug.apk
+            app-debug.apk.sha256
           if-no-files-found: error
           retention-days: 14
